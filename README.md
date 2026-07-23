@@ -455,9 +455,17 @@ Before opening a large implementation pull request, start with an issue or desig
 - Using a single opaque LLM score as the definition of quality.
 - Building a hosted SaaS before the local workflow is reliable.
 
-## License
+## License and third-party notices
 
-A final license will be selected before the first public release. **Apache-2.0** is the current recommendation for the core project because it supports broad commercial and community use while providing an explicit patent grant.
+SkillConsole's original source code and documentation are released under the [MIT License](./LICENSE).
+
+The MIT License applies only to material owned by the SkillConsole copyright holder. It does not relicense third-party SDKs, libraries, APIs, services, models, documentation, or trademarks. Each third-party component remains subject to its own copyright, license, terms of service, and other applicable policies.
+
+### Claude Agent SDK
+
+SkillConsole uses the TypeScript package [`@anthropic-ai/claude-agent-sdk`](https://github.com/anthropics/claude-agent-sdk-typescript). Its repository currently states **© Anthropic PBC. All rights reserved**, and specifies that use is subject to Anthropic's [Commercial Terms of Service](https://www.anthropic.com/legal/commercial-terms), except where a specific component or dependency has a separate license.
+
+Before using, distributing, deploying, or offering SkillConsole to customers or end users, review the current [Claude Agent SDK license and terms](https://github.com/anthropics/claude-agent-sdk-typescript/blob/main/LICENSE.md) and the licenses or terms of all other third-party components. SkillConsole's MIT License does not grant rights to the Claude Agent SDK, Claude Code, Anthropic models or services, or third-party trademarks.
 
 ## Acknowledgements
 

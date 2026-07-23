@@ -455,9 +455,17 @@ pnpm typecheck
 - 用一个不可解释的 LLM 总分定义质量；
 - 在本地工作流尚不可靠时优先建设 SaaS。
 
-## License
+## 许可证与第三方声明
 
-正式公开发布前将确定最终 License。当前建议核心项目采用 **Apache-2.0**，以支持广泛的商业与社区使用，并提供明确的专利授权条款。
+SkillConsole 项目自身的原创源代码与文档采用 [MIT License](./LICENSE)。
+
+MIT License 仅适用于 SkillConsole 著作权人拥有权利的内容，不会对第三方 SDK、依赖库、API、服务、模型、文档或商标进行重新授权。每项第三方组件仍分别受其自身著作权、许可证、服务条款及其他适用政策约束。
+
+### Claude Agent SDK
+
+SkillConsole 使用 TypeScript 包 [`@anthropic-ai/claude-agent-sdk`](https://github.com/anthropics/claude-agent-sdk-typescript)。该项目仓库当前标注 **© Anthropic PBC. All rights reserved**，并说明除具有独立许可证的特定组件或依赖项外，其使用受 Anthropic [Commercial Terms of Service](https://www.anthropic.com/legal/commercial-terms) 约束。
+
+在使用、分发、部署 SkillConsole，或将其作为产品和服务提供给客户或最终用户之前，请自行查阅最新的 [Claude Agent SDK 许可证与条款](https://github.com/anthropics/claude-agent-sdk-typescript/blob/main/LICENSE.md)，以及其他所有第三方组件各自的许可证或条款。SkillConsole 的 MIT License 不授予 Claude Agent SDK、Claude Code、Anthropic 模型或服务以及第三方商标的相关权利。
 
 ## 致谢与声明
 
