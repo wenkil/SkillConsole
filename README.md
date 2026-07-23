@@ -199,7 +199,7 @@ Browser
         ├── Skill and test management
         ├── run orchestration
         ├── comparison and reporting
-        ├── SQLite metadata store
+        ├── PostgreSQL metadata and event store
         └── isolated per-run worker processes
               └── Claude Agent SDK session
 ```
@@ -350,7 +350,7 @@ SkillConsole is being designed in public. The initial roadmap is intentionally f
 - [ ] Real-time event and tool-call viewer
 - [ ] Artifact browser
 - [ ] Test suites and deterministic assertions
-- [ ] Run history with SQLite and immutable event logs
+- [ ] Run history with PostgreSQL and immutable event logs
 
 ### Phase 2 — Evaluation and regression
 
@@ -401,38 +401,111 @@ Until container isolation and permission controls are implemented and audited, d
 7. **Safe local defaults.** Minimize permissions, network access, and secret exposure.
 8. **Open formats.** Runs, events, grades, and reports should remain inspectable outside SkillConsole.
 
-## Development
+## Development and deployment
 
-The initial implementation is expected to use a TypeScript monorepo:
+SkillConsole is developed and deployed through Docker. Contributors do not need to install Node.js packages on the host machine. Docker builds the pnpm workspace and keeps `node_modules` inside the images.
+
+Prerequisites:
+
+- Docker Desktop on Windows or macOS, or Docker Engine with Docker Compose on Linux;
+- ports `5173`, `3000`, and `5433` available for development;
+- port `3000` available for the production profile.
+
+The repository remains a pnpm TypeScript monorepo inside its containers. The root `package.json`, `pnpm-workspace.yaml`, and `pnpm-lock.yaml` define that workspace and must remain in the repository.
+
+### Development
+
+From the repository root:
+
+```bash
+docker compose -f compose.yaml -f compose.development.yaml --profile development up --build
+```
+
+When the containers are healthy, open:
+
+```text
+http://localhost:5173
+```
+
+The development profile runs:
+
+- Vite Web UI on `http://localhost:5173`;
+- Fastify API on `http://localhost:3000`;
+- PostgreSQL on `127.0.0.1:5433` and inside the Compose network.
+
+Vite proxies `/api/*` to Fastify. Source directories are bind-mounted for hot reload, while dependencies remain inside Docker.
+
+Local database clients can connect with:
+
+```text
+Host: 127.0.0.1
+Port: 5433
+Database: skillconsole
+Username: skillconsole
+Password: the POSTGRES_PASSWORD value from .env, or skillconsole by default
+```
+
+If port `5433` is already in use, set `POSTGRES_HOST_PORT` in `.env`, for example:
+
+```dotenv
+POSTGRES_HOST_PORT=15432
+```
+
+This host-port mapping is defined only in `compose.development.yaml`. The production command does not expose PostgreSQL to the host.
+
+Stop the environment with:
+
+```bash
+docker compose -f compose.yaml -f compose.development.yaml --profile development down
+```
+
+After changing a `package.json` or `pnpm-lock.yaml`, run the development command again with `--build`.
+
+### Production
+
+Copy `.env.example` to `.env` and replace `POSTGRES_PASSWORD` before exposing a deployment. Then run:
+
+```bash
+docker compose --profile production up --build --detach
+```
+
+Open the single production address:
+
+```text
+http://localhost:3000
+```
+
+The production image builds the React application, serves it through Fastify, exposes the API under `/api/*`, and persists PostgreSQL and application data in Docker volumes.
+
+Useful operations:
+
+```bash
+docker compose --profile production logs --follow
+docker compose --profile production ps
+docker compose --profile production down
+```
+
+The application layout is:
 
 ```text
 apps/
 ├── web/                 # React visual workspace
-├── server/              # API, orchestration, reports
+├── server/              # Fastify API and run orchestration
 └── worker/              # isolated Agent SDK execution
 
 packages/
-├── core/                # domain model and use cases
-├── protocol/            # versioned run-event schemas
-├── skill-parser/        # Skill discovery and validation
+├── contracts/           # REST, SSE, IPC, and run-event schemas
+├── domain/              # domain model and state rules
+├── database/            # PostgreSQL, Drizzle schema, and migrations
+├── skill-engine/        # Skill scanning, validation, and snapshots
 ├── agent-runtime/       # Claude Agent SDK adapter
-├── graders/             # deterministic and model graders
-├── storage/             # SQLite and artifact storage
-├── reporters/           # HTML, Markdown, JSON, CI formats
-└── testkit/             # fixtures and integration helpers
+├── evaluation/          # deterministic assertions
+├── artifact-storage/    # artifact-storage interface and local implementation
+├── config/              # typed runtime configuration
+└── testkit/             # fixtures, builders, and test helpers
 ```
 
-Proposed local commands:
-
-```bash
-pnpm install
-pnpm dev
-pnpm test
-pnpm lint
-pnpm typecheck
-```
-
-These commands are part of the target repository contract and may change while the initial scaffold is being created.
+See [Project structure](./docs/project-structure.md) for directory responsibilities, internal layouts, and dependency rules. See [System architecture](./docs/system-architecture-design.md) for the product and runtime boundaries.
 
 ## Contributing
 

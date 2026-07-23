@@ -199,7 +199,7 @@ Browser
         ├── Skill 与测试管理
         ├── Run 编排
         ├── 对比和报告
-        ├── SQLite 元数据存储
+        ├── PostgreSQL 元数据与事件存储
         └── 每次运行独立的 Worker Process
               └── Claude Agent SDK Session
 ```
@@ -350,7 +350,7 @@ SkillConsole 将公开进行设计和开发。初期优先确保单机版本可�
 - [ ] 实时事件和工具调用查看器
 - [ ] 产物浏览器
 - [ ] 测试集与确定性断言
-- [ ] SQLite 运行历史与不可变事件日志
+- [ ] PostgreSQL 运行历史与不可变事件日志
 
 ### Phase 2 — 评测与回归
 
@@ -401,38 +401,111 @@ Agent Skill 可能引导 Agent 读取文件、写入文件、调用工具或访�
 7. **安全的本地默认值。** 尽量减少权限、网络访问和 Secret 暴露。
 8. **开放数据格式。** 即使脱离 SkillConsole，也能查看和处理 Run、Event、Grade 和 Report。
 
-## 开发结构
+## 开发与部署
 
-首期计划使用 TypeScript Monorepo：
+SkillConsole 的开发和生产部署统一使用 Docker。贡献者不需要在宿主机安装 Node.js 依赖，pnpm Workspace 和 `node_modules` 都在镜像中构建。
+
+环境要求：
+
+- Windows 或 macOS 使用 Docker Desktop，Linux 使用 Docker Engine 和 Docker Compose；
+- 开发环境需要使用 `5173`、`3000` 和 `5433` 端口；
+- 生产环境需要使用 `3000` 端口。
+
+容器内部仍然使用 pnpm TypeScript Monorepo。根目录的 `package.json`、`pnpm-workspace.yaml` 和 `pnpm-lock.yaml` 用于定义 Workspace 和锁定依赖，因此不能删除。
+
+### 开发环境
+
+在仓库根目录执行：
+
+```bash
+docker compose -f compose.yaml -f compose.development.yaml --profile development up --build
+```
+
+容器健康后打开：
+
+```text
+http://localhost:5173
+```
+
+开发 Profile 会启动：
+
+- `http://localhost:5173`：Vite 前端；
+- `http://localhost:3000`：Fastify API；
+- `127.0.0.1:5433` 及 Compose 内部网络中的 PostgreSQL。
+
+Vite 会把 `/api/*` 代理到 Fastify。源码目录通过 Bind Mount 实现热更新，依赖始终保留在 Docker 内，不会在宿主机生成 `node_modules`。
+
+本地数据库客户端可使用以下信息连接：
+
+```text
+主机：127.0.0.1
+端口：5433
+数据库：skillconsole
+用户名：skillconsole
+密码：.env 中的 POSTGRES_PASSWORD，未配置时默认为 skillconsole
+```
+
+如果本机的 `5433` 端口已被占用，可在 `.env` 中指定其他宿主机端口，例如：
+
+```dotenv
+POSTGRES_HOST_PORT=15432
+```
+
+宿主机端口映射只定义在 `compose.development.yaml` 中，生产环境启动命令不会向宿主机暴露 PostgreSQL。
+
+停止环境：
+
+```bash
+docker compose -f compose.yaml -f compose.development.yaml --profile development down
+```
+
+修改 `package.json` 或 `pnpm-lock.yaml` 后，需要重新执行带 `--build` 的开发命令。
+
+### 生产部署
+
+先将 `.env.example` 复制为 `.env`，并在对外部署前修改 `POSTGRES_PASSWORD`，然后执行：
+
+```bash
+docker compose --profile production up --build --detach
+```
+
+生产环境只需要打开：
+
+```text
+http://localhost:3000
+```
+
+生产镜像会构建 React 前端，通过 Fastify 提供静态页面，并在 `/api/*` 提供接口。PostgreSQL 和应用运行数据使用 Docker Volume 持久化。
+
+常用运维命令：
+
+```bash
+docker compose --profile production logs --follow
+docker compose --profile production ps
+docker compose --profile production down
+```
+
+应用结构如下：
 
 ```text
 apps/
 ├── web/                 # React 可视化工作台
-├── server/              # API、编排、报告
+├── server/              # Fastify API 与 Run 编排
 └── worker/              # 隔离的 Agent SDK 执行进程
 
 packages/
-├── core/                # 领域模型与 Use Cases
-├── protocol/            # 版本化 Run Event Schema
-├── skill-parser/        # Skill 发现与校验
+├── contracts/           # REST、SSE、IPC 与 Run Event Schema
+├── domain/              # 领域模型与状态规则
+├── database/            # PostgreSQL、Drizzle Schema 与 Migration
+├── skill-engine/        # Skill 扫描、校验与快照
 ├── agent-runtime/       # Claude Agent SDK Adapter
-├── graders/             # 确定性与模型 Grader
-├── storage/             # SQLite 与 Artifact Storage
-├── reporters/           # HTML、Markdown、JSON、CI 格式
-└── testkit/             # Fixtures 与集成测试工具
+├── evaluation/          # 确定性断言
+├── artifact-storage/    # Artifact 存储接口与本地实现
+├── config/              # 类型化运行配置
+└── testkit/             # Fixture、Builder 与测试辅助
 ```
 
-计划中的本地命令：
-
-```bash
-pnpm install
-pnpm dev
-pnpm test
-pnpm lint
-pnpm typecheck
-```
-
-这些命令属于目标仓库契约，在初始化代码框架期间仍可能调整。
+完整目录职责、内部结构和依赖方向见 [项目结构设计](./docs/project-structure.md)，产品与 Runtime 边界见 [系统架构设计](./docs/system-architecture-design.md)。
 
 ## 参与贡献
 

@@ -1,0 +1,9 @@
+{
+  "actions": {
+    "settings": "Settings"
+  },
+  "languages": {
+    "en": "English",
+    "zh-CN": "Simplified Chinese"
+  }
+}

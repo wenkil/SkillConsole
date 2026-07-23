@@ -1,0 +1,75 @@
+{
+  "sidebar": {
+    "workbenches": "Workbenches",
+    "projectList": "Project list",
+    "emptyTitle": "No projects yet",
+    "emptyDescription": "Your first Skill testing workbench will appear here after it is created."
+  },
+  "hero": {
+    "eyebrow": "Skill quality measurement tool",
+    "title": "Create a Skill testing workbench",
+    "description": "A workbench binds one Skill source, test definitions, runtime configuration, execution traces, and artifacts into a locally managed project.",
+    "createWorkbench": "Create workbench"
+  },
+  "setup": {
+    "title": "Workbench initialization",
+    "description": "Create a testing workbench in four steps. The completed project will appear in the list on the left.",
+    "steps": {
+      "name": {
+        "title": "Name the workbench",
+        "description": "Give the Skill testing project a clear name so it is easy to identify in the project list."
+      },
+      "source": {
+        "title": "Import Skill source",
+        "description": "Choose a local Skill folder or import a ZIP archive containing the complete Skill files."
+      },
+      "runtime": {
+        "title": "Configure runtime",
+        "description": "Enter a user-managed Endpoint URL, API Key, and Model ID for a compatible inference service."
+      },
+      "validate": {
+        "title": "Validate and enter",
+        "description": "Check the Skill structure and runtime connection, then enter the project to begin testing."
+      }
+    }
+  },
+  "localFirst": {
+    "title": "Local-first design",
+    "description": "Skill files and test data stay on this computer. The frontend does not upload project data directly."
+  },
+  "createDialog": {
+    "title": "Create testing workbench",
+    "workbenchName": "Workbench name",
+    "workbenchNamePlaceholder": "For example: Invoice Review Skill Workbench",
+    "workbenchNameHelp": "This name appears in the project list on the left.",
+    "skillSource": "Skill source",
+    "folder": "Folder",
+    "folderDescription": "Choose a local folder containing the Skill files.",
+    "zip": "ZIP archive",
+    "zipDescription": "Import a ZIP archive containing the complete Skill.",
+    "chooseFolder": "Choose Skill folder",
+    "chooseZip": "Choose ZIP archive",
+    "dropHint": "Click to browse or drop the source here.",
+    "selectedSource": "Selected",
+    "cancel": "Cancel",
+    "createProject": "Create project",
+    "nameRequired": "Enter a workbench name.",
+    "sourceRequired": "Choose a Skill folder or ZIP archive."
+  },
+  "settingsDialog": {
+    "title": "Default runtime",
+    "description": "Configure only the Endpoint URL, API Key, and Model ID used by new projects.",
+    "endpointUrl": "Endpoint URL",
+    "apiKey": "API Key",
+    "modelId": "Model ID",
+    "saveSettings": "Save settings"
+  },
+  "notifications": {
+    "projectCreated": "Project created",
+    "settingsSaved": "Settings saved"
+  },
+  "detail": {
+    "backToHome": "Back to creation home",
+    "placeholder": "The project detail page will be designed separately. This screen only preserves the navigation boundary from the project list."
+  }
+}

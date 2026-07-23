@@ -1,0 +1,17 @@
+.git
+.agents
+.codex
+.pnpm-store
+node_modules
+**/node_modules
+**/dist
+**/coverage
+**/.vite
+**/*.tsbuildinfo
+.env
+.env.*
+!.env.example
+var
+tmp
+temp
+prototypes

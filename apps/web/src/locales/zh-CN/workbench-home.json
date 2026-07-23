@@ -1,0 +1,75 @@
+{
+  "sidebar": {
+    "workbenches": "测试工作台",
+    "projectList": "项目列表",
+    "emptyTitle": "暂无项目",
+    "emptyDescription": "创建第一个 Skill 测试工作台后，项目会显示在这里。"
+  },
+  "hero": {
+    "eyebrow": "Skill 质量度量工具",
+    "title": "创建 Skill 测试工作台",
+    "description": "测试工作台将一个 Skill 来源、测试定义、运行配置、执行轨迹和产物绑定在一起，并由你在本地管理。",
+    "createWorkbench": "创建测试工作台"
+  },
+  "setup": {
+    "title": "工作台初始化",
+    "description": "按照下面四个步骤创建测试工作台。创建完成后，项目会显示在左侧列表中。",
+    "steps": {
+      "name": {
+        "title": "命名工作台",
+        "description": "使用清晰的名称标识当前 Skill 测试项目，并方便在左侧项目列表中快速找到。"
+      },
+      "source": {
+        "title": "导入 Skill 来源",
+        "description": "选择本地 Skill 文件夹，或者导入包含完整 Skill 文件的 ZIP 压缩包。"
+      },
+      "runtime": {
+        "title": "配置运行环境",
+        "description": "填写用户管理的 Endpoint URL、API Key 和 Model ID，连接兼容的推理服务。"
+      },
+      "validate": {
+        "title": "验证并进入",
+        "description": "检查 Skill 结构和运行环境是否可用，验证通过后进入项目详情页开始测试。"
+      }
+    }
+  },
+  "localFirst": {
+    "title": "本地优先设计",
+    "description": "Skill 文件和测试数据保存在本机，前端不会直接上传项目数据。"
+  },
+  "createDialog": {
+    "title": "创建测试工作台",
+    "workbenchName": "工作台名称",
+    "workbenchNamePlaceholder": "例如：发票审核 Skill 工作台",
+    "workbenchNameHelp": "该名称会显示在左侧项目列表中。",
+    "skillSource": "Skill 来源",
+    "folder": "文件夹",
+    "folderDescription": "选择包含 Skill 文件的本地文件夹。",
+    "zip": "ZIP 压缩包",
+    "zipDescription": "导入包含完整 Skill 文件的 ZIP 包。",
+    "chooseFolder": "选择 Skill 文件夹",
+    "chooseZip": "选择 ZIP 压缩包",
+    "dropHint": "点击浏览，也可以将来源拖放到这里。",
+    "selectedSource": "已选择",
+    "cancel": "取消",
+    "createProject": "创建项目",
+    "nameRequired": "请填写工作台名称。",
+    "sourceRequired": "请选择 Skill 文件夹或 ZIP 压缩包。"
+  },
+  "settingsDialog": {
+    "title": "默认运行环境",
+    "description": "只配置新项目默认使用的 Endpoint URL、API Key 和 Model ID。",
+    "endpointUrl": "Endpoint URL",
+    "apiKey": "API Key",
+    "modelId": "Model ID",
+    "saveSettings": "保存设置"
+  },
+  "notifications": {
+    "projectCreated": "项目已创建",
+    "settingsSaved": "设置已保存"
+  },
+  "detail": {
+    "backToHome": "返回创建首页",
+    "placeholder": "项目详情页将在下一阶段单独设计。当前页面只保留从项目列表进入详情的导航边界。"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "skillconsole",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A visual workbench for testing Agent Skills.",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22.12.0",
+    "pnpm": ">=11.9.0 <12"
+  }
+}
