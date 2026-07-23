@@ -413,6 +413,22 @@ Prerequisites:
 
 The repository remains a pnpm TypeScript monorepo inside its containers. The root `package.json`, `pnpm-workspace.yaml`, and `pnpm-lock.yaml` define that workspace and must remain in the repository.
 
+### Image registry configuration
+
+Docker Hub is used by default. To use a registry mirror, copy `.env.example` to `.env` and set a prefix that includes the trailing slash:
+
+```dotenv
+DOCKER_REGISTRY=docker.1ms.run/
+```
+
+The prefix applies to the PostgreSQL, Node.js, Dockerfile frontend, and standalone Web Nginx images. Leave `DOCKER_REGISTRY` empty to use Docker Hub. A PowerShell session variable overrides the value loaded from `.env`:
+
+```powershell
+$env:DOCKER_REGISTRY = "docker.1ms.run/"
+```
+
+Third-party mirrors are optional and are not operated or verified by SkillConsole. Users are responsible for evaluating their availability, integrity, and supply-chain security.
+
 ### Development
 
 From the repository root:

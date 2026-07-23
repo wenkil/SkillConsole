@@ -1,4 +1,4 @@
-import { FolderDashed, FolderOpen, Layers3 } from "lucide-react"
+import { Folder, FolderOpen, Layers3 } from "lucide-react"
 
 import type { WorkbenchProject } from "@/features/workbench-home/model/workbench"
 import type { WorkbenchHomeCopy } from "@/features/workbench-home/model/workbench-home-copy"
@@ -37,7 +37,7 @@ export function ProjectSidebar({
 
         {projects.length === 0 ? (
           <div className="mt-2 border border-dashed border-rule px-3 py-7 text-center text-muted-foreground">
-            <FolderDashed
+            <Folder
               aria-hidden="true"
               className="mx-auto mb-2 size-7"
               strokeWidth={1.7}
@@ -56,7 +56,7 @@ export function ProjectSidebar({
                 className={cn(
                   "w-full border border-rule-soft px-3 py-3 text-left transition-colors hover:border-primary hover:bg-accent",
                   activeProjectId === project.id &&
-                    "border-primary bg-accent shadow-[inset_3px_0_0_var(--primary)]",
+                  "border-primary bg-accent shadow-[inset_3px_0_0_var(--primary)]",
                 )}
                 key={project.id}
                 onClick={() => onProjectSelect(project.id)}

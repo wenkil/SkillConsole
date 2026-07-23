@@ -2,7 +2,7 @@ name: skillconsole
 
 services:
   postgres:
-    image: postgres:18-alpine
+    image: "${DOCKER_REGISTRY:-}postgres:18-alpine"
     profiles:
       - development
       - production
@@ -29,6 +29,9 @@ services:
       context: .
       dockerfile: apps/server/Dockerfile
       target: development
+      args:
+        BUILDKIT_SYNTAX: "${DOCKER_REGISTRY:-}docker/dockerfile:1.7"
+        NODE_IMAGE: "${DOCKER_REGISTRY:-}node:22-bookworm-slim"
     environment:
       NODE_ENV: development
       HOST: 0.0.0.0
@@ -61,6 +64,10 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
       target: development
+      args:
+        BUILDKIT_SYNTAX: "${DOCKER_REGISTRY:-}docker/dockerfile:1.7"
+        NODE_IMAGE: "${DOCKER_REGISTRY:-}node:22-bookworm-slim"
+        NGINX_IMAGE: "${DOCKER_REGISTRY:-}nginx:1.29-alpine"
     environment:
       VITE_API_PROXY_TARGET: http://server:3000
     depends_on:
@@ -83,6 +90,9 @@ services:
       context: .
       dockerfile: Dockerfile
       target: production
+      args:
+        BUILDKIT_SYNTAX: "${DOCKER_REGISTRY:-}docker/dockerfile:1.7"
+        NODE_IMAGE: "${DOCKER_REGISTRY:-}node:22-bookworm-slim"
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0

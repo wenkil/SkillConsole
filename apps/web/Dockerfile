@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 ARG NODE_IMAGE=node:22-bookworm-slim
+ARG NGINX_IMAGE=nginx:1.29-alpine
 
 FROM ${NODE_IMAGE} AS development
 
@@ -28,7 +29,7 @@ FROM development AS build
 
 RUN pnpm --filter @skillconsole/web build
 
-FROM nginx:1.29-alpine AS production
+FROM ${NGINX_IMAGE} AS production
 
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /workspace/apps/web/dist /usr/share/nginx/html

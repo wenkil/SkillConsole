@@ -413,6 +413,22 @@ SkillConsole 的开发和生产部署统一使用 Docker。贡献者不需要在
 
 容器内部仍然使用 pnpm TypeScript Monorepo。根目录的 `package.json`、`pnpm-workspace.yaml` 和 `pnpm-lock.yaml` 用于定义 Workspace 和锁定依赖，因此不能删除。
 
+### 镜像仓库配置
+
+项目默认使用 Docker Hub。如需使用镜像站，请将 `.env.example` 复制为 `.env`，并填写包含末尾斜杠的镜像前缀：
+
+```dotenv
+DOCKER_REGISTRY=docker.1ms.run/
+```
+
+该前缀会应用于 PostgreSQL、Node.js、Dockerfile Frontend 和独立 Web 构建使用的 Nginx 镜像。将 `DOCKER_REGISTRY` 留空时使用 Docker Hub。PowerShell 当前会话中的环境变量会覆盖 `.env` 中的配置：
+
+```powershell
+$env:DOCKER_REGISTRY = "docker.1ms.run/"
+```
+
+第三方镜像站为可选配置，并非由 SkillConsole 运营或验证；其可用性、内容完整性与供应链安全由使用者自行评估。
+
 ### 开发环境
 
 在仓库根目录执行：
