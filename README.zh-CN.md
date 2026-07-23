@@ -103,6 +103,23 @@ SkillConsole 将 Skill 视为一个有版本、可测试、可发布的产品，
 
 ### 运行环境
 
+> [!IMPORTANT]
+> SkillConsole 使用 **Claude Agent SDK** 运行 Agent，不针对不同模型厂商提供独立的内置 Provider 配置。所有推理 Endpoint 都由用户自行管理：用户需要填写 Endpoint URL、API Key（或安全的 Secret 引用）和模型标识。
+>
+> Endpoint 必须实现 Claude Agent SDK 所需的 **Anthropic Messages API** 契约，主要接口为 `POST /v1/messages`，并支持 Agent 运行所需的 SSE 流式事件、`tool_use` / `tool_result` 内容块、停止原因字段和 Usage Metadata。只有 OpenAI 兼容的 `/v1/chat/completions` 接口并不能直接使用，必须先通过网关转换为上述契约。
+
+用户可以选择的接入方式包括：
+
+- 直接使用 Anthropic 官方 API；
+- 使用企业内部 LLM 网关；
+- 使用 [New API](https://docs.newapi.ai/zh/docs/apps/claude-code)、[LiteLLM](https://docs.litellm.ai/) 或 [Claude Code Router](https://github.com/musistudio/claude-code-router) 等网关或协议转换层，并将其配置为提供所需的 Messages API 行为；
+- 使用自建的协议转换服务；
+- 使用其他能够被 Claude Agent SDK 调用并满足上述契约的 Endpoint。
+
+以上只是可选接入方式示例，不代表 SkillConsole 内置集成、认证兼容或为其背书。SkillConsole 不判断 Endpoint 背后实际使用哪一家模型厂商；协议转换、模型能力、服务可用性、费用和数据处理均由用户或网关运营方负责。
+
+协议参考：[Anthropic Messages API](https://platform.claude.com/docs/en/api/messages/create) 与 [Streaming Messages](https://platform.claude.com/docs/en/build-with-claude/streaming)。
+
 可复用的 Environment Profile 可以包含：
 
 - API Base URL；

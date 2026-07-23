@@ -103,6 +103,23 @@ SkillConsole should highlight:
 
 ### Environments
 
+> [!IMPORTANT]
+> SkillConsole runs agents through the **Claude Agent SDK** and does not integrate with each model vendor through separate built-in provider configurations. Every inference endpoint is user-managed: users supply the endpoint URL, API key (or secure secret reference), and model identifier.
+>
+> The endpoint must implement the **Anthropic Messages API** contract used by the Claude Agent SDK—principally `POST /v1/messages`, including SSE streaming, `tool_use` / `tool_result` content blocks, stop-reason fields, and usage metadata required by agent runs. An OpenAI-compatible `/v1/chat/completions` endpoint alone cannot be used directly unless a gateway converts it to this contract.
+
+Possible connection paths include:
+
+- the Anthropic API directly;
+- an internal enterprise LLM gateway;
+- gateway or conversion layers such as [New API](https://docs.newapi.ai/en/docs/apps/claude-code), [LiteLLM](https://docs.litellm.ai/), or [Claude Code Router](https://github.com/musistudio/claude-code-router), when configured to expose the required Messages API behavior;
+- a self-hosted protocol translation service;
+- any other endpoint that the Claude Agent SDK can call and that satisfies the contract above.
+
+These are connection examples, not bundled integrations or certified compatibility claims. SkillConsole does not determine which provider is behind an endpoint. Protocol translation, model capability, availability, cost, and data handling remain the responsibility of the user or gateway operator.
+
+Protocol references: [Anthropic Messages API](https://platform.claude.com/docs/en/api/messages/create) and [streaming messages](https://platform.claude.com/docs/en/build-with-claude/streaming).
+
 Store reusable execution profiles containing:
 
 - API base URL;
