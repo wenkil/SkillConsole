@@ -1,5 +1,7 @@
 # SkillConsole
 
+[English](./README.md) | **简体中文**
+
 <p align="center">
   <strong>面向 Agent Skills 的可视化管理、测试、对比与报告工作台。</strong>
 </p>

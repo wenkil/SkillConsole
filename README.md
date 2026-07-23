@@ -1,5 +1,7 @@
 # SkillConsole
 
+**English** | [简体中文](./README.zh-CN.md)
+
 <p align="center">
   <strong>The visual workspace for managing, testing, comparing, and reporting Agent Skills.</strong>
 </p>
