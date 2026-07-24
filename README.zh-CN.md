@@ -132,15 +132,6 @@ docker compose -f compose.yaml -f compose.development.yaml --profile development
 http://localhost:5173
 ```
 
-数据库、生产部署、镜像仓库和常用运维命令见[部署与本地开发](./docs/deployment.md)。
-
-## 文档
-
-- [Skill 测试工作台产品定义](./docs/skill-workspace-product-definition.md)
-- [部署与本地开发](./docs/deployment.md)
-- [系统架构设计](./docs/system-architecture-design.md)
-- [项目结构设计](./docs/project-structure.md)
-
 ## 参与贡献
 
 欢迎提交真实 Skill 测试流程、失败案例、版本管理建议、Evals Schema 研究、文件 Diff 方案、可复现数据集和交互体验反馈。

@@ -132,15 +132,6 @@ When the containers are healthy, open:
 http://localhost:5173
 ```
 
-See [Deployment and local development](./docs/deployment.md) for database access, production deployment, registry configuration, and operational commands.
-
-## Documentation
-
-- [Skill test workspace product definition](./docs/skill-workspace-product-definition.md)
-- [Deployment and local development](./docs/deployment.md)
-- [System architecture](./docs/system-architecture-design.md)
-- [Project structure](./docs/project-structure.md)
-
 ## Contributing
 
 Contributions are welcome for real Skill testing workflows, failure cases, version-management ideas, Evals schema research, file-diff approaches, reproducible datasets, and interaction-design feedback.
