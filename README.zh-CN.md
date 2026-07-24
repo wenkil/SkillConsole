@@ -403,7 +403,7 @@ Agent Skill 可能引导 Agent 读取文件、写入文件、调用工具或访�
 
 ## 开发与部署
 
-SkillConsole 的开发和生产部署统一使用 Docker。贡献者不需要在宿主机安装 Node.js 依赖，pnpm Workspace 和 `node_modules` 都在镜像中构建。
+SkillConsole 的开发和生产部署统一使用 Docker。贡献者不需要在宿主机安装 Node.js 依赖，npm Workspaces 和 `node_modules` 都在镜像中构建。
 
 环境要求：
 
@@ -411,7 +411,7 @@ SkillConsole 的开发和生产部署统一使用 Docker。贡献者不需要在
 - 开发环境需要使用 `5173`、`3000` 和 `5433` 端口；
 - 生产环境需要使用 `3000` 端口。
 
-容器内部仍然使用 pnpm TypeScript Monorepo。根目录的 `package.json`、`pnpm-workspace.yaml` 和 `pnpm-lock.yaml` 用于定义 Workspace 和锁定依赖，因此不能删除。
+容器内部使用 npm TypeScript Monorepo。根目录 `package.json` 中的 `workspaces` 定义 Workspace，`package-lock.json` 锁定依赖，二者都是可复现构建所需的元数据。
 
 ### 镜像仓库配置
 
@@ -449,6 +449,8 @@ http://localhost:5173
 - `http://localhost:3000`：Fastify API；
 - `127.0.0.1:5433` 及 Compose 内部网络中的 PostgreSQL。
 
+API 的进程存活探针为 `http://localhost:3000/health/live`，包含 PostgreSQL 检查的就绪探针为 `http://localhost:3000/health/ready`，仅开发环境开放的 OpenAPI 文档为 `http://localhost:3000/documentation`。Compose 会在启动 Fastify 前先执行尚未应用的 Drizzle 迁移。
+
 Vite 会把 `/api/*` 代理到 Fastify。源码目录通过 Bind Mount 实现热更新，依赖始终保留在 Docker 内，不会在宿主机生成 `node_modules`。
 
 本地数据库客户端可使用以下信息连接：
@@ -475,7 +477,7 @@ POSTGRES_HOST_PORT=15432
 docker compose -f compose.yaml -f compose.development.yaml --profile development down
 ```
 
-修改 `package.json` 或 `pnpm-lock.yaml` 后，需要重新执行带 `--build` 的开发命令。
+修改 `package.json` 或 `package-lock.json` 后，需要重新执行带 `--build` 的开发命令。
 
 ### 生产部署
 
@@ -506,19 +508,13 @@ docker compose --profile production down
 ```text
 apps/
 ├── web/                 # React 可视化工作台
-├── server/              # Fastify API 与 Run 编排
-└── worker/              # 隔离的 Agent SDK 执行进程
+└── server/              # 全部后端能力与包内 Run Worker
 
-packages/
-├── contracts/           # REST、SSE、IPC 与 Run Event Schema
-├── domain/              # 领域模型与状态规则
-├── database/            # PostgreSQL、Drizzle Schema 与 Migration
-├── skill-engine/        # Skill 扫描、校验与快照
-├── agent-runtime/       # Claude Agent SDK Adapter
-├── evaluation/          # 确定性断言
-├── artifact-storage/    # Artifact 存储接口与本地实现
+apps/server/src/
 ├── config/              # 类型化运行配置
-└── testkit/             # Fixture、Builder 与测试辅助
+├── core/                # Server 内错误与 HTTP 基础类型
+├── infrastructure/      # PostgreSQL、Drizzle、文件存储和日志
+└── modules/             # Project、Skill、Test、Environment 和 Run
 ```
 
 完整目录职责、内部结构和依赖方向见 [项目结构设计](./docs/project-structure.md)，产品与 Runtime 边界见 [系统架构设计](./docs/system-architecture-design.md)。

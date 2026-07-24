@@ -5,29 +5,23 @@ ARG NGINX_IMAGE=nginx:1.29-alpine
 
 FROM ${NODE_IMAGE} AS development
 
-ENV PNPM_HOME=/pnpm
-ENV PATH="${PNPM_HOME}:${PATH}"
-
-RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
-
 WORKDIR /workspace
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY package.json package-lock.json tsconfig.base.json ./
 COPY apps/web/package.json apps/web/package.json
 COPY apps/server/package.json apps/server/package.json
-COPY packages packages
 
-RUN pnpm install --frozen-lockfile
+RUN npm ci
 
 COPY apps/web apps/web
 
 EXPOSE 5173
 
-CMD ["pnpm", "--filter", "@skillconsole/web", "dev"]
+CMD ["npm", "run", "dev", "--workspace", "@skillconsole/web"]
 
 FROM development AS build
 
-RUN pnpm --filter @skillconsole/web build
+RUN npm run build --workspace @skillconsole/web
 
 FROM ${NGINX_IMAGE} AS production
 

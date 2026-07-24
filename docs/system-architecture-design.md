@@ -919,27 +919,29 @@ erDiagram
 
 ## 13. 代码边界建议
 
-首版使用 pnpm TypeScript Workspace：前端采用 React 和 Vite，应用服务采用 Fastify，数据层采用 PostgreSQL、Drizzle ORM 和 `node-postgres`。目录结构表达部署边界和稳定契约，不按每个页面拆包：
+首版使用 npm TypeScript Workspaces，只保留 Web 和 Server 两个应用。前端采用 React 和 Vite，Server 采用 Fastify，数据层采用 PostgreSQL、Drizzle ORM 和 `node-postgres`。全部后端能力按产品功能放在 Server 内部，不为单一调用方创建 Workspace Package：
 
 ```text
 apps/
 ├── web/                 # 产品界面
-├── server/              # API、应用服务与 Run 编排
-└── worker/              # 独立 Run 进程
+└── server/              # API、数据库、存储、Skill、评测与 Run
 
-packages/
-├── contracts/           # API、IPC 与 Run Event Schema
-├── domain/              # Project、Test、Run 等领域模型
-├── database/            # PostgreSQL、Drizzle Schema 与 Migration
-├── skill-engine/        # Skill 扫描、校验与快照
-├── agent-runtime/       # Claude Agent SDK Adapter
-├── evaluation/          # 确定性断言
-├── artifact-storage/    # Artifact 存储接口与本地实现
-├── config/              # 类型化运行配置
-└── testkit/             # Fixture、Builder 与测试辅助
+apps/server/src/
+├── config/
+├── core/
+├── infrastructure/
+│   ├── database/
+│   ├── storage/
+│   └── observability/
+└── modules/
+    ├── projects/
+    ├── skills/
+    ├── tests/
+    ├── environments/
+    └── runs/
 ```
 
-不建议首版按“项目服务、测试服务、报告服务”拆成独立微服务。模块之间先通过 TypeScript 接口和数据库事务保持边界，只有部署需求出现后再拆进程或服务。
+Skill 扫描与快照归属 `skills`，Agent Runtime、确定性评测和 Run Artifact 归属 `runs`，通用物理文件读写由 `infrastructure/storage` 提供。Run Worker 仍可作为 Server 包内的独立 Node.js 子进程运行，但不再维护独立 Workspace。只有出现第二个真实调用方或独立部署需求后，才考虑提取 Package 或服务。
 
 每个目录的职责、内部结构和依赖方向见 [项目结构设计](./project-structure.md)。
 
@@ -949,7 +951,7 @@ packages/
 
 - 开发环境使用 Compose 的 `development` profile，分别启动 Web、Server 和 PostgreSQL；浏览器访问 `http://localhost:5173`。
 - 生产环境使用 Compose 的 `production` profile，由单个 Fastify 应用同时提供 API 和前端静态资源，并连接 PostgreSQL；浏览器访问 `http://localhost:3000`。
-- 根目录 `package.json`、`pnpm-workspace.yaml` 和锁文件属于 Workspace 依赖边界，也是容器分层安装与可复现构建所需的元数据，不应删除。
+- 根目录 `package.json` 中的 `workspaces` 与 `package-lock.json` 属于 Workspace 依赖边界，也是容器分层安装与可复现构建所需的元数据，不应删除。
 
 具体命令和环境变量见根目录 [README](../README.md) 与 [中文 README](../README.zh-CN.md)。
 

@@ -1,28 +1,49 @@
 import { buildApplication } from "./app.js"
+import { parseApplicationConfig } from "./config/index.js"
 
-const databaseUrl = process.env.DATABASE_URL
+const config = parseApplicationConfig(process.env)
+const application = await buildApplication({ config })
+let isShuttingDown = false
 
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL is required.")
+async function shutdown(signal: NodeJS.Signals): Promise<void> {
+  if (isShuttingDown) return
+
+  isShuttingDown = true
+  application.log.info({ signal }, "SkillConsole server is shutting down")
+
+  try {
+    await application.close()
+  } catch (error) {
+    application.log.error({ err: error }, "Failed to close SkillConsole server")
+    process.exitCode = 1
+  }
 }
 
-const port = Number.parseInt(process.env.PORT ?? "3000", 10)
-const host = process.env.HOST ?? "0.0.0.0"
-
-if (!Number.isInteger(port) || port <= 0) {
-  throw new Error("PORT must be a positive integer.")
-}
-
-const application = await buildApplication({
-  databaseUrl,
-  logger: true,
-  staticRoot: process.env.STATIC_ROOT,
+process.once("SIGINT", () => {
+  void shutdown("SIGINT")
+})
+process.once("SIGTERM", () => {
+  void shutdown("SIGTERM")
 })
 
 try {
-  const address = await application.listen({ host, port })
+  const address = await application.listen({
+    host: config.host,
+    port: config.port,
+  })
+
   application.log.info({ address }, "SkillConsole server is ready")
 } catch (error) {
-  application.log.error(error)
+  application.log.error({ err: error }, "SkillConsole server failed to start")
+
+  try {
+    await application.close()
+  } catch (closeError) {
+    application.log.error(
+      { err: closeError },
+      "Failed to close SkillConsole server after startup error",
+    )
+  }
+
   process.exitCode = 1
 }

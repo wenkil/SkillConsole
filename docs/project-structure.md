@@ -8,24 +8,24 @@
 
 ## 1. 设计目标
 
-SkillConsole 采用 TypeScript Monorepo，将 Web 界面、Fastify Server、Agent Run Worker 和可复用领域能力分开。
+SkillConsole 采用 TypeScript Monorepo，只保留 Web 和 Server 两个 Workspace。全部后端能力位于 `apps/server`，Agent Run 需要隔离时由 Server 包内的 Worker 入口启动独立 Node.js 进程。
 
 目录结构需要同时满足：
 
 1. 前端不能直接接触数据库、文件系统、Secret 或 Claude Agent SDK；
-2. HTTP API 与 Agent 执行进程分离；
+2. HTTP API 与 Agent 执行可以分进程隔离，但不拆成不同 Workspace；
 3. 产品模块可以在模块化单体中独立演进；
 4. PostgreSQL、Artifact Store 和 Claude Agent SDK 可以通过明确边界替换或升级；
 5. 首版不因未来可能出现的 SaaS、多 Runtime 或微服务需求而提前复杂化；
-6. 每个目录都能够从 README 中判断职责、允许依赖和禁止行为。
+6. 只有独立运行的应用维护 Package 边界，Server 内部按产品功能组织模块。
 
 ## 2. 技术基线
 
 | 领域 | 选择 | 说明 |
 | --- | --- | --- |
-| 语言 | TypeScript | 前端、Server、Worker 和共享包统一语言 |
+| 语言 | TypeScript | Web、Server 和 Server 内 Worker 入口统一语言 |
 | Node.js | `>=22.12.0` | 兼容当前本地 Node.js 22；CI 后续以 Node.js 24 LTS 为主 |
-| 包管理 | pnpm 11 | 使用 pnpm Workspace，不在首版加入 Turborepo |
+| 包管理 | npm 10+ | 使用 npm Workspaces，不在首版加入 Turborepo |
 | 前端 | React 19 + Vite 8 + shadcn/ui + Tailwind CSS 4 | 独立 SPA，通过 API 和 SSE 与 Server 通信 |
 | 前端数据层 | TanStack Query + TanStack Table | 管理服务端状态和数据密集型表格 |
 | 后端 | Fastify 5 | 使用插件封装和按产品模块组织 Route |
@@ -33,11 +33,11 @@ SkillConsole 采用 TypeScript Monorepo，将 Web 界面、Fastify Server、Agen
 | 数据库 | PostgreSQL | 保存结构化元数据、Run 状态、事件和断言结果 |
 | 数据访问 | Drizzle ORM + `pg` | Schema 使用 TypeScript 定义，SQL Migration 纳入版本控制 |
 | 实时事件 | Server-Sent Events | Server 向 Web 单向推送 Run 事件 |
-| Agent Runtime | Claude Agent SDK for TypeScript | 只在 `packages/agent-runtime` 内直接依赖 |
+| Agent Runtime | Claude Agent SDK for TypeScript | 只在 `apps/server/src/modules/runs/runtime` 内直接依赖 |
 | Artifact | 本地文件系统 | PostgreSQL 只保存元数据和受控引用 |
 | 日志 | Pino | Server 与 Worker 使用同一个 `runId` 关联日志 |
 
-当前仓库已初始化前端工程基础，包括依赖、Vite 与 TypeScript 配置、Tailwind CSS 主题入口、shadcn/ui 配置和最小启动入口。Server、Worker 和共享包仍保持目录骨架状态。
+当前仓库已初始化前端、Fastify Server、Docker Compose 和 PostgreSQL 基础设施。后端正在按本文定义的 Server 内部模块结构完成阶段 1。
 
 ## 3. 仓库目录
 
@@ -47,19 +47,7 @@ SkillConsole/
 ├── compose.yaml                  # 开发与生产 Profile
 ├── apps/
 │   ├── web/                    # React 可视化工作台和 Web Dockerfile
-│   ├── server/                 # Fastify API、静态托管和 Server Dockerfile
-│   └── worker/                 # 独立 Agent Run 进程
-│
-├── packages/
-│   ├── contracts/              # REST、SSE、IPC 和 Run Event Schema
-│   ├── domain/                 # 产品领域模型和状态规则
-│   ├── database/               # PostgreSQL、Drizzle Schema 与 Migration
-│   ├── skill-engine/           # Skill 扫描、校验、快照和 Workspace
-│   ├── agent-runtime/          # Claude Agent SDK Adapter
-│   ├── evaluation/             # 确定性断言
-│   ├── artifact-storage/       # Artifact 存储接口和本地实现
-│   ├── config/                 # 类型化环境配置
-│   └── testkit/                # 测试 Builder、Fixture 和 Mock
+│   └── server/                 # 全部后端能力、Worker 入口和 Server Dockerfile
 │
 ├── examples/
 │   ├── skills/                 # 可公开的示例 Skill
@@ -77,7 +65,7 @@ SkillConsole/
 ├── scripts/                    # 可重复的仓库级脚本
 ├── var/                        # 运行时数据，不纳入 Git
 ├── package.json
-├── pnpm-workspace.yaml
+├── package-lock.json
 └── tsconfig.base.json
 ```
 
@@ -144,7 +132,7 @@ apps/web/src/
 
 ### 4.2 `apps/server`
 
-Fastify 模块化单体，是 Web、PostgreSQL、Artifact Store 和 Worker 之间的应用层。
+Fastify 模块化单体，拥有 Web API、PostgreSQL、文件存储、Skill 扫描、Run Worker、断言评测和结果读取等全部后端能力。
 
 负责：
 
@@ -165,24 +153,21 @@ apps/server/src/
 ├── app/
 │   ├── build-app.ts
 │   └── lifecycle.ts
-├── plugins/
-│   ├── config.ts
-│   ├── database.ts
-│   ├── errors.ts
-│   ├── logging.ts
-│   └── openapi.ts
+├── config/                       # 类型化环境配置
+├── core/
+│   ├── errors/                   # Server 内部错误模型
+│   └── http/                     # 通用 HTTP Schema 与映射
+├── infrastructure/
+│   ├── database/                 # Drizzle、Schema、Repository 与事务
+│   ├── storage/                  # 受控文件读写和本地存储实现
+│   └── observability/            # 日志、Request ID 和运行诊断
 ├── modules/
+│   ├── health/
 │   ├── projects/
-│   ├── skills/
-│   ├── tests/
-│   ├── environments/
-│   ├── runs/
-│   └── results/
-├── orchestration/
-│   ├── run-scheduler.ts
-│   ├── worker-client.ts
-│   └── worker-registry.ts
-├── shared/
+│   ├── skills/                   # 导入、扫描、校验、快照和 Skill 文件
+│   ├── tests/                    # 测试用例与断言定义
+│   ├── environments/             # Endpoint 与执行配置
+│   └── runs/                     # 调度、Worker、Runtime、评测、产物和结果
 ├── app.ts
 └── main.ts
 ```
@@ -200,9 +185,9 @@ apps/server/src/
 
 Route Handler 只处理 HTTP 边界，不直接写 SQL，也不直接调用 Claude Agent SDK。
 
-### 4.3 `apps/worker`
+### 4.3 Server 内 Worker 进程
 
-每次 Agent Run 使用的独立 Node.js 进程。
+每次 Agent Run 仍可使用独立 Node.js 进程，但 Worker 是 `apps/server` 的内部运行入口，不是独立 Workspace，也不维护第二套依赖。
 
 负责：
 
@@ -216,145 +201,70 @@ Route Handler 只处理 HTTP 边界，不直接写 SQL，也不直接调用 Clau
 - 执行取消、超时、预算和大小限制；
 - 在终态后退出。
 
-建议的内部结构：
+Worker 位于 Run 模块内部：
 
 ```text
-apps/worker/src/
-├── bootstrap/           # IPC 和进程生命周期
-├── runner/              # Run 状态机
-├── workspace/           # Workspace 准备和清理
-├── events/              # Event 标准化和发送
-├── artifacts/           # Artifact 与 Workspace Diff
-├── policies/            # 执行限制
-└── main.ts
+apps/server/src/modules/runs/
+├── orchestration/       # 调度、进程注册和取消
+├── worker/              # Worker 入口、IPC 和生命周期
+├── runtime/             # Claude Agent SDK Adapter
+├── evaluation/          # 确定性断言
+├── artifacts/           # Run Artifact 与 Workspace Diff 规则
+└── events/              # 标准化事件与 SSE 投影
 ```
 
-Worker 不提供 HTTP API，也不直接修改产品表。所有持久化由 Server 根据 Worker Event 完成。
+Worker 不提供 HTTP API，也不直接修改产品表。它只通过版本化 IPC 向 Server 主进程发送事件，所有持久化仍由 Server 主进程完成。
 
-## 5. 共享包目录
+## 5. Server 内部模块
 
-### 5.1 `packages/contracts`
+### 5.1 `modules/projects`
 
-保存跨进程和跨前后端协议：
+负责工作台项目的生命周期、项目级聚合读取以及删除前的关联资源检查。
 
-- REST Request / Response Schema；
-- SSE Event Schema；
-- Server 与 Worker IPC Schema；
-- Run Event Schema；
-- Schema Version；
-- Redaction Metadata。
-
-该包必须能够在浏览器中使用，禁止依赖 Node.js 文件系统、Fastify Instance、数据库 Client、Secret 和 Claude Agent SDK。
-
-### 5.2 `packages/domain`
-
-保存不依赖框架的产品规则：
-
-- Project、SkillSource、SkillSnapshot；
-- TestSuite、TestCase、Assertion；
-- EndpointProfile、ExecutionProfile；
-- Run、RunInputSnapshot、Artifact；
-- Run 状态转换；
-- 领域错误和策略。
-
-该包保持纯 TypeScript，禁止依赖 React、Fastify、Drizzle 和 SDK。
-
-### 5.3 `packages/database`
-
-保存 PostgreSQL 数据访问实现：
-
-```text
-packages/database/
-├── src/
-│   ├── schema/
-│   ├── repositories/
-│   ├── client.ts
-│   └── index.ts
-├── migrations/
-└── drizzle.config.ts
-```
-
-设计规则：
-
-- 可筛选、可关联和参与状态转换的数据使用关系字段；
-- 版本化 Event Payload 可以使用 `jsonb`；
-- `run_events` 使用 `(run_id, sequence)` 唯一约束保证顺序；
-- Migration SQL 必须进入 Git；
-- Artifact 二进制和明文 Secret 不进入 PostgreSQL。
-
-### 5.4 `packages/skill-engine`
+### 5.2 `modules/skills`
 
 负责：
 
+- 导入文件夹或 ZIP；
 - 发现和解析 `SKILL.md`；
-- 校验元数据、路径、引用和文件限制；
-- 检测符号链接与路径越界；
+- 校验元数据、引用、符号链接和路径边界；
 - 计算内容 Hash；
 - 创建不可变 Skill Snapshot；
-- 将 Snapshot 写入 Run Workspace。
+- 管理 Skill 文件与快照的业务元数据。
 
-扫描阶段不得执行 Skill 中的脚本。
+扫描阶段不得执行 Skill 中的脚本。实际文件读写通过 `infrastructure/storage` 完成，Skill 模块拥有扫描与快照规则。
 
-### 5.5 `packages/agent-runtime`
+### 5.3 `modules/tests` 与 `modules/environments`
 
-Claude Agent SDK 的唯一直接适配层。
+`tests` 保存测试输入、Fixture、预期行为和断言定义；`environments` 保存 Endpoint 的非敏感配置、模型和执行策略。两者都不启动 Agent。
 
-负责：
+### 5.4 `modules/runs`
 
-- 将 `RunInputSnapshot` 转换为 SDK Options；
-- 启动和取消 Session；
-- 转换 SDK Message、Tool Event、Usage、Permission 和 Error；
-- 隔离 SDK 类型和版本变化。
+Run 模块是执行闭环，负责：
 
-首版不实现多 Runtime 插件系统，也不把 Endpoint 厂商差异放入该包。
+- 创建不可变 Run Input Snapshot；
+- 启动和取消包内 Worker 子进程；
+- 适配 Claude Agent SDK；
+- 标准化并持久化 Run Event；
+- 执行确定性断言；
+- 收集 Artifact 和 Workspace Diff；
+- 汇总最终状态并通过 SSE 投影事件。
 
-### 5.6 `packages/evaluation`
+Runtime、Evaluation 和 Run Artifact 彼此围绕同一份 Run Evidence 协作，因此保留在一个 Run 模块中，不拆成独立 Package。
 
-负责确定性断言：
+### 5.5 `infrastructure`
 
-- 文本与正则；
-- JSON 和字段；
-- 文件存在与内容；
-- 工具调用；
-- Skill 激活；
-- 超时和预算。
+基础设施只提供 Server 内部实现：
 
-评测器只读取标准化 Run Evidence。无法获得证据时返回 `blocked`，不能从最终文本猜测行为。
+- `database`：连接池、Drizzle Schema、Migration、Repository 和事务；
+- `storage`：安全相对路径、原子写入、容量限制和本地文件系统实现；
+- `observability`：结构化日志、Request ID、Run ID 和诊断信息。
 
-### 5.7 `packages/artifact-storage`
+基础设施不包含产品流程。未来更换 PostgreSQL、S3 或其他实现时，通过 Server 内部接口替换，不需要新增 Workspace。
 
-负责：
+### 5.6 `core`
 
-- Skill Snapshot、Fixture、Artifact 和大体积诊断数据的存储接口；
-- 首版本地文件系统实现；
-- 安全的 Artifact 引用；
-- 路径、大小、保留期和访问策略。
-
-未来迁移到 S3 兼容存储时，Server 的业务接口不应发生变化。
-
-### 5.8 `packages/config`
-
-负责 Server 和 Worker 的类型化配置：
-
-- 环境变量 Schema；
-- 启动前配置校验；
-- 本地安全默认值；
-- Web 公共配置与服务端 Secret 的分离。
-
-该包可以处理 Secret Reference，但不得记录或序列化解析后的 Secret。
-
-### 5.9 `packages/testkit`
-
-只供测试和开发使用：
-
-- 领域 Builder；
-- 固定时钟和 ID；
-- Run Event 和 Evidence Fixture；
-- 临时 Skill 与 Workspace；
-- Fastify 测试辅助；
-- PostgreSQL 集成测试准备。
-
-生产应用不得依赖该包。
+`core` 只保存跨模块使用且不属于某个产品功能的 Server 内部基础类型，例如错误模型、HTTP 错误响应和标识符。不得把具体业务逻辑堆入 `core`。
 
 ## 6. 支撑目录
 
@@ -411,7 +321,7 @@ Claude Agent SDK 的唯一直接适配层。
 - 仓库根目录：产品、开发与部署总入口；
 - `apps/web/README.md`：前端技术边界；
 - `apps/server/README.md`：后端技术边界；
-- 独立 Package、Docs、Example 等一级模块的根目录。
+- Docs、Example 等需要独立维护说明的一级目录。
 
 不在 `src` 的每个 Feature、Component、Hook 或 Type 目录重复创建 README。代码结构约束集中写入 `docs/architecture`。
 
@@ -433,36 +343,35 @@ var/
 
 ```mermaid
 flowchart TD
-    WEB["apps/web"] --> CONTRACTS["packages/contracts"]
+    WEB["apps/web"] --> API["Server HTTP API / SSE"]
 
-    SERVER["apps/server"] --> CONTRACTS
-    SERVER --> DOMAIN["packages/domain"]
-    SERVER --> DATABASE["packages/database"]
-    SERVER --> SKILL["packages/skill-engine"]
-    SERVER --> EVAL["packages/evaluation"]
-    SERVER --> ARTIFACT["packages/artifact-storage"]
-    SERVER --> CONFIG["packages/config"]
+    subgraph SERVER["apps/server"]
+        APP["Fastify App"] --> PROJECTS["Projects"]
+        APP --> SKILLS["Skills"]
+        APP --> TESTS["Tests / Environments"]
+        APP --> RUNS["Runs"]
 
-    WORKER["apps/worker"] --> CONTRACTS
-    WORKER --> DOMAIN
-    WORKER --> RUNTIME["packages/agent-runtime"]
-    WORKER --> SKILL
-    WORKER --> ARTIFACT
-    WORKER --> CONFIG
+        PROJECTS --> DB["Infrastructure: Database"]
+        SKILLS --> DB
+        SKILLS --> STORAGE["Infrastructure: Storage"]
+        TESTS --> DB
+        RUNS --> DB
+        RUNS --> STORAGE
+        RUNS --> WORKER["Run Worker 子进程"]
+        WORKER --> RUNTIME["Agent Runtime"]
+        WORKER --> EVALUATION["Evaluation"]
+    end
 
-    DATABASE --> DOMAIN
-    SKILL --> DOMAIN
-    EVAL --> DOMAIN
-    RUNTIME --> DOMAIN
+    API --> APP
 ```
 
 禁止出现：
 
-- `domain` 反向依赖 `server` 或 `worker`；
-- `web` 依赖 `database`、`skill-engine` 或 `agent-runtime`；
-- `agent-runtime` 直接写 PostgreSQL；
-- `database` 依赖 Fastify Route；
-- 应用通过跨目录相对路径绕过包公开入口。
+- Web 直接访问数据库、文件系统、Secret 或 Agent Runtime；
+- Route Handler 直接写 SQL、操作文件或调用 Claude Agent SDK；
+- Worker 子进程直接修改产品表；
+- `infrastructure` 反向调用具体产品流程；
+- 模块绕过公开 Service 直接修改其他模块内部状态。
 
 ## 8. PostgreSQL 使用边界
 
@@ -491,28 +400,29 @@ PostgreSQL 不保存：
 
 当前阶段已创建：
 
-- 可被 Git 追踪的目录；
-- 每个应用和共享包的职责 README；
-- 根 `package.json`；
-- `pnpm-workspace.yaml`；
+- Web 与 Server 两个 npm Workspace；
+- 定义 npm Workspaces 的根 `package.json`；
 - `tsconfig.base.json`；
 - `.editorconfig` 和 `.gitignore`；
-- 前端应用级 `package.json` 和 `pnpm-lock.yaml`；
+- 应用级 `package.json`；根 `package-lock.json` 由首次 npm 安装生成并纳入版本控制；
 - React、Vite、TypeScript、Tailwind CSS、ESLint 和 Vitest 配置；
 - shadcn/ui 的 `components.json`；
 - 首页应用壳、Headless Controller 和受控 Feature 组件；
 - Button、Dialog、Input、Label、Toggle Group 和 Sonner 等 shadcn/ui 源码组件；
 - Ink Signal 首页主题 Token 与全局样式；
 - 前端组件架构文档；
+- Fastify 插件化启动、存活/就绪探针、统一错误、开发环境 OpenAPI 和生产静态托管基础；
+- PostgreSQL Docker Compose 基础设施；
+- Server 内类型化配置、Drizzle 数据库客户端、初始 Project Schema 与 SQL Migration；
+- Compose 一次性数据库迁移服务和 Server 启动门禁；
 - 本文档。
 
 当前阶段不创建：
 
 - 项目详情及后续产品页面；
 - 完整 React Router 路由表；
-- Fastify 或 Worker 入口代码；
-- Drizzle Schema 和 Migration；
-- Docker Compose；
+- Run Worker 子进程入口；
+- Project 之外的业务表和业务 Migration；
 - 前后端 API 集成；
 - 产品级自动化测试和 CI。
 

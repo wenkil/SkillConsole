@@ -403,7 +403,7 @@ Until container isolation and permission controls are implemented and audited, d
 
 ## Development and deployment
 
-SkillConsole is developed and deployed through Docker. Contributors do not need to install Node.js packages on the host machine. Docker builds the pnpm workspace and keeps `node_modules` inside the images.
+SkillConsole is developed and deployed through Docker. Contributors do not need to install Node.js packages on the host machine. Docker builds the npm workspaces and keeps `node_modules` inside the images.
 
 Prerequisites:
 
@@ -411,7 +411,7 @@ Prerequisites:
 - ports `5173`, `3000`, and `5433` available for development;
 - port `3000` available for the production profile.
 
-The repository remains a pnpm TypeScript monorepo inside its containers. The root `package.json`, `pnpm-workspace.yaml`, and `pnpm-lock.yaml` define that workspace and must remain in the repository.
+The repository uses an npm TypeScript monorepo inside its containers. The `workspaces` field in the root `package.json` defines the workspaces, while `package-lock.json` locks dependencies for reproducible builds.
 
 ### Image registry configuration
 
@@ -449,6 +449,8 @@ The development profile runs:
 - Fastify API on `http://localhost:3000`;
 - PostgreSQL on `127.0.0.1:5433` and inside the Compose network.
 
+The API exposes liveness at `http://localhost:3000/health/live`, PostgreSQL-backed readiness at `http://localhost:3000/health/ready`, and development-only OpenAPI documentation at `http://localhost:3000/documentation`. Compose applies pending Drizzle migrations before starting Fastify.
+
 Vite proxies `/api/*` to Fastify. Source directories are bind-mounted for hot reload, while dependencies remain inside Docker.
 
 Local database clients can connect with:
@@ -475,7 +477,7 @@ Stop the environment with:
 docker compose -f compose.yaml -f compose.development.yaml --profile development down
 ```
 
-After changing a `package.json` or `pnpm-lock.yaml`, run the development command again with `--build`.
+After changing a `package.json` or `package-lock.json`, run the development command again with `--build`.
 
 ### Production
 
@@ -506,19 +508,13 @@ The application layout is:
 ```text
 apps/
 ├── web/                 # React visual workspace
-├── server/              # Fastify API and run orchestration
-└── worker/              # isolated Agent SDK execution
+└── server/              # all backend capabilities and the in-package Run Worker
 
-packages/
-├── contracts/           # REST, SSE, IPC, and run-event schemas
-├── domain/              # domain model and state rules
-├── database/            # PostgreSQL, Drizzle schema, and migrations
-├── skill-engine/        # Skill scanning, validation, and snapshots
-├── agent-runtime/       # Claude Agent SDK adapter
-├── evaluation/          # deterministic assertions
-├── artifact-storage/    # artifact-storage interface and local implementation
+apps/server/src/
 ├── config/              # typed runtime configuration
-└── testkit/             # fixtures, builders, and test helpers
+├── core/                # server-internal errors and HTTP primitives
+├── infrastructure/      # PostgreSQL, Drizzle, file storage, and logging
+└── modules/             # Project, Skill, Test, Environment, and Run
 ```
 
 See [Project structure](./docs/project-structure.md) for directory responsibilities, internal layouts, and dependency rules. See [System architecture](./docs/system-architecture-design.md) for the product and runtime boundaries.

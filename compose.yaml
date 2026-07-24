@@ -22,6 +22,24 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql
 
+  migrate:
+    profiles:
+      - development
+      - production
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+      target: migration
+      args:
+        BUILDKIT_SYNTAX: "${DOCKER_REGISTRY:-}docker/dockerfile:1.7"
+        NODE_IMAGE: "${DOCKER_REGISTRY:-}node:22-bookworm-slim"
+    environment:
+      DATABASE_URL: postgres://skillconsole:${POSTGRES_PASSWORD:-skillconsole}@postgres:5432/skillconsole
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   server:
     profiles:
       - development
@@ -37,15 +55,16 @@ services:
       HOST: 0.0.0.0
       PORT: 3000
       DATABASE_URL: postgres://skillconsole:${POSTGRES_PASSWORD:-skillconsole}@postgres:5432/skillconsole
+      OPENAPI_ENABLED: "true"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD
         - node
         - -e
-        - fetch('http://127.0.0.1:3000/api/health').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))
+        - fetch('http://127.0.0.1:3000/health/ready').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))
       interval: 5s
       timeout: 5s
       retries: 12
@@ -55,7 +74,6 @@ services:
     restart: unless-stopped
     volumes:
       - ./apps/server/src:/workspace/apps/server/src
-      - ./packages:/workspace/packages
 
   web:
     profiles:
@@ -81,7 +99,6 @@ services:
       - ./apps/web/index.html:/workspace/apps/web/index.html
       - ./apps/web/vite.config.ts:/workspace/apps/web/vite.config.ts
       - ./apps/web/tsconfig.json:/workspace/apps/web/tsconfig.json
-      - ./packages:/workspace/packages
 
   app:
     profiles:
@@ -98,16 +115,17 @@ services:
       HOST: 0.0.0.0
       PORT: 3000
       DATABASE_URL: postgres://skillconsole:${POSTGRES_PASSWORD:-skillconsole}@postgres:5432/skillconsole
+      OPENAPI_ENABLED: "false"
       STATIC_ROOT: /workspace/apps/web/dist
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD
         - node
         - -e
-        - fetch('http://127.0.0.1:3000/api/health').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))
+        - fetch('http://127.0.0.1:3000/health/ready').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))
       interval: 10s
       timeout: 5s
       retries: 12
