@@ -24,3 +24,13 @@ temp/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# AI agent tool folders
+.claude/
+.codex/
+.cursor/
+.trae/
+.continue/
+.aider/
+.agents/
+docs/

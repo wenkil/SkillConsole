@@ -3,20 +3,12 @@
 **English** | [简体中文](./README.zh-CN.md)
 
 <p align="center">
-  <strong>The visual workspace for managing, testing, comparing, and reporting Agent Skills.</strong>
+  <strong>A local-first visual test workspace for Agent Skills.</strong>
 </p>
 
 <p align="center">
-  Skill registry · Visual test studio · Run history · Trace inspection · Regression analysis · Shareable reports
+  Skill versions · Reproducible tests · Traces and artifacts · Regression comparison · Test reports
 </p>
-
-> [!IMPORTANT]
-> SkillConsole is currently in **pre-alpha**. The product model, configuration schema, and extension APIs may change before the first stable release.
-
-<!--
-Add a product screenshot or short demo here once the first UI is available.
-A 10–20 second GIF showing “select a Skill → run a suite → inspect a failure → compare versions” will communicate the project better than a static dashboard screenshot.
--->
 
 ## What is SkillConsole?
 
@@ -36,404 +28,101 @@ SkillConsole is not intended to be only a CLI wrapper, chat UI, benchmark leader
 
 ## Why SkillConsole?
 
-Agent Skills are filesystem-based instructions, resources, and workflows. They are easy to create, but difficult to evaluate consistently.
+Teams often test Skills with a combination of Git, command-line scripts, spreadsheets, and disconnected reports. Source files may be versioned, but the test inputs, environment, execution trace, and final conclusions are rarely preserved as one reproducible record.
 
-A Skill may look correct and still:
+This creates practical problems:
 
-- fail to trigger for real user requests;
-- trigger for unrelated requests;
-- work with one model but regress with another;
-- produce the right final text through the wrong or unsafe tool path;
-- generate incomplete or invalid artifacts;
-- become slower or more expensive after a change;
-- pass an automated judge while failing a domain expert's review.
+- a report cannot be reliably traced back to the exact Skill files it tested;
+- directory and file changes are difficult to review as one meaningful revision;
+- test cases, datasets, traces, and generated files live in different places;
+- rerunning tests after a change does not clearly identify new failures or fixes;
+- a score alone cannot explain why an agent succeeded or failed;
+- people who do not work in Git or a terminal cannot easily understand the full test process.
 
 SkillConsole treats a Skill as a versioned, testable product—not just a Markdown file.
 
-## Core capabilities
+## How does SkillConsole help?
 
-### Skill registry
+### Skill versions
 
-- Import Skills from a local directory or Git repository.
-- Inspect `SKILL.md`, supporting files, scripts, and referenced resources.
-- Track versions, commits, tags, owners, labels, and release status.
-- Validate metadata, paths, dependencies, and configuration compatibility.
-- Preserve immutable Skill snapshots for reproducible runs.
+- Upload one file or a complete directory.
+- Create an editable draft from the latest finalized version.
+- Save repeatedly during one editing cycle without producing a version for every change.
+- Finalize an immutable version when the work is ready.
+- Compare directory structure and file content between versions.
+- Use the first finalized version as the default regression baseline.
 
-### Visual test studio
+SkillConsole manages this history itself. It does not integrate with Git or expose branches, commits, or tags.
 
-- Create trigger, capability, artifact, safety, and regression test cases.
-- Group cases into reusable suites.
-- Attach files, repositories, expected outputs, and structured assertions.
-- Configure deterministic graders and optional model-based rubrics.
-- Run a single case interactively or execute a full suite.
+### Reproducible tests
 
-### Run history and trace inspection
+Every test task is pinned to:
 
-- Stream agent output in real time.
-- Inspect model messages, Skill activation, tool calls, tool results, and errors.
-- Browse generated artifacts and workspace changes.
-- Record duration, token usage, cost, retries, and termination reason.
-- Search, filter, tag, annotate, and rerun historical executions.
+- a finalized Skill version or frozen draft snapshot;
+- a test suite and its cases;
+- a dataset version;
+- the endpoint, model, and execution environment;
+- traces, tool calls, generated files, and reports.
 
-### Compare and regression analysis
+Later changes to a Skill or dataset never rewrite the evidence behind an existing task.
 
-Compare any meaningful dimension:
+### Results and regression
 
-- Skill version A vs. Skill version B;
-- candidate vs. baseline without the Skill;
-- one model vs. another model;
-- one API endpoint vs. another endpoint;
-- one execution profile vs. another profile;
-- current branch vs. the last release.
+The workspace home centers on a task list. Each task exposes:
 
-SkillConsole should highlight:
+- a task summary;
+- test-case results;
+- agent output and traces;
+- tool calls;
+- generated files and other artifacts;
+- detailed and summary reports.
 
-- newly failing and newly passing cases;
-- trigger precision and recall changes;
-- score, latency, cost, and tool-usage deltas;
-- output and artifact differences;
-- inconsistent or flaky cases across repeated trials.
+A regression task runs the same inputs against a candidate and baseline, highlighting new failures, fixes, persistent failures, persistent passes, and unstable behavior.
 
-### Reports and review
+## How do I use it?
 
-- Combine automated grading with human review.
-- Assign reviewers and capture comments, decisions, and overrides.
-- Generate release, regression, comparison, and executive-summary reports.
-- Export or share sanitized HTML, Markdown, JSON, and CI-friendly results.
-- Preserve the evidence behind every reported conclusion.
+1. **Create a Skill test workspace.** One workspace represents one Skill under continuous test.
+2. **Upload the Skill.** Select one file or a complete directory to create the first finalized version and default baseline.
+3. **Change the Skill.** Create a draft, edit Markdown in the browser, or upload more files and directories.
+4. **Finalize a version.** Review the file changes and turn the draft into an immutable version.
+5. **Prepare tests.** Manage cases in a list and import data from JSON, CSV, or Excel.
+6. **Run a task.** Choose the Skill version, test suite, dataset, and execution environment.
+7. **Inspect the result.** Review the summary, trace, artifacts, and reports.
+8. **Run regression.** Compare the latest candidate with the baseline.
 
-### Environments
-
-> [!IMPORTANT]
-> SkillConsole runs agents through the **Claude Agent SDK** and does not integrate with each model vendor through separate built-in provider configurations. Every inference endpoint is user-managed: users supply the endpoint URL, API key (or secure secret reference), and model identifier.
->
-> The endpoint must implement the **Anthropic Messages API** contract used by the Claude Agent SDK—principally `POST /v1/messages`, including SSE streaming, `tool_use` / `tool_result` content blocks, stop-reason fields, and usage metadata required by agent runs. An OpenAI-compatible `/v1/chat/completions` endpoint alone cannot be used directly unless a gateway converts it to this contract.
-
-Possible connection paths include:
-
-- the Anthropic API directly;
-- an internal enterprise LLM gateway;
-- gateway or conversion layers such as [New API](https://docs.newapi.ai/en/docs/apps/claude-code), [LiteLLM](https://docs.litellm.ai/), or [Claude Code Router](https://github.com/musistudio/claude-code-router), when configured to expose the required Messages API behavior;
-- a self-hosted protocol translation service;
-- any other endpoint that the Claude Agent SDK can call and that satisfies the contract above.
-
-These are connection examples, not bundled integrations or certified compatibility claims. SkillConsole does not determine which provider is behind an endpoint. Protocol translation, model capability, availability, cost, and data handling remain the responsibility of the user or gateway operator.
-
-Protocol references: [Anthropic Messages API](https://platform.claude.com/docs/en/api/messages/create) and [streaming messages](https://platform.claude.com/docs/en/build-with-claude/streaming).
-
-Store reusable execution profiles containing:
-
-- API base URL;
-- secret reference;
-- custom model name;
-- custom headers;
-- tool and permission policy;
-- system-prompt mode;
-- turn, timeout, and budget limits;
-- workspace and network isolation settings.
-
-An environment should include a capability check for authentication, streaming, tool use, usage reporting, and other runtime features required by a test suite.
-
-## Runtime model
-
-SkillConsole uses the **Claude Agent SDK** as its initial and primary agent runtime. It does not maintain a separate user-installed Claude CLI runner.
-
-The platform follows Claude Code's filesystem configuration model where practical:
-
-```text
-<run-workspace>/
-├── CLAUDE.md
-└── .claude/
-    ├── settings.json
-    ├── skills/
-    │   └── <skill-name>/
-    │       ├── SKILL.md
-    │       └── ...
-    ├── agents/
-    └── commands/
-```
-
-For every run, SkillConsole materializes an isolated workspace containing only the selected Skill version, fixtures, and approved project configuration. The Agent SDK discovers project Skills and configuration from that workspace.
-
-Useful references:
-
-- [Claude Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview)
-- [Agent Skills in the SDK](https://code.claude.com/docs/en/agent-sdk/skills)
-- [TypeScript SDK reference](https://code.claude.com/docs/en/agent-sdk/typescript)
-- [Claude Code environment variables](https://code.claude.com/docs/en/env-vars)
-
-## Architecture
-
-```mermaid
-flowchart LR
-    UI[Web UI] --> API[Application API]
-    API --> ORCH[Run Orchestrator]
-    ORCH --> QUEUE[Run Queue]
-    QUEUE --> WORKER[Isolated Run Worker]
-
-    WORKER --> SDK[Claude Agent SDK]
-    SDK --> ENDPOINT[Anthropic-compatible API or Gateway]
-    WORKER --> WS[Ephemeral Workspace]
-    WORKER --> EVENTS[Normalized Event Stream]
-    WORKER --> ARTIFACTS[Artifact Collector]
-
-    EVENTS --> STORE[(Run Store)]
-    ARTIFACTS --> STORE
-    STORE --> GRADERS[Deterministic and Model Graders]
-    GRADERS --> COMPARE[Comparison Engine]
-    COMPARE --> REPORTS[Reports and Review]
-
-    STORE --> UI
-    REPORTS --> UI
-```
-
-### Recommended deployment shape
-
-The first release is designed as a modular monolith:
-
-```text
-Browser
-  └── SkillConsole server
-        ├── application API
-        ├── Skill and test management
-        ├── run orchestration
-        ├── comparison and reporting
-        ├── PostgreSQL metadata and event store
-        └── isolated per-run worker processes
-              └── Claude Agent SDK session
-```
-
-Each run executes in its own worker process and workspace. A future hosted edition can move workers into disposable containers without changing the core run protocol.
-
-## Evaluation model
-
-SkillConsole separates evaluation into four layers.
-
-### 1. Static validation
-
-Checks that do not require a model:
-
-- valid frontmatter and required fields;
-- missing or unsafe file references;
-- invalid paths and undeclared dependencies;
-- unsupported configuration;
-- potential secret leakage;
-- Skill size and structure warnings.
-
-### 2. Trigger evaluation
-
-Measures whether a Skill is selected for the right requests:
-
-- positive cases;
-- negative cases;
-- hard negatives;
-- near-neighbor cases;
-- multi-Skill conflicts.
-
-Typical metrics include precision, recall, false-positive rate, false-negative rate, and trigger latency.
-
-### 3. Capability evaluation
-
-Measures whether enabling a Skill improves task completion:
-
-- baseline without the Skill;
-- current candidate;
-- previous Skill version;
-- repeated trials when nondeterminism matters.
-
-Capability evaluation can combine deterministic assertions, artifact validation, pairwise model judging, and human review.
-
-### 4. Regression evaluation
-
-Tracks changes across versions and environments:
-
-- pass-rate movement;
-- newly failing cases;
-- output-quality movement;
-- latency and cost changes;
-- tool-use and permission changes;
-- flaky or unstable tests.
-
-## Configuration concept
-
-SkillConsole keeps provider connectivity separate from agent execution policy.
-
-### Provider profile
-
-```yaml
-name: team-gateway
-provider:
-  baseUrl: https://llm-gateway.example.com
-  apiKeyFrom: env:SKILLCONSOLE_API_KEY
-  model: team-claude-compatible-model
-  headers:
-    X-Workspace: agent-platform
-```
-
-The endpoint must be compatible with the Anthropic Messages API behavior required by the Claude Agent SDK. A basic chat response alone does not guarantee support for streaming, tool use, or usage metadata.
-
-### Execution profile
-
-```yaml
-name: workspace-write
-execution:
-  systemPrompt: claude-code-compatible
-  settingSources:
-    - project
-  tools:
-    - Skill
-    - Read
-    - Glob
-    - Grep
-    - Write
-    - Edit
-  permissionMode: default
-  maxTurns: 20
-  timeoutSeconds: 300
-  maxBudgetUsd: 2
-  network: disabled
-```
-
-Secrets must be referenced from environment variables or a secret store. They should never be stored in a Skill snapshot, test definition, run event, exported report, or browser-local storage.
-
-## Example workflow
-
-1. **Add a Skill** from a directory or Git revision.
-2. **Create a test suite** with prompts, fixtures, assertions, and rubrics.
-3. **Select an environment** containing the endpoint, model, and execution policy.
-4. **Run the suite** and inspect live agent activity.
-5. **Review failures** using the trace, artifacts, and grader evidence.
-6. **Compare versions** or execution environments.
-7. **Publish a report** for a release decision, regression review, or stakeholder update.
-
-## Planned data model
-
-```text
-Project
-├── Skills
-│   └── Skill versions
-├── Test suites
-│   └── Test cases
-├── Environments
-├── Runs
-│   ├── Events
-│   ├── Artifacts
-│   ├── Grades
-│   └── Reviews
-├── Comparisons
-└── Reports
-```
-
-Every run should record enough information to reproduce or explain its result, including:
-
-- Skill content hash;
-- test-case and fixture hash;
-- model and endpoint profile;
-- Agent SDK and application versions;
-- execution and permission profile;
-- environment and isolation metadata;
-- normalized event log;
-- generated artifacts;
-- grader configuration and evidence.
-
-## Project status and roadmap
-
-SkillConsole is being designed in public. The initial roadmap is intentionally focused on a reliable single-node experience before hosted collaboration features.
-
-### Phase 1 — Local visual workbench
-
-- [ ] Skill import and registry
-- [ ] `SKILL.md` inspection and static validation
-- [ ] Environment profiles for API key, API URL, and custom model
-- [ ] Claude Agent SDK run worker
-- [ ] Real-time event and tool-call viewer
-- [ ] Artifact browser
-- [ ] Test suites and deterministic assertions
-- [ ] Run history with PostgreSQL and immutable event logs
-
-### Phase 2 — Evaluation and regression
-
-- [ ] Baseline and candidate runs
-- [ ] Skill-version comparison
-- [ ] Model and endpoint comparison
-- [ ] Repeated trials and flaky-test detection
-- [ ] Trigger-evaluation metrics
-- [ ] Pairwise model judge
-- [ ] Human review workflow
-- [ ] Shareable HTML and Markdown reports
-
-### Phase 3 — Team and CI workflows
-
-- [ ] Authentication and project roles
-- [ ] Reviewer assignment and approval gates
-- [ ] GitHub pull-request integration
-- [ ] CI result formats and quality gates
-- [ ] Remote workers and container isolation
-- [ ] Report history and quality trends
-- [ ] Plugin APIs for graders, artifact viewers, and runtime adapters
-
-## Security model
-
-Agent Skills can instruct an agent to read files, write files, run tools, or interact with external systems. SkillConsole therefore treats every run as potentially unsafe.
-
-The intended security model includes:
-
-- one process and workspace per run;
-- least-privilege tool policies;
-- explicit filesystem boundaries;
-- network disabled by default;
-- secret injection only inside the run worker;
-- event and report redaction;
-- execution time, budget, and resource limits;
-- disposable container workers for untrusted Skills or multi-tenant hosting.
-
-Until container isolation and permission controls are implemented and audited, do not use SkillConsole to execute untrusted Skills or expose production credentials.
+SkillConsole runs agent sessions through the **Claude Agent SDK**. Users manage their own inference endpoint, API key, and model. The endpoint must implement the Anthropic Messages API contract required by the SDK.
 
 ## Design principles
 
-1. **Visual first, automation ready.** The Web UI is the primary workspace, while every run and report remains machine-readable.
-2. **Evidence over scores.** A grade must link back to traces, assertions, artifacts, and reviewer evidence.
-3. **Reproducibility by default.** Skill versions, fixtures, environments, and evaluation settings are immutable inputs to a run.
-4. **Deterministic before probabilistic.** Use code-based assertions whenever possible; use model judges only where judgment is genuinely required.
-5. **Comparison is a first-class workflow.** Quality is easier to understand as a delta than as an isolated score.
-6. **Claude-compatible, not machine-dependent.** Preserve Claude Code's project configuration model without inheriting uncontrolled user-machine state.
-7. **Safe local defaults.** Minimize permissions, network access, and secret exposure.
-8. **Open formats.** Runs, events, grades, and reports should remain inspectable outside SkillConsole.
+1. **Local first.** Skills, test data, and evidence should remain usable on the user's machine or internal environment without requiring a hosted SaaS.
+2. **One workspace, one Skill.** Versions, tests, datasets, and tasks stay organized around one explicit test target.
+3. **Finalized versions are immutable.** Editing happens in drafts, and every task points to a recoverable version or frozen snapshot.
+4. **Evidence over scores.** A conclusion must be traceable to cases, traces, tool calls, artifacts, and assertion evidence.
+5. **Comparison is a first-class workflow.** A change in quality is usually more useful than an isolated score.
+6. **Open data formats.** Cases, datasets, task results, and reports should remain importable, exportable, and machine-readable.
+7. **Safe local defaults.** Filesystem paths, secrets, network access, and tool permissions require explicit boundaries.
+8. **Do not define the Skill for the user.** The product provides tests and evidence without requiring optional files or one recommended Skill structure.
 
-## Development and deployment
+## What does SkillConsole not do?
 
-SkillConsole is developed and deployed through Docker. Contributors do not need to install Node.js packages on the host machine. Docker builds the npm workspaces and keeps `node_modules` inside the images.
+| Non-goal | Why |
+| --- | --- |
+| Integrate with or replace Git | SkillConsole versions exist for drafts, test snapshots, and regression evidence—not source collaboration, branching, or merging |
+| Build a complete Web IDE | Editing supports necessary Skill changes; the product stays focused on testing rather than duplicating general development tools |
+| Decide whether a Skill is “complete” | Scripts, images, templates, and references are not mandatory for every Skill; users own their content structure |
+| Build a general-purpose multi-model agent framework | Claude Agent SDK owns agent execution while SkillConsole focuses on testing, versions, and evidence |
+| Bundle integrations for every model provider | Users manage endpoints and protocol conversion, avoiding a permanently changing vendor-adapter layer |
+| Build accounts, team permissions, or multi-tenant SaaS | The product remains local first and can also be exposed directly on an internal network |
+| Operate a Skill marketplace | SkillConsole tests user-supplied Skills without bringing untrusted distribution into its core scope |
+| Define quality with one opaque LLM score | Scores must remain connected to inspectable test results and execution evidence |
 
-Prerequisites:
+## Quick start
 
-- Docker Desktop on Windows or macOS, or Docker Engine with Docker Compose on Linux;
-- ports `5173`, `3000`, and `5433` available for development;
-- port `3000` available for the production profile.
-
-The repository uses an npm TypeScript monorepo inside its containers. The `workspaces` field in the root `package.json` defines the workspaces, while `package-lock.json` locks dependencies for reproducible builds.
-
-### Image registry configuration
-
-Docker Hub is used by default. To use a registry mirror, copy `.env.example` to `.env` and set a prefix that includes the trailing slash:
-
-```dotenv
-DOCKER_REGISTRY=docker.1ms.run/
-```
-
-The prefix applies to the PostgreSQL, Node.js, Dockerfile frontend, and standalone Web Nginx images. Leave `DOCKER_REGISTRY` empty to use Docker Hub. A PowerShell session variable overrides the value loaded from `.env`:
-
-```powershell
-$env:DOCKER_REGISTRY = "docker.1ms.run/"
-```
-
-Third-party mirrors are optional and are not operated or verified by SkillConsole. Users are responsible for evaluating their availability, integrity, and supply-chain security.
-
-### Development
+Install Docker Desktop, or Docker Engine with Docker Compose.
 
 From the repository root:
 
-```bash
+```powershell
 docker compose -f compose.yaml -f compose.development.yaml --profile development up --build
 ```
 
@@ -443,123 +132,29 @@ When the containers are healthy, open:
 http://localhost:5173
 ```
 
-The development profile runs:
+See [Deployment and local development](./docs/deployment.md) for database access, production deployment, registry configuration, and operational commands.
 
-- Vite Web UI on `http://localhost:5173`;
-- Fastify API on `http://localhost:3000`;
-- PostgreSQL on `127.0.0.1:5433` and inside the Compose network.
+## Documentation
 
-The API exposes liveness at `http://localhost:3000/health/live`, PostgreSQL-backed readiness at `http://localhost:3000/health/ready`, and development-only OpenAPI documentation at `http://localhost:3000/documentation`. Compose applies pending Drizzle migrations before starting Fastify.
-
-Vite proxies `/api/*` to Fastify. Source directories are bind-mounted for hot reload, while dependencies remain inside Docker.
-
-Local database clients can connect with:
-
-```text
-Host: 127.0.0.1
-Port: 5433
-Database: skillconsole
-Username: skillconsole
-Password: the POSTGRES_PASSWORD value from .env, or skillconsole by default
-```
-
-If port `5433` is already in use, set `POSTGRES_HOST_PORT` in `.env`, for example:
-
-```dotenv
-POSTGRES_HOST_PORT=15432
-```
-
-This host-port mapping is defined only in `compose.development.yaml`. The production command does not expose PostgreSQL to the host.
-
-Stop the environment with:
-
-```bash
-docker compose -f compose.yaml -f compose.development.yaml --profile development down
-```
-
-After changing a `package.json` or `package-lock.json`, run the development command again with `--build`.
-
-### Production
-
-Copy `.env.example` to `.env` and replace `POSTGRES_PASSWORD` before exposing a deployment. Then run:
-
-```bash
-docker compose --profile production up --build --detach
-```
-
-Open the single production address:
-
-```text
-http://localhost:3000
-```
-
-The production image builds the React application, serves it through Fastify, exposes the API under `/api/*`, and persists PostgreSQL and application data in Docker volumes.
-
-Useful operations:
-
-```bash
-docker compose --profile production logs --follow
-docker compose --profile production ps
-docker compose --profile production down
-```
-
-The application layout is:
-
-```text
-apps/
-├── web/                 # React visual workspace
-└── server/              # all backend capabilities and the in-package Run Worker
-
-apps/server/src/
-├── config/              # typed runtime configuration
-├── core/                # server-internal errors and HTTP primitives
-├── infrastructure/      # PostgreSQL, Drizzle, file storage, and logging
-└── modules/             # Project, Skill, Test, Environment, and Run
-```
-
-See [Project structure](./docs/project-structure.md) for directory responsibilities, internal layouts, and dependency rules. See [System architecture](./docs/system-architecture-design.md) for the product and runtime boundaries.
+- [Skill test workspace product definition](./docs/skill-workspace-product-definition.md)
+- [Deployment and local development](./docs/deployment.md)
+- [System architecture](./docs/system-architecture-design.md)
+- [Project structure](./docs/project-structure.md)
 
 ## Contributing
 
-The project is in its earliest stage, so high-value contributions include:
+Contributions are welcome for real Skill testing workflows, failure cases, version-management ideas, Evals schema research, file-diff approaches, reproducible datasets, and interaction-design feedback.
 
-- real Skill testing workflows and failure cases;
-- UX feedback from Skill authors, QA engineers, and domain reviewers;
-- evaluation-schema proposals;
-- deterministic grader ideas;
-- secure worker and sandbox designs;
-- sample Skills and reproducible test suites;
-- accessibility and report-design feedback.
+Before submitting a large implementation that changes public data models or the run protocol, start with an issue or design proposal.
 
-Before opening a large implementation pull request, start with an issue or design proposal so that the public data model and run protocol remain coherent.
+## License and notice
 
-## Non-goals for the first release
+SkillConsole's original source code and documentation are released under the [MIT License](./LICENSE). Third-party SDKs, dependencies, APIs, services, models, documentation, and trademarks remain subject to their respective licenses and terms.
 
-- Rebuilding a general-purpose multi-model agent framework.
-- Replacing Claude Agent SDK's agent loop.
-- Acting as a marketplace for downloading arbitrary Skills.
-- Running untrusted Skills without process and filesystem isolation.
-- Using a single opaque LLM score as the definition of quality.
-- Building a hosted SaaS before the local workflow is reliable.
-
-## License and third-party notices
-
-SkillConsole's original source code and documentation are released under the [MIT License](./LICENSE).
-
-The MIT License applies only to material owned by the SkillConsole copyright holder. It does not relicense third-party SDKs, libraries, APIs, services, models, documentation, or trademarks. Each third-party component remains subject to its own copyright, license, terms of service, and other applicable policies.
-
-### Claude Agent SDK
-
-SkillConsole uses the TypeScript package [`@anthropic-ai/claude-agent-sdk`](https://github.com/anthropics/claude-agent-sdk-typescript). Its repository currently states **© Anthropic PBC. All rights reserved**, and specifies that use is subject to Anthropic's [Commercial Terms of Service](https://www.anthropic.com/legal/commercial-terms), except where a specific component or dependency has a separate license.
-
-Before using, distributing, deploying, or offering SkillConsole to customers or end users, review the current [Claude Agent SDK license and terms](https://github.com/anthropics/claude-agent-sdk-typescript/blob/main/LICENSE.md) and the licenses or terms of all other third-party components. SkillConsole's MIT License does not grant rights to the Claude Agent SDK, Claude Code, Anthropic models or services, or third-party trademarks.
-
-## Acknowledgements
-
-SkillConsole is designed around the Claude Agent SDK and the filesystem-based Agent Skill model used by Claude Code. It is an independent open-source project and is not an official Anthropic product.
+SkillConsole uses [`@anthropic-ai/claude-agent-sdk`](https://github.com/anthropics/claude-agent-sdk-typescript), but it is an independent open-source project and not an official Anthropic product. Review the current Claude Agent SDK license and terms before use or distribution.
 
 ---
 
 <p align="center">
-  <strong>Manage the Skill. Test the behavior. Explain the result.</strong>
+  <strong>Version the Skill. Test the behavior. Explain every result.</strong>
 </p>
