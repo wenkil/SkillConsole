@@ -5,7 +5,6 @@ import { useTranslation } from "react-i18next"
 import {
   createSkillWorkspace,
   listSkillWorkspaces,
-  SkillConsoleApiError,
 } from "@/features/workbench-home/api/skill-workspaces-api"
 import {
   createEmptyRuntimeDefaults,
@@ -25,6 +24,7 @@ import {
 } from "@/features/workbench-home/model/workbench-home-copy"
 import { usePreferencesStore } from "@/shared/stores/preferences/preferences-store"
 import type { AppLocale } from "@/shared/types/locale"
+import { SkillConsoleApiError } from "@/shared/api/http"
 
 const workspacesQueryKey = ["skill-workspaces"] as const
 
@@ -55,8 +55,6 @@ export interface WorkbenchHomeController {
     updateSourceKind: (kind: SkillSourceKind) => void
     selectSource: (files: readonly File[]) => void
     createWorkspace: () => Promise<SkillWorkspace | null>
-    openWorkspace: (workspaceId: string) => void
-    closeWorkspace: () => void
     retryWorkspaceList: () => void
     openSettingsDialog: () => void
     closeSettingsDialog: () => void
@@ -65,15 +63,14 @@ export interface WorkbenchHomeController {
   }
 }
 
-export function useWorkbenchHomeController(): WorkbenchHomeController {
+export function useWorkbenchHomeController(
+  activeWorkspaceId: string | null,
+): WorkbenchHomeController {
   const queryClient = useQueryClient()
   const { t: translateCommon } = useTranslation("common")
   const { t: translateWorkbenchHome } = useTranslation("workbenchHome")
   const locale = usePreferencesStore((state) => state.locale)
   const setLocale = usePreferencesStore((state) => state.setLocale)
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(
-    null,
-  )
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false)
   const [draft, setDraft] = useState<CreateWorkbenchDraft>(
     createEmptyWorkbenchDraft,
@@ -106,7 +103,6 @@ export function useWorkbenchHomeController(): WorkbenchHomeController {
           ...current.filter((item) => item.id !== workspace.id),
         ],
       )
-      setActiveWorkspaceId(workspace.id)
       setCreateDialogOpen(false)
       setDraft(createEmptyWorkbenchDraft())
       setErrors({})
@@ -228,8 +224,6 @@ export function useWorkbenchHomeController(): WorkbenchHomeController {
       updateSourceKind,
       selectSource,
       createWorkspace,
-      openWorkspace: setActiveWorkspaceId,
-      closeWorkspace: () => setActiveWorkspaceId(null),
       retryWorkspaceList: () => {
         void workspaceQuery.refetch()
       },

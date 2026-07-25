@@ -83,6 +83,30 @@ export class LocalSnapshotStorage {
     return archivePath
   }
 
+  getSnapshotFilePath(snapshotId: string, relativePath: string): string {
+    assertInternalId(snapshotId)
+    if (
+      relativePath.length === 0 ||
+      relativePath.includes("\\") ||
+      path.posix.isAbsolute(relativePath) ||
+      relativePath.split("/").some((segment) => segment === "" || segment === "..")
+    ) {
+      throw new Error("A Snapshot file path is invalid.")
+    }
+
+    const snapshotFilesRoot = path.join(
+      this.snapshotsRoot,
+      snapshotId,
+      "files",
+    )
+    const snapshotFilePath = path.join(
+      snapshotFilesRoot,
+      ...relativePath.split("/"),
+    )
+    assertWithinRoot(snapshotFilesRoot, snapshotFilePath)
+    return snapshotFilePath
+  }
+
   async resetOperation(operationId: string): Promise<void> {
     const operationRoot = this.getOperationRoot(operationId)
     await rm(operationRoot, { recursive: true, force: true })

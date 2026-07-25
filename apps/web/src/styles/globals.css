@@ -146,4 +146,121 @@
     border: 1px solid var(--foreground);
     background: var(--paper-raised);
   }
+
+  .skill-markdown {
+    color: var(--foreground);
+    font-size: 0.9rem;
+    line-height: 1.75;
+  }
+
+  .skill-markdown > *:first-child {
+    margin-top: 0;
+  }
+
+  .skill-markdown h1,
+  .skill-markdown h2,
+  .skill-markdown h3,
+  .skill-markdown h4 {
+    margin-top: 1.75em;
+    margin-bottom: 0.7em;
+    font-weight: 760;
+    letter-spacing: -0.025em;
+    line-height: 1.2;
+  }
+
+  .skill-markdown h1 {
+    border-bottom: 1px solid var(--foreground);
+    padding-bottom: 0.45em;
+    font-size: 1.9rem;
+  }
+
+  .skill-markdown h2 {
+    border-bottom: 1px solid var(--rule-soft);
+    padding-bottom: 0.35em;
+    font-size: 1.4rem;
+  }
+
+  .skill-markdown h3 {
+    font-size: 1.12rem;
+  }
+
+  .skill-markdown p,
+  .skill-markdown ul,
+  .skill-markdown ol,
+  .skill-markdown blockquote,
+  .skill-markdown pre,
+  .skill-markdown table {
+    margin: 0.9em 0;
+  }
+
+  .skill-markdown ul,
+  .skill-markdown ol {
+    padding-left: 1.5rem;
+  }
+
+  .skill-markdown ul {
+    list-style: square;
+  }
+
+  .skill-markdown ol {
+    list-style: decimal;
+  }
+
+  .skill-markdown a {
+    color: var(--signal-dark);
+    font-weight: 650;
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+  }
+
+  .skill-markdown blockquote {
+    border-left: 3px solid var(--technical);
+    background: color-mix(in srgb, var(--technical) 6%, transparent);
+    padding: 0.65rem 1rem;
+    color: var(--muted-foreground);
+  }
+
+  .skill-markdown code {
+    border: 1px solid var(--rule-soft);
+    background: var(--paper-muted);
+    padding: 0.1rem 0.3rem;
+    font-family: var(--font-mono);
+    font-size: 0.83em;
+  }
+
+  .skill-markdown pre {
+    overflow: auto;
+    border: 1px solid var(--foreground);
+    background: var(--trace);
+    padding: 1rem;
+    color: var(--trace-foreground);
+  }
+
+  .skill-markdown pre code {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: inherit;
+  }
+
+  .skill-markdown table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+
+  .skill-markdown th,
+  .skill-markdown td {
+    border: 1px solid var(--rule);
+    padding: 0.5rem 0.65rem;
+    text-align: left;
+  }
+
+  .skill-markdown th {
+    background: var(--paper-muted);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
 }

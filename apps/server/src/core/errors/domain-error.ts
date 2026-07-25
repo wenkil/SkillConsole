@@ -3,6 +3,7 @@ export type DomainErrorKind =
   | "internal"
   | "not_found"
   | "payload_too_large"
+  | "unsupported_media_type"
   | "validation"
 
 export interface DomainErrorOptions {

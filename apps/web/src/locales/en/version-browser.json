@@ -1,0 +1,76 @@
+{
+  "actions": {
+    "backToHome": "Back to workbench home",
+    "download": "Download original"
+  },
+  "header": {
+    "eyebrow": "Formal Skill version",
+    "formalVersion": "Formal version",
+    "versionPicker": "Select formal version",
+    "currentVersion": "Current formal version",
+    "historicalVersion": "Viewing a historical version",
+    "defaultBaseline": "Default baseline",
+    "notTested": "Not tested"
+  },
+  "immutable": {
+    "title": "Read-only formal version",
+    "description": "This page displays an immutable Snapshot. Browsing never changes file content, the Manifest, or version metadata."
+  },
+  "tree": {
+    "files": "Formal version files",
+    "search": "Search path or file name",
+    "noResults": "No matching files",
+    "keyboardHelp": "Use arrow keys to browse and Space to open a file"
+  },
+  "preview": {
+    "title": "File preview",
+    "source": "Source",
+    "rendered": "Rendered",
+    "rawHtmlDisabled": "Raw HTML disabled"
+  },
+  "states": {
+    "loading": "Loading formal version",
+    "loadError": "Formal version content is unavailable",
+    "retry": "Reload",
+    "noFileSelected": "Select a file from the tree",
+    "unavailableTitle": "Inline preview is not available for this file",
+    "unavailableDescription": "You can verify its hash, size, and MIME hint, or download the original through the controlled endpoint.",
+    "missingFileTitle": "The selected file is not present in the Manifest",
+    "corruptedFileTitle": "The file is missing or no longer matches the Manifest",
+    "snapshotUnavailableTitle": "This Snapshot is not currently available for browsing",
+    "invalidUtf8Title": "The file is not valid UTF-8 text",
+    "largeFileTitle": "The file is too large for inline preview",
+    "binaryFileTitle": "Binary files are not rendered inline",
+    "imageUnavailableTitle": "The image is missing, corrupted, or not allowed inline",
+    "workspaceUnavailable": "The workbench does not exist or is temporarily unavailable."
+  },
+  "metadata": {
+    "version": "Version information",
+    "snapshot": "Snapshot information",
+    "versionNumber": "Version number",
+    "sourceType": "Source type",
+    "sourceName": "Source name",
+    "publishedAt": "Published at",
+    "createdAt": "Created at",
+    "snapshotState": "Snapshot state",
+    "fileCount": "Files",
+    "totalSize": "Total size",
+    "manifestHash": "Manifest hash",
+    "file": "File information",
+    "path": "Relative path",
+    "mediaType": "MIME hint",
+    "byteSize": "File size",
+    "sha256": "SHA-256",
+    "contentKind": "Content type",
+    "text": "Text",
+    "binary": "Binary",
+    "ready": "Ready",
+    "corrupted": "Corrupted",
+    "staging": "Staging"
+  },
+  "sourceTypes": {
+    "singleFile": "Single file",
+    "folder": "Complete folder",
+    "zip": "ZIP archive"
+  }
+}

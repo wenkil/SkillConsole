@@ -13,6 +13,7 @@ const domainStatusCodes: Record<DomainErrorKind, number> = {
   internal: 500,
   not_found: 404,
   payload_too_large: 413,
+  unsupported_media_type: 415,
   validation: 422,
 }
 

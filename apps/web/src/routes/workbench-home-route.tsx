@@ -1,16 +1,27 @@
 import { toast } from "sonner"
+import {
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom"
 
 import { CreateWorkbenchDialog } from "@/features/workbench-home/components/create-workbench-dialog"
 import { RuntimeSettingsDialog } from "@/features/workbench-home/components/runtime-settings-dialog"
 import { WorkbenchHomeView } from "@/features/workbench-home/components/workbench-home-view"
-import { WorkbenchOverview } from "@/features/workbench-home/components/workbench-overview"
 import { WorkbenchSidebar } from "@/features/workbench-home/components/workbench-sidebar"
 import { useWorkbenchHomeController } from "@/features/workbench-home/hooks/use-workbench-home-controller"
+import { VersionBrowserView } from "@/features/version-browser/components/version-browser-view"
 import { AppHeader } from "@/shared/components/layout/app-header"
 import { ApplicationFrame } from "@/shared/components/layout/application-frame"
 
 export function WorkbenchHomeRoute() {
-  const controller = useWorkbenchHomeController()
+  const navigate = useNavigate()
+  const { workspaceId = null, versionId = null } = useParams<{
+    workspaceId?: string
+    versionId?: string
+  }>()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const controller = useWorkbenchHomeController(workspaceId)
   const { actions, copy } = controller
 
   async function handleCreateWorkspace() {
@@ -19,6 +30,7 @@ export function WorkbenchHomeRoute() {
       toast.success(copy.workspaceCreated, {
         description: workspace.name,
       })
+      navigate(`/workbenches/${workspace.id}`)
     }
   }
 
@@ -44,16 +56,27 @@ export function WorkbenchHomeRoute() {
             error={controller.workspaceList.error}
             loading={controller.workspaceList.loading}
             onRetry={actions.retryWorkspaceList}
-            onWorkspaceSelect={actions.openWorkspace}
+            onWorkspaceSelect={(selectedWorkspaceId) =>
+              navigate(`/workbenches/${selectedWorkspaceId}`)
+            }
             workspaces={controller.workspaces}
           />
         }
       >
         {controller.activeWorkspace ? (
-          <WorkbenchOverview
-            copy={copy}
+          <VersionBrowserView
             locale={controller.locale}
-            onBack={actions.closeWorkspace}
+            onBack={() => navigate("/")}
+            onFileSelect={(relativePath) => {
+              setSearchParams({ path: relativePath }, { replace: true })
+            }}
+            onVersionSelect={(selectedVersionId) => {
+              navigate(
+                `/workbenches/${controller.activeWorkspace!.id}/versions/${selectedVersionId}`,
+              )
+            }}
+            selectedFilePath={searchParams.get("path")}
+            selectedVersionId={versionId}
             workspace={controller.activeWorkspace}
           />
         ) : (

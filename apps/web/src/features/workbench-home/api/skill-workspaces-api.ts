@@ -4,45 +4,7 @@ import {
   type CreateWorkbenchDraft,
   type SkillWorkspace,
 } from "@/features/workbench-home/model/workbench"
-
-interface ApiErrorResponse {
-  error?: {
-    code?: string
-    message?: string
-    requestId?: string
-    details?: Record<string, unknown>
-  }
-}
-
-export class SkillConsoleApiError extends Error {
-  readonly code: string
-  readonly requestId: string | undefined
-  readonly details: Record<string, unknown> | undefined
-  readonly status: number
-
-  constructor(
-    status: number,
-    response: ApiErrorResponse,
-  ) {
-    super(response.error?.message || "The request could not be completed.")
-    this.name = "SkillConsoleApiError"
-    this.status = status
-    this.code = response.error?.code || "REQUEST_FAILED"
-    this.requestId = response.error?.requestId
-    this.details = response.error?.details
-  }
-}
-
-async function readApiError(response: Response): Promise<SkillConsoleApiError> {
-  let body: ApiErrorResponse = {}
-  try {
-    body = (await response.json()) as ApiErrorResponse
-  } catch {
-    // The shared fallback below keeps proxy and network failures readable.
-  }
-
-  return new SkillConsoleApiError(response.status, body)
-}
+import { readApiError } from "@/shared/api/http"
 
 export async function listSkillWorkspaces(): Promise<SkillWorkspace[]> {
   const response = await fetch("/api/skill-workspaces", {

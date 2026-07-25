@@ -1,0 +1,76 @@
+{
+  "actions": {
+    "backToHome": "返回工作台首页",
+    "download": "下载原文件"
+  },
+  "header": {
+    "eyebrow": "Skill 正式版本",
+    "formalVersion": "正式版本",
+    "versionPicker": "选择正式版本",
+    "currentVersion": "当前正式版本",
+    "historicalVersion": "正在查看历史版本",
+    "defaultBaseline": "默认基线",
+    "notTested": "尚未测试"
+  },
+  "immutable": {
+    "title": "只读正式版本",
+    "description": "此页面展示不可变 Snapshot。文件内容、Manifest 和版本元数据不会在浏览过程中被修改。"
+  },
+  "tree": {
+    "files": "正式版本文件",
+    "search": "搜索路径或文件名",
+    "noResults": "没有匹配的文件",
+    "keyboardHelp": "使用方向键浏览，空格键打开文件"
+  },
+  "preview": {
+    "title": "文件预览",
+    "source": "源文件",
+    "rendered": "渲染预览",
+    "rawHtmlDisabled": "原始 HTML 已禁用"
+  },
+  "states": {
+    "loading": "正在读取正式版本",
+    "loadError": "无法读取正式版本内容",
+    "retry": "重新加载",
+    "noFileSelected": "从左侧文件树选择一个文件",
+    "unavailableTitle": "此文件不支持内联预览",
+    "unavailableDescription": "可以核对文件 Hash、大小和 MIME 提示，或通过受控接口下载原文件。",
+    "missingFileTitle": "Manifest 中不存在所选文件",
+    "corruptedFileTitle": "文件缺失或与 Manifest 不一致",
+    "snapshotUnavailableTitle": "此 Snapshot 当前不可浏览",
+    "invalidUtf8Title": "文件不是有效的 UTF-8 文本",
+    "largeFileTitle": "文件过大，未进行内联预览",
+    "binaryFileTitle": "二进制文件不进行内联预览",
+    "imageUnavailableTitle": "图片缺失、损坏或不允许内联预览",
+    "workspaceUnavailable": "工作台不存在或暂时无法读取。"
+  },
+  "metadata": {
+    "version": "版本信息",
+    "snapshot": "Snapshot 信息",
+    "versionNumber": "版本号",
+    "sourceType": "来源类型",
+    "sourceName": "来源名称",
+    "publishedAt": "发布时间",
+    "createdAt": "创建时间",
+    "snapshotState": "Snapshot 状态",
+    "fileCount": "文件数",
+    "totalSize": "总大小",
+    "manifestHash": "Manifest Hash",
+    "file": "文件信息",
+    "path": "相对路径",
+    "mediaType": "MIME 提示",
+    "byteSize": "文件大小",
+    "sha256": "SHA-256",
+    "contentKind": "内容类型",
+    "text": "文本",
+    "binary": "二进制",
+    "ready": "可用",
+    "corrupted": "已损坏",
+    "staging": "处理中"
+  },
+  "sourceTypes": {
+    "singleFile": "单文件",
+    "folder": "完整文件夹",
+    "zip": "ZIP 压缩包"
+  }
+}

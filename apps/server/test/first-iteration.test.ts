@@ -1,7 +1,13 @@
 import assert from "node:assert/strict"
 import { File } from "node:buffer"
-import { randomUUID } from "node:crypto"
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { createHash, randomUUID } from "node:crypto"
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import test from "node:test"
@@ -11,15 +17,23 @@ import { deflateRawSync } from "node:zlib"
 import { migrate } from "drizzle-orm/node-postgres/migrator"
 
 import { buildApplication } from "../src/app.js"
+import { DomainError } from "../src/core/errors/domain-error.js"
 import {
   closeDatabaseClient,
   createDatabaseClient,
 } from "../src/infrastructure/database/client.js"
 import { buildSnapshotManifest } from "../src/modules/skill-workspaces/snapshot-manifest.js"
+import { LocalSnapshotStorage } from "../src/modules/skill-workspaces/snapshot-storage.js"
 import {
   prepareRelativePaths,
   normalizeRelativePath,
 } from "../src/modules/skill-workspaces/upload-validation.js"
+import {
+  classifySnapshotFile,
+  MAX_TEXT_PREVIEW_BYTES,
+  readTextPreview,
+} from "../src/modules/skill-workspaces/version-browser.service.js"
+import type { VersionFileRecord } from "../src/modules/skill-workspaces/version-browser.repository.js"
 
 const limits = {
   maxFiles: 2_000,
@@ -121,6 +135,125 @@ test("builds a stable SHA-256 manifest from actual file bytes", async () => {
       first.files.find((file) => file.relativePath === "assets/data.bin")
         ?.contentKind,
       "binary",
+    )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test("classifies safe previews without treating binary or large text as inline content", () => {
+  assert.deepEqual(
+    classifySnapshotFile({
+      relativePath: "SKILL.md",
+      byteSize: 128,
+      mediaTypeHint: "text/markdown",
+      contentKind: "text",
+    }),
+    { previewKind: "markdown", previewable: true },
+  )
+  assert.deepEqual(
+    classifySnapshotFile({
+      relativePath: "assets/logo.png",
+      byteSize: 256,
+      mediaTypeHint: "image/png",
+      contentKind: "binary",
+    }),
+    { previewKind: "image", previewable: true },
+  )
+  assert.deepEqual(
+    classifySnapshotFile({
+      relativePath: "assets/archive.bin",
+      byteSize: 256,
+      mediaTypeHint: "application/octet-stream",
+      contentKind: "binary",
+    }),
+    { previewKind: "binary", previewable: false },
+  )
+  assert.deepEqual(
+    classifySnapshotFile({
+      relativePath: "logs/large.txt",
+      byteSize: MAX_TEXT_PREVIEW_BYTES + 1,
+      mediaTypeHint: "text/plain",
+      contentKind: "text",
+    }),
+    { previewKind: "text", previewable: false },
+  )
+})
+
+test("returns explicit states for unsafe or corrupted Snapshot text reads", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "skillconsole-browser-"))
+  const storage = new LocalSnapshotStorage(root)
+  const snapshotId = randomUUID()
+  await storage.initialize()
+
+  function createRecord(
+    relativePath: string,
+    content: Buffer,
+    overrides: Partial<VersionFileRecord["file"]> = {},
+  ): VersionFileRecord {
+    return {
+      snapshotId,
+      snapshotState: "READY",
+      file: {
+        id: randomUUID(),
+        snapshotId,
+        relativePath,
+        sha256: createHash("sha256").update(content).digest("hex"),
+        byteSize: content.byteLength,
+        mediaTypeHint: "text/plain",
+        contentKind: "text",
+        ...overrides,
+      },
+    }
+  }
+
+  async function writeSnapshotFile(
+    relativePath: string,
+    content: Buffer,
+  ): Promise<void> {
+    const target = storage.getSnapshotFilePath(snapshotId, relativePath)
+    await mkdir(path.dirname(target), { recursive: true })
+    await writeFile(target, content)
+  }
+
+  try {
+    assert.throws(
+      () => storage.getSnapshotFilePath(snapshotId, "../escape.txt"),
+      /invalid/,
+    )
+
+    const corruptedContent = Buffer.from("tampered", "utf8")
+    await writeSnapshotFile("corrupted.txt", corruptedContent)
+    await assert.rejects(
+      readTextPreview(
+        storage,
+        createRecord("corrupted.txt", corruptedContent, {
+          sha256: "0".repeat(64),
+        }),
+      ),
+      (error) =>
+        error instanceof DomainError &&
+        error.code === "SNAPSHOT_FILE_CORRUPTED",
+    )
+
+    const invalidUtf8 = Buffer.from([0xc3, 0x28])
+    await writeSnapshotFile("invalid.txt", invalidUtf8)
+    await assert.rejects(
+      readTextPreview(
+        storage,
+        createRecord("invalid.txt", invalidUtf8),
+      ),
+      (error) =>
+        error instanceof DomainError && error.code === "FILE_UTF8_INVALID",
+    )
+
+    await assert.rejects(
+      readTextPreview(storage, {
+        ...createRecord("invalid.txt", invalidUtf8),
+        snapshotState: "CORRUPTED",
+      }),
+      (error) =>
+        error instanceof DomainError && error.code === "SNAPSHOT_NOT_READY",
     )
   } finally {
     await rm(root, { recursive: true, force: true })
@@ -317,7 +450,7 @@ test(
       const folder = await createWorkspace("Folder Skill", "folder", [
         {
           name: "folder-skill/SKILL.md",
-          content: "# Folder\n",
+          content: "# 文件夹 Skill\n\n<script>alert('blocked')</script>\n",
           type: "text/markdown",
         },
         {
@@ -325,13 +458,216 @@ test(
           content: "print('ok')\n",
           type: "text/x-python",
         },
+        {
+          name: "folder-skill/config/settings.json",
+          content: '{"名称":"发票审核","enabled":true}\n',
+          type: "application/json",
+        },
+        {
+          name: "folder-skill/config/settings.yaml",
+          content: "名称: 发票审核\nenabled: true\n",
+          type: "application/yaml",
+        },
+        {
+          name: "folder-skill/assets/pixel.png",
+          content: Buffer.from(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+            "base64",
+          ),
+          type: "image/png",
+        },
+        {
+          name: "folder-skill/assets/data.bin",
+          content: Buffer.from([0, 1, 2, 3]),
+          type: "application/octet-stream",
+        },
       ])
       assert.equal(folder.response.status, 201)
       const folderBody = (await folder.response.json()) as {
+        workspace: {
+          id: string
+          currentVersion: {
+            id: string
+            snapshot: { id: string }
+          }
+        }
         upload: { fileCount: number; strippedRoot: string | null }
       }
-      assert.equal(folderBody.upload.fileCount, 2)
+      assert.equal(folderBody.upload.fileCount, 6)
       assert.equal(folderBody.upload.strippedRoot, "folder-skill")
+
+      const versionsResponse = await fetch(
+        `${address}/api/skill-workspaces/${folderBody.workspace.id}/versions`,
+      )
+      assert.equal(versionsResponse.status, 200)
+      const versions = (await versionsResponse.json()) as Array<{
+        id: string
+        versionNumber: number
+        isCurrent: boolean
+        isDefaultBaseline: boolean
+        snapshot: { state: string; fileCount: number }
+      }>
+      assert.equal(versions.length, 1)
+      assert.deepEqual(
+        {
+          id: versions[0]?.id,
+          versionNumber: versions[0]?.versionNumber,
+          isCurrent: versions[0]?.isCurrent,
+          isDefaultBaseline: versions[0]?.isDefaultBaseline,
+          state: versions[0]?.snapshot.state,
+          fileCount: versions[0]?.snapshot.fileCount,
+        },
+        {
+          id: folderBody.workspace.currentVersion.id,
+          versionNumber: 1,
+          isCurrent: true,
+          isDefaultBaseline: true,
+          state: "READY",
+          fileCount: 6,
+        },
+      )
+
+      const versionResponse = await fetch(
+        `${address}/api/skill-workspaces/${folderBody.workspace.id}/versions/${folderBody.workspace.currentVersion.id}`,
+      )
+      assert.equal(versionResponse.status, 200)
+
+      const filesBase =
+        `${address}/api/skill-workspaces/${folderBody.workspace.id}` +
+        `/versions/${folderBody.workspace.currentVersion.id}/files`
+      const filesResponse = await fetch(filesBase)
+      assert.equal(filesResponse.status, 200)
+      const fileList = (await filesResponse.json()) as {
+        snapshotId: string
+        files: Array<{
+          relativePath: string
+          previewKind: string
+          previewable: boolean
+        }>
+      }
+      assert.equal(
+        fileList.snapshotId,
+        folderBody.workspace.currentVersion.snapshot.id,
+      )
+      assert.equal(fileList.files.length, 6)
+      assert.deepEqual(
+        fileList.files.map((file) => [
+          file.relativePath,
+          file.previewKind,
+          file.previewable,
+        ]),
+        [
+          ["SKILL.md", "markdown", true],
+          ["assets/data.bin", "binary", false],
+          ["assets/pixel.png", "image", true],
+          ["config/settings.json", "json", true],
+          ["config/settings.yaml", "yaml", true],
+          ["scripts/check.py", "text", true],
+        ],
+      )
+
+      const markdownResponse = await fetch(
+        `${filesBase}/text-preview?path=${encodeURIComponent("SKILL.md")}`,
+      )
+      assert.equal(markdownResponse.status, 200)
+      const markdown = (await markdownResponse.json()) as {
+        kind: string
+        encoding: string
+        content: string
+      }
+      assert.equal(markdown.kind, "markdown")
+      assert.equal(markdown.encoding, "utf-8")
+      assert.match(markdown.content, /文件夹 Skill/)
+      assert.match(markdown.content, /<script>alert/)
+
+      const jsonResponse = await fetch(
+        `${filesBase}/text-preview?path=${encodeURIComponent("config/settings.json")}`,
+      )
+      assert.equal(jsonResponse.status, 200)
+      assert.match(
+        ((await jsonResponse.json()) as { content: string }).content,
+        /发票审核/,
+      )
+
+      const imageResponse = await fetch(
+        `${filesBase}/image-preview?path=${encodeURIComponent("assets/pixel.png")}`,
+      )
+      assert.equal(imageResponse.status, 200)
+      assert.equal(imageResponse.headers.get("content-type"), "image/png")
+      assert.equal(
+        imageResponse.headers.get("x-content-type-options"),
+        "nosniff",
+      )
+      assert.match(
+        imageResponse.headers.get("content-security-policy") ?? "",
+        /sandbox/,
+      )
+
+      const binaryPreviewResponse = await fetch(
+        `${filesBase}/text-preview?path=${encodeURIComponent("assets/data.bin")}`,
+      )
+      assert.equal(binaryPreviewResponse.status, 415)
+      assert.equal(
+        (
+          (await binaryPreviewResponse.json()) as {
+            error: { code: string }
+          }
+        ).error.code,
+        "FILE_TEXT_PREVIEW_NOT_SUPPORTED",
+      )
+
+      const downloadResponse = await fetch(
+        `${filesBase}/download?path=${encodeURIComponent("assets/data.bin")}`,
+      )
+      assert.equal(downloadResponse.status, 200)
+      assert.equal(
+        downloadResponse.headers.get("content-type"),
+        "application/octet-stream",
+      )
+      assert.match(
+        downloadResponse.headers.get("content-disposition") ?? "",
+        /^attachment;/,
+      )
+      assert.deepEqual(
+        Buffer.from(await downloadResponse.arrayBuffer()),
+        Buffer.from([0, 1, 2, 3]),
+      )
+
+      const missingFileResponse = await fetch(
+        `${filesBase}/text-preview?path=${encodeURIComponent("missing.txt")}`,
+      )
+      assert.equal(missingFileResponse.status, 404)
+
+      const crossWorkspaceVersionResponse = await fetch(
+        `${address}/api/skill-workspaces/${singleBody.workspace.id}` +
+          `/versions/${folderBody.workspace.currentVersion.id}`,
+      )
+      assert.equal(crossWorkspaceVersionResponse.status, 404)
+
+      await writeFile(
+        path.join(
+          dataRoot,
+          "snapshots",
+          folderBody.workspace.currentVersion.snapshot.id,
+          "files",
+          "config",
+          "settings.json",
+        ),
+        '{"tampered":true}\n',
+        "utf8",
+      )
+      const corruptedResponse = await fetch(
+        `${filesBase}/text-preview?path=${encodeURIComponent("config/settings.json")}`,
+      )
+      assert.equal(corruptedResponse.status, 409)
+      assert.equal(
+        (
+          (await corruptedResponse.json()) as {
+            error: { code: string }
+          }
+        ).error.code,
+        "SNAPSHOT_FILE_CORRUPTED",
+      )
 
       const archive = createZip([
         { name: "zip-skill/SKILL.md", content: "# ZIP\n" },
