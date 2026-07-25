@@ -1,7 +1,6 @@
 import {
   CheckCircle2,
   FileArchive,
-  FileText,
   FolderOpen,
   FolderPlus,
   LoaderCircle,
@@ -15,9 +14,9 @@ import type {
 } from "react"
 
 import type {
+  CreateSkillSourceKind,
   CreateWorkbenchDraft,
   CreateWorkbenchErrors,
-  SkillSourceKind,
 } from "@/features/workbench-home/model/workbench"
 import type { WorkbenchHomeCopy } from "@/features/workbench-home/model/workbench-home-copy"
 import { Button } from "@/shared/components/ui/button"
@@ -44,10 +43,11 @@ interface CreateWorkbenchDialogProps {
   draft: CreateWorkbenchDraft
   errors: CreateWorkbenchErrors
   submitting: boolean
+  folderPolicyStatus: "loading" | "ready" | "error"
   copy: WorkbenchHomeCopy
   onOpenChange: (open: boolean) => void
   onNameChange: (name: string) => void
-  onSourceKindChange: (kind: SkillSourceKind) => void
+  onSourceKindChange: (kind: CreateSkillSourceKind) => void
   onSourceSelect: (files: readonly File[]) => void
   onSubmit: () => void
 }
@@ -67,16 +67,16 @@ function sourceErrorMessage(
 }
 
 const sourceIcons = {
-  single_file: FileText,
   folder: FolderOpen,
   zip: FileArchive,
-} satisfies Record<SkillSourceKind, typeof FileText>
+} satisfies Record<CreateSkillSourceKind, typeof FolderOpen>
 
 export function CreateWorkbenchDialog({
   open,
   draft,
   errors,
   submitting,
+  folderPolicyStatus,
   copy,
   onOpenChange,
   onNameChange,
@@ -87,6 +87,15 @@ export function CreateWorkbenchDialog({
   const sourceInputId = `workbench-${draft.sourceKind}-source`
   const SelectedSourceIcon = sourceIcons[draft.sourceKind]
   const sourceError = sourceErrorMessage(errors.source, copy)
+  const folderPolicyBlocked =
+    draft.sourceKind === "folder" && folderPolicyStatus !== "ready"
+  let dropHint = copy.dropHint
+  if (folderPolicyBlocked) {
+    dropHint =
+      folderPolicyStatus === "error"
+        ? copy.uploadPolicyUnavailable
+        : copy.loadingUploadPolicy
+  }
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     onSourceSelect(Array.from(event.target.files ?? []))
@@ -94,6 +103,7 @@ export function CreateWorkbenchDialog({
 
   function handleDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault()
+    if (folderPolicyBlocked) return
     onSourceSelect(Array.from(event.dataTransfer.files))
   }
 
@@ -147,14 +157,10 @@ export function CreateWorkbenchDialog({
               </span>
             </div>
             <ToggleGroup
-              className="grid w-full grid-cols-3 gap-2"
+              className="grid w-full grid-cols-2 gap-2"
               disabled={submitting}
               onValueChange={(value) => {
-                if (
-                  value === "single_file" ||
-                  value === "folder" ||
-                  value === "zip"
-                ) {
+                if (value === "folder" || value === "zip") {
                   onSourceKindChange(value)
                 }
               }}
@@ -162,9 +168,7 @@ export function CreateWorkbenchDialog({
               value={draft.sourceKind}
               variant="outline"
             >
-              {(
-                ["single_file", "folder", "zip"] as const
-              ).map((sourceKind) => {
+              {(["folder", "zip"] as const).map((sourceKind) => {
                 const Icon = sourceIcons[sourceKind]
                 return (
                   <ToggleGroupItem
@@ -197,7 +201,7 @@ export function CreateWorkbenchDialog({
                 : undefined
             }
             className="sr-only"
-            disabled={submitting}
+            disabled={submitting || folderPolicyBlocked}
             id={sourceInputId}
             key={draft.sourceKind}
             multiple={draft.sourceKind === "folder"}
@@ -214,7 +218,8 @@ export function CreateWorkbenchDialog({
             className={cn(
               buttonVariants({ variant: "outline" }),
               "flex h-28 w-full flex-col gap-1.5 rounded-none border-dashed border-rule bg-background text-muted-foreground shadow-none hover:border-primary hover:bg-accent hover:text-signal-dark",
-              submitting && "pointer-events-none opacity-60",
+              (submitting || folderPolicyBlocked) &&
+                "pointer-events-none opacity-60",
             )}
             htmlFor={sourceInputId}
             onDragOver={(event) => event.preventDefault()}
@@ -224,7 +229,7 @@ export function CreateWorkbenchDialog({
             <strong className="text-foreground">
               {copy.sourceKinds[draft.sourceKind].choose}
             </strong>
-            <span className="text-xs">{copy.dropHint}</span>
+            <span className="text-xs">{dropHint}</span>
           </Label>
 
           {draft.source && (
@@ -291,6 +296,13 @@ export function CreateWorkbenchDialog({
                 />
                 {copy.serverValidationNote}
               </p>
+              {draft.source.ignoredFileCount > 0 && (
+                <p className="border-t border-technical/30 px-4 py-2.5 text-[11px] font-semibold text-technical-foreground">
+                  {copy.ignoredFolderFiles(
+                    draft.source.ignoredFileCount,
+                  )}
+                </p>
+              )}
             </section>
           )}
 

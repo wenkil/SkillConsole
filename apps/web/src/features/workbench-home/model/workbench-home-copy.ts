@@ -43,6 +43,8 @@ export interface WorkbenchHomeCopy {
   sourceScope: string
   sourceKinds: Record<SkillSourceKind, SourceKindCopy>
   dropHint: string
+  loadingUploadPolicy: string
+  uploadPolicyUnavailable: string
   importSummary: string
   readyForValidation: string
   sourceType: string
@@ -50,6 +52,7 @@ export interface WorkbenchHomeCopy {
   totalSize: string
   directoryDepth: string
   serverValidationNote: string
+  ignoredFolderFiles: (count: number) => string
   cancel: string
   createWorkbenchAndV1: string
   publishingVersion: string
@@ -158,6 +161,10 @@ export function getWorkbenchHomeCopy(
       },
     },
     dropHint: translate("createDialog.dropHint"),
+    loadingUploadPolicy: translate("createDialog.loadingUploadPolicy"),
+    uploadPolicyUnavailable: translate(
+      "createDialog.uploadPolicyUnavailable",
+    ),
     importSummary: translate("createDialog.importSummary"),
     readyForValidation: translate("createDialog.readyForValidation"),
     sourceType: translate("createDialog.sourceType"),
@@ -165,17 +172,22 @@ export function getWorkbenchHomeCopy(
     totalSize: translate("createDialog.totalSize"),
     directoryDepth: translate("createDialog.directoryDepth"),
     serverValidationNote: translate("createDialog.serverValidationNote"),
+    ignoredFolderFiles: (count) =>
+      translate("createDialog.ignoredFolderFiles", { count }),
     cancel: translate("createDialog.cancel"),
     createWorkbenchAndV1: translate("createDialog.createWorkbenchAndV1"),
     publishingVersion: translate("createDialog.publishingVersion"),
     nameRequired: translate("createDialog.nameRequired"),
     sourceErrors: {
       sourceRequired: translate("createDialog.errors.sourceRequired"),
-      singleFileRequired: translate(
-        "createDialog.errors.singleFileRequired",
-      ),
       folderSelectionRequired: translate(
         "createDialog.errors.folderSelectionRequired",
+      ),
+      folderPolicyUnavailable: translate(
+        "createDialog.errors.folderPolicyUnavailable",
+      ),
+      folderFilesIgnored: translate(
+        "createDialog.errors.folderFilesIgnored",
       ),
       zipRequired: translate("createDialog.errors.zipRequired"),
     },

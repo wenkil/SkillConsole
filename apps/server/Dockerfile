@@ -45,6 +45,7 @@ RUN npm ci --omit=dev --workspace @skillconsole/server
 
 COPY --from=build /workspace/apps/server/dist apps/server/dist
 COPY apps/server/migrations apps/server/migrations
+COPY apps/server/config apps/server/config
 
 EXPOSE 3000
 

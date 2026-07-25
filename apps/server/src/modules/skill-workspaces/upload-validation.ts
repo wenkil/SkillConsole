@@ -2,6 +2,10 @@ import { DomainError } from "../../core/errors/domain-error.js"
 
 import type { UploadLimits } from "../../config/index.js"
 import type { SkillSourceType } from "../../infrastructure/database/index.js"
+import {
+  createUploadFolderPathMatcher,
+  type UploadFolderIgnorePolicy,
+} from "./upload-folder-ignore-policy.js"
 
 const windowsReservedNamePattern =
   /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
@@ -137,6 +141,7 @@ export function prepareRelativePaths(
   originalPaths: readonly string[],
   sourceType: SkillSourceType,
   limits: UploadLimits,
+  folderIgnorePolicy?: UploadFolderIgnorePolicy,
 ): PreparedRelativePaths {
   if (originalPaths.length === 0) {
     throw uploadValidationError(
@@ -159,6 +164,10 @@ export function prepareRelativePaths(
   const strippedRoot = findStrippableRoot(normalizedPaths, sourceType)
   const seenCaseFoldedPaths = new Map<string, string>()
   const files: PreparedRelativePath[] = []
+  const shouldIgnoreConfiguredPath =
+    sourceType === "folder" && folderIgnorePolicy
+      ? createUploadFolderPathMatcher(folderIgnorePolicy)
+      : null
   let ignoredCount = 0
 
   normalizedPaths.forEach((normalizedPath, inputIndex) => {
@@ -167,7 +176,10 @@ export function prepareRelativePaths(
       : normalizedPath
     const validatedPath = normalizeRelativePath(relativePath, limits)
 
-    if (isGitMetadataPath(validatedPath)) {
+    if (
+      isGitMetadataPath(validatedPath) ||
+      shouldIgnoreConfiguredPath?.(validatedPath)
+    ) {
       ignoredCount += 1
       return
     }

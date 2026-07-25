@@ -41,6 +41,10 @@ import {
   readImagePreview,
   readTextPreview,
 } from "./version-browser.service.js"
+import {
+  loadUploadFolderIgnorePolicy,
+  UploadFolderIgnorePolicySchema,
+} from "./upload-folder-ignore-policy.js"
 
 function contentDispositionFilename(relativePath: string): string {
   const filename = relativePath.split("/").at(-1) ?? "download"
@@ -64,6 +68,9 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
   application,
 ) => {
   const limits = application.appConfig.uploadLimits
+  const folderIgnorePolicy = await loadUploadFolderIgnorePolicy(
+    application.appConfig.uploadFolderIgnoreConfigPath,
+  )
 
   await application.register(fastifyMultipart, {
     preservePath: true,
@@ -85,7 +92,22 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
     database: application.databaseClient.database,
     storage,
     limits,
+    folderIgnorePolicy,
   })
+
+  application.get(
+    "/api/skill-workspace-upload-policy",
+    {
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "Read the server-owned folder upload ignore policy",
+        response: {
+          200: UploadFolderIgnorePolicySchema,
+        },
+      },
+    },
+    async () => folderIgnorePolicy,
+  )
 
   application.get(
     "/api/skill-workspaces",

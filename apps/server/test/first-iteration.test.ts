@@ -29,6 +29,10 @@ import {
   normalizeRelativePath,
 } from "../src/modules/skill-workspaces/upload-validation.js"
 import {
+  loadUploadFolderIgnorePolicy,
+  shouldIgnoreFolderPath,
+} from "../src/modules/skill-workspaces/upload-folder-ignore-policy.js"
+import {
   classifySnapshotFile,
   readTextPreview,
 } from "../src/modules/skill-workspaces/version-browser.service.js"
@@ -43,6 +47,12 @@ const limits = {
   maxZipBytes: 100 * 1024 * 1024,
   maxZipCompressionRatio: 100,
 } as const
+const folderIgnorePolicyPath = fileURLToPath(
+  new URL("../config/upload-folder-ignore.json", import.meta.url),
+)
+const folderIgnorePolicy = await loadUploadFolderIgnorePolicy(
+  folderIgnorePolicyPath,
+)
 
 test("normalizes portable paths and rejects traversal", () => {
   assert.equal(normalizeRelativePath("docs/SKILL.md", limits), "docs/SKILL.md")
@@ -95,6 +105,96 @@ test("excludes .git metadata from the formal manifest path set", () => {
     prepared.files.map((file) => file.relativePath),
     ["SKILL.md"],
   )
+})
+
+test("loads and applies the configured folder-only ignore policy", () => {
+  assert.equal(
+    shouldIgnoreFolderPath(
+      "scripts/node_modules/package/index.js",
+      folderIgnorePolicy,
+    ),
+    true,
+  )
+  assert.equal(
+    shouldIgnoreFolderPath(
+      "scripts/Node_Modules/package/index.js",
+      folderIgnorePolicy,
+    ),
+    true,
+  )
+  assert.equal(
+    shouldIgnoreFolderPath("scripts/cache.pyc", folderIgnorePolicy),
+    true,
+  )
+  assert.equal(
+    shouldIgnoreFolderPath("package.json", folderIgnorePolicy),
+    false,
+  )
+
+  const folder = prepareRelativePaths(
+    [
+      "skill/SKILL.md",
+      "skill/package.json",
+      "skill/node_modules/package/index.js",
+      "skill/.venv/lib/tool.py",
+      "skill/scripts/cache.pyc",
+    ],
+    "folder",
+    limits,
+    folderIgnorePolicy,
+  )
+  assert.equal(folder.ignoredCount, 3)
+  assert.deepEqual(
+    folder.files.map((file) => file.relativePath),
+    ["SKILL.md", "package.json"],
+  )
+
+  const zip = prepareRelativePaths(
+    ["skill/SKILL.md", "skill/node_modules/package/index.js"],
+    "zip",
+    limits,
+    folderIgnorePolicy,
+  )
+  assert.equal(zip.ignoredCount, 0)
+  assert.deepEqual(
+    zip.files.map((file) => file.relativePath),
+    ["SKILL.md", "node_modules/package/index.js"],
+  )
+
+  assert.throws(
+    () =>
+      prepareRelativePaths(
+        ["skill/node_modules/package/index.js"],
+        "folder",
+        limits,
+        folderIgnorePolicy,
+      ),
+    /contains no files/,
+  )
+})
+
+test("rejects an invalid folder ignore configuration", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "skillconsole-policy-"))
+  const invalidPolicyPath = path.join(root, "upload-folder-ignore.json")
+
+  try {
+    await writeFile(
+      invalidPolicyPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        caseSensitive: false,
+        ignoredDirectoryNames: ["node_modules"],
+      }),
+      "utf8",
+    )
+
+    await assert.rejects(
+      loadUploadFolderIgnorePolicy(invalidPolicyPath),
+      /does not match schema version 1/,
+    )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })
 
 test("builds a stable SHA-256 manifest from actual file bytes", async () => {
@@ -379,6 +479,7 @@ test(
       logLevel: "silent",
       openApiEnabled: true,
       dataRoot,
+      uploadFolderIgnoreConfigPath: folderIgnorePolicyPath,
       uploadLimits: limits,
     } as const
     let application = await buildApplication({ config, logger: false })
@@ -422,6 +523,12 @@ test(
     }
 
     try {
+      const policyResponse = await fetch(
+        `${address}/api/skill-workspace-upload-policy`,
+      )
+      assert.equal(policyResponse.status, 200)
+      assert.deepEqual(await policyResponse.json(), folderIgnorePolicy)
+
       const single = await createWorkspace(
         "Single file Skill",
         "single_file",
@@ -488,6 +595,16 @@ test(
           content: Buffer.from([0, 1, 2, 3]),
           type: "application/octet-stream",
         },
+        {
+          name: "folder-skill/node_modules/package/index.js",
+          content: "export const dependency = true\n",
+          type: "text/javascript",
+        },
+        {
+          name: "folder-skill/scripts/cache.pyc",
+          content: Buffer.from([0, 1, 2, 3]),
+          type: "application/octet-stream",
+        },
       ])
       assert.equal(folder.response.status, 201)
       const folderBody = (await folder.response.json()) as {
@@ -498,9 +615,14 @@ test(
             snapshot: { id: string }
           }
         }
-        upload: { fileCount: number; strippedRoot: string | null }
+        upload: {
+          fileCount: number
+          ignoredFileCount: number
+          strippedRoot: string | null
+        }
       }
       assert.equal(folderBody.upload.fileCount, 6)
+      assert.equal(folderBody.upload.ignoredFileCount, 2)
       assert.equal(folderBody.upload.strippedRoot, "folder-skill")
 
       const versionsResponse = await fetch(

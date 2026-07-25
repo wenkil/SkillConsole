@@ -25,7 +25,7 @@
       },
       "source": {
         "title": "选择 Skill 来源",
-        "description": "上传单文件、完整文件夹，或仅用于首次版本的 ZIP 压缩包。"
+        "description": "选择完整 Skill 文件夹，或导入仅用于首次版本的 ZIP 压缩包。"
       },
       "validate": {
         "title": "校验与生成清单",
@@ -53,7 +53,7 @@
     "sources": {
       "singleFile": {
         "label": "单文件",
-        "description": "直接使用一个 SKILL.md 或其他 Skill 文件。",
+        "description": "历史单文件来源。",
         "choose": "选择一个 Skill 文件"
       },
       "folder": {
@@ -68,6 +68,8 @@
       }
     },
     "dropHint": "点击浏览，也可以将来源拖放到这里。",
+    "loadingUploadPolicy": "正在加载文件夹过滤策略…",
+    "uploadPolicyUnavailable": "无法读取文件夹过滤策略，请关闭弹框后重试。",
     "importSummary": "导入摘要",
     "readyForValidation": "等待服务端校验",
     "sourceType": "来源类型",
@@ -75,14 +77,16 @@
     "totalSize": "总大小",
     "directoryDepth": "目录深度",
     "serverValidationNote": "浏览器摘要仅用于确认；路径、Hash、大小和 ZIP 安全规则将由服务端重新校验。",
+    "ignoredFolderFiles": "已按服务器策略忽略 {{count}} 个依赖、缓存或安装包文件。",
     "cancel": "取消",
     "createWorkbenchAndV1": "创建工作台并发布 V1",
     "publishingVersion": "正在校验并发布 V1",
     "nameRequired": "请填写工作台名称。",
     "errors": {
-      "sourceRequired": "请选择单文件、完整文件夹或 ZIP 压缩包。",
-      "singleFileRequired": "单文件来源只能选择一个文件。",
+      "sourceRequired": "请选择完整 Skill 文件夹或 ZIP 压缩包。",
       "folderSelectionRequired": "请使用“选择 Skill 文件夹”保留完整相对路径；普通多文件拖放不能可靠还原目录。",
+      "folderPolicyUnavailable": "文件夹过滤策略尚未就绪，请稍后重新选择。",
+      "folderFilesIgnored": "所选文件夹中的文件全部被上传过滤策略忽略。",
       "zipRequired": "请选择一个有效的 .zip 压缩包。"
     },
     "createFailed": "V1 创建失败",

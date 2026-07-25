@@ -3,6 +3,7 @@ import {
   type CreateSkillWorkspaceResponse,
   type CreateWorkbenchDraft,
   type SkillWorkspace,
+  type UploadFolderIgnorePolicy,
 } from "@/features/workbench-home/model/workbench"
 import { readApiError } from "@/shared/api/http"
 
@@ -15,6 +16,17 @@ export async function listSkillWorkspaces(): Promise<SkillWorkspace[]> {
 
   if (!response.ok) throw await readApiError(response)
   return (await response.json()) as SkillWorkspace[]
+}
+
+export async function getUploadFolderIgnorePolicy(): Promise<UploadFolderIgnorePolicy> {
+  const response = await fetch("/api/skill-workspace-upload-policy", {
+    headers: {
+      Accept: "application/json",
+    },
+  })
+
+  if (!response.ok) throw await readApiError(response)
+  return (await response.json()) as UploadFolderIgnorePolicy
 }
 
 export async function createSkillWorkspace(

@@ -91,6 +91,7 @@ export function WorkbenchHomeRoute() {
         copy={copy}
         draft={controller.createDialog.draft}
         errors={controller.createDialog.errors}
+        folderPolicyStatus={controller.createDialog.folderPolicyStatus}
         onNameChange={actions.updateWorkbenchName}
         onOpenChange={(open) => {
           if (open) actions.openCreateDialog()

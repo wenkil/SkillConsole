@@ -1,4 +1,8 @@
 export type SkillSourceKind = "single_file" | "folder" | "zip"
+export type CreateSkillSourceKind = Exclude<
+  SkillSourceKind,
+  "single_file"
+>
 
 export interface SkillSnapshotSummary {
   id: string
@@ -29,13 +33,22 @@ export interface SelectedSkillSource {
   name: string
   files: File[]
   fileCount: number
+  ignoredFileCount: number
   totalBytes: number
   maxDepth: number
 }
 
+export interface UploadFolderIgnorePolicy {
+  schemaVersion: 1
+  caseSensitive: boolean
+  ignoredDirectoryNames: string[]
+  ignoredFileNames: string[]
+  ignoredFileSuffixes: string[]
+}
+
 export interface CreateWorkbenchDraft {
   name: string
-  sourceKind: SkillSourceKind
+  sourceKind: CreateSkillSourceKind
   source: SelectedSkillSource | null
 }
 
@@ -43,8 +56,9 @@ export interface CreateWorkbenchErrors {
   name?: "nameRequired" | undefined
   source?:
     | "sourceRequired"
-    | "singleFileRequired"
     | "folderSelectionRequired"
+    | "folderPolicyUnavailable"
+    | "folderFilesIgnored"
     | "zipRequired"
     | undefined
   upload?: string | undefined
@@ -82,7 +96,7 @@ export class SourceSelectionError extends Error {
 export function createEmptyWorkbenchDraft(): CreateWorkbenchDraft {
   return {
     name: "",
-    sourceKind: "single_file",
+    sourceKind: "folder",
     source: null,
   }
 }
@@ -99,16 +113,54 @@ function getFolderRelativePath(file: File): string {
   return file.webkitRelativePath || file.name
 }
 
+function stripSelectedFolderRoot(path: string): string {
+  const normalizedPath = path.replaceAll("\\", "/")
+  const rootSeparator = normalizedPath.indexOf("/")
+  return rootSeparator >= 0
+    ? normalizedPath.slice(rootSeparator + 1)
+    : normalizedPath
+}
+
+function comparable(value: string, caseSensitive: boolean): string {
+  return caseSensitive ? value : value.toLowerCase()
+}
+
+function createUploadFolderPathMatcher(
+  policy: UploadFolderIgnorePolicy,
+): (path: string) => boolean {
+  const normalize = (value: string) =>
+    comparable(value, policy.caseSensitive)
+  const ignoredDirectoryNames = new Set(
+    policy.ignoredDirectoryNames.map(normalize),
+  )
+  const ignoredFileNames = new Set(policy.ignoredFileNames.map(normalize))
+  const ignoredFileSuffixes = policy.ignoredFileSuffixes.map(normalize)
+
+  return (path: string): boolean => {
+    const segments = path.replaceAll("\\", "/").split("/")
+    const fileName = segments.at(-1) ?? ""
+    const directoryNames = segments.slice(0, -1)
+    const comparableFileName = normalize(fileName)
+
+    return (
+      directoryNames.some((name) =>
+        ignoredDirectoryNames.has(normalize(name)),
+      ) ||
+      ignoredFileNames.has(comparableFileName) ||
+      ignoredFileSuffixes.some((suffix) =>
+        comparableFileName.endsWith(suffix),
+      )
+    )
+  }
+}
+
 export function createSelectedSkillSource(
-  sourceKind: SkillSourceKind,
+  sourceKind: CreateSkillSourceKind,
   files: readonly File[],
+  folderIgnorePolicy?: UploadFolderIgnorePolicy,
 ): SelectedSkillSource {
   if (files.length === 0) {
     throw new SourceSelectionError("sourceRequired")
-  }
-
-  if (sourceKind === "single_file" && files.length !== 1) {
-    throw new SourceSelectionError("singleFileRequired")
   }
 
   if (
@@ -125,8 +177,30 @@ export function createSelectedSkillSource(
     throw new SourceSelectionError("folderSelectionRequired")
   }
 
-  const paths = files.map((file) => getFolderRelativePath(file))
-  const firstPath = paths[0] ?? files[0]?.name ?? ""
+  if (sourceKind === "folder" && !folderIgnorePolicy) {
+    throw new SourceSelectionError("folderPolicyUnavailable")
+  }
+
+  const shouldIgnorePath = folderIgnorePolicy
+    ? createUploadFolderPathMatcher(folderIgnorePolicy)
+    : null
+  const selectedFiles =
+    sourceKind === "folder" && shouldIgnorePath
+      ? files.filter(
+          (file) =>
+            !shouldIgnorePath(
+              stripSelectedFolderRoot(getFolderRelativePath(file)),
+            ),
+        )
+      : [...files]
+
+  if (selectedFiles.length === 0) {
+    throw new SourceSelectionError("folderFilesIgnored")
+  }
+
+  const originalPaths = files.map((file) => getFolderRelativePath(file))
+  const paths = selectedFiles.map((file) => getFolderRelativePath(file))
+  const firstPath = originalPaths[0] ?? files[0]?.name ?? ""
   const name =
     sourceKind === "folder"
       ? (firstPath.split("/")[0] ?? firstPath)
@@ -134,9 +208,10 @@ export function createSelectedSkillSource(
 
   return {
     name,
-    files: [...files],
-    fileCount: files.length,
-    totalBytes: files.reduce((total, file) => total + file.size, 0),
+    files: selectedFiles,
+    fileCount: selectedFiles.length,
+    ignoredFileCount: files.length - selectedFiles.length,
+    totalBytes: selectedFiles.reduce((total, file) => total + file.size, 0),
     maxDepth: Math.max(
       ...paths.map((path) => Math.max(path.split("/").length - 1, 0)),
     ),
@@ -160,7 +235,7 @@ export function validateWorkbenchDraft(
 }
 
 export function getUploadPath(
-  sourceKind: SkillSourceKind,
+  sourceKind: CreateSkillSourceKind,
   file: File,
 ): string {
   return sourceKind === "folder"

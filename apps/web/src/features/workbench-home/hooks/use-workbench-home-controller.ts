@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next"
 
 import {
   createSkillWorkspace,
+  getUploadFolderIgnorePolicy,
   listSkillWorkspaces,
 } from "@/features/workbench-home/api/skill-workspaces-api"
 import {
@@ -12,10 +13,10 @@ import {
   createSelectedSkillSource,
   SourceSelectionError,
   validateWorkbenchDraft,
+  type CreateSkillSourceKind,
   type CreateWorkbenchDraft,
   type CreateWorkbenchErrors,
   type RuntimeDefaults,
-  type SkillSourceKind,
   type SkillWorkspace,
 } from "@/features/workbench-home/model/workbench"
 import {
@@ -27,6 +28,7 @@ import type { AppLocale } from "@/shared/types/locale"
 import { SkillConsoleApiError } from "@/shared/api/http"
 
 const workspacesQueryKey = ["skill-workspaces"] as const
+const uploadPolicyQueryKey = ["skill-workspace-upload-policy"] as const
 
 export interface WorkbenchHomeController {
   locale: AppLocale
@@ -42,6 +44,7 @@ export interface WorkbenchHomeController {
     draft: CreateWorkbenchDraft
     errors: CreateWorkbenchErrors
     submitting: boolean
+    folderPolicyStatus: "loading" | "ready" | "error"
   }
   settingsDialog: {
     open: boolean
@@ -52,7 +55,7 @@ export interface WorkbenchHomeController {
     openCreateDialog: () => void
     closeCreateDialog: () => void
     updateWorkbenchName: (name: string) => void
-    updateSourceKind: (kind: SkillSourceKind) => void
+    updateSourceKind: (kind: CreateSkillSourceKind) => void
     selectSource: (files: readonly File[]) => void
     createWorkspace: () => Promise<SkillWorkspace | null>
     retryWorkspaceList: () => void
@@ -85,6 +88,11 @@ export function useWorkbenchHomeController(
   const workspaceQuery = useQuery({
     queryKey: workspacesQueryKey,
     queryFn: listSkillWorkspaces,
+  })
+  const uploadPolicyQuery = useQuery({
+    queryKey: uploadPolicyQueryKey,
+    queryFn: getUploadFolderIgnorePolicy,
+    staleTime: Number.POSITIVE_INFINITY,
   })
   const workspaces = workspaceQuery.data ?? []
   const createMutation = useMutation({
@@ -122,6 +130,9 @@ export function useWorkbenchHomeController(
     setDraft(createEmptyWorkbenchDraft())
     setErrors({})
     createMutation.reset()
+    if (uploadPolicyQuery.isError) {
+      void uploadPolicyQuery.refetch()
+    }
     createOperationIdRef.current = null
     setCreateDialogOpen(true)
   }
@@ -139,7 +150,7 @@ export function useWorkbenchHomeController(
     createOperationIdRef.current = null
   }
 
-  function updateSourceKind(sourceKind: SkillSourceKind) {
+  function updateSourceKind(sourceKind: CreateSkillSourceKind) {
     setDraft((current) => ({
       ...current,
       sourceKind,
@@ -151,7 +162,11 @@ export function useWorkbenchHomeController(
 
   function selectSource(files: readonly File[]) {
     try {
-      const source = createSelectedSkillSource(draft.sourceKind, files)
+      const source = createSelectedSkillSource(
+        draft.sourceKind,
+        files,
+        uploadPolicyQuery.data,
+      )
       setDraft((current) => ({ ...current, source }))
       setErrors((current) => ({
         ...current,
@@ -197,6 +212,13 @@ export function useWorkbenchHomeController(
     return runtimeDefaults
   }
 
+  let folderPolicyStatus: "loading" | "ready" | "error" = "loading"
+  if (uploadPolicyQuery.data) {
+    folderPolicyStatus = "ready"
+  } else if (uploadPolicyQuery.isError) {
+    folderPolicyStatus = "error"
+  }
+
   return {
     locale,
     copy,
@@ -211,6 +233,7 @@ export function useWorkbenchHomeController(
       draft,
       errors,
       submitting: createMutation.isPending,
+      folderPolicyStatus,
     },
     settingsDialog: {
       open: isSettingsDialogOpen,

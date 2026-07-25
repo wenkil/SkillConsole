@@ -28,6 +28,7 @@ export interface ApplicationConfig {
   readonly logLevel: LogLevel
   readonly openApiEnabled: boolean
   readonly dataRoot: string
+  readonly uploadFolderIgnoreConfigPath: string
   readonly uploadLimits: UploadLimits
   readonly staticRoot?: string
 }
@@ -47,12 +48,18 @@ const defaultDataRoot = path.resolve(
   fileURLToPath(new URL("../../../../", import.meta.url)),
   "var",
 )
+const defaultUploadFolderIgnoreConfigPath = fileURLToPath(
+  new URL("../../config/upload-folder-ignore.json", import.meta.url),
+)
 
 export class ConfigurationError extends Error {
   readonly issues: readonly string[]
 
-  constructor(issues: readonly string[]) {
-    super(`Application configuration is invalid: ${issues.join("; ")}`)
+  constructor(issues: readonly string[], options?: ErrorOptions) {
+    super(
+      `Application configuration is invalid: ${issues.join("; ")}`,
+      options,
+    )
     this.name = "ConfigurationError"
     this.issues = issues
   }
@@ -170,6 +177,8 @@ export function parseApplicationConfig(
 
   const staticRoot = environment.STATIC_ROOT?.trim()
   const configuredDataRoot = environment.SKILLCONSOLE_DATA_ROOT?.trim()
+  const configuredUploadFolderIgnoreConfigPath =
+    environment.SKILLCONSOLE_UPLOAD_FOLDER_IGNORE_CONFIG?.trim()
   const config: ApplicationConfig = {
     nodeEnvironment,
     host: environment.HOST?.trim() || "0.0.0.0",
@@ -185,6 +194,9 @@ export function parseApplicationConfig(
     dataRoot: configuredDataRoot
       ? path.resolve(configuredDataRoot)
       : defaultDataRoot,
+    uploadFolderIgnoreConfigPath: configuredUploadFolderIgnoreConfigPath
+      ? path.resolve(configuredUploadFolderIgnoreConfigPath)
+      : defaultUploadFolderIgnoreConfigPath,
     uploadLimits: {
       maxFiles: parsePositiveInteger(
         environment.SKILLCONSOLE_UPLOAD_MAX_FILES,

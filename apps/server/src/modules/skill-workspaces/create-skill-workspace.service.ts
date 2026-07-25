@@ -31,6 +31,7 @@ import {
   validateWorkspaceName,
 } from "./upload-validation.js"
 import { extractZipArchive } from "./zip-extractor.js"
+import type { UploadFolderIgnorePolicy } from "./upload-folder-ignore-policy.js"
 
 interface UploadMetadata {
   readonly operationId: string
@@ -162,21 +163,25 @@ export interface CreateSkillWorkspaceServiceOptions {
   readonly database: Database
   readonly storage: LocalSnapshotStorage
   readonly limits: UploadLimits
+  readonly folderIgnorePolicy: UploadFolderIgnorePolicy
 }
 
 export class CreateSkillWorkspaceService {
   readonly database: Database
   readonly storage: LocalSnapshotStorage
   readonly limits: UploadLimits
+  readonly folderIgnorePolicy: UploadFolderIgnorePolicy
 
   constructor({
     database,
     storage,
     limits,
+    folderIgnorePolicy,
   }: CreateSkillWorkspaceServiceOptions) {
     this.database = database
     this.storage = storage
     this.limits = limits
+    this.folderIgnorePolicy = folderIgnorePolicy
   }
 
   async create(
@@ -405,6 +410,7 @@ export class CreateSkillWorkspaceService {
           incomingFiles.map((file) => file.originalPath),
           metadata.sourceType,
           this.limits,
+          this.folderIgnorePolicy,
         )
         candidates = preparedPaths.files.map((preparedPath) => {
           const incomingFile = incomingFiles[preparedPath.inputIndex]

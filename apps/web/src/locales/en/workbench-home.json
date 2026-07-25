@@ -25,7 +25,7 @@
       },
       "source": {
         "title": "Select Skill source",
-        "description": "Upload one file, a complete folder, or a ZIP archive used only for the initial version."
+        "description": "Choose a complete Skill folder or import a ZIP archive used only for the initial version."
       },
       "validate": {
         "title": "Validate and manifest",
@@ -53,7 +53,7 @@
     "sources": {
       "singleFile": {
         "label": "Single file",
-        "description": "Start directly from one SKILL.md or another Skill file.",
+        "description": "Historical single-file source.",
         "choose": "Choose one Skill file"
       },
       "folder": {
@@ -68,6 +68,8 @@
       }
     },
     "dropHint": "Click to browse or drop the source here.",
+    "loadingUploadPolicy": "Loading the folder upload policy…",
+    "uploadPolicyUnavailable": "The folder upload policy is unavailable. Close the dialog and try again.",
     "importSummary": "Import summary",
     "readyForValidation": "Awaiting server validation",
     "sourceType": "Source type",
@@ -75,14 +77,16 @@
     "totalSize": "Total size",
     "directoryDepth": "Directory depth",
     "serverValidationNote": "The browser summary is for confirmation only. The server revalidates paths, hashes, sizes, and ZIP safety rules.",
+    "ignoredFolderFiles": "{{count}} dependency, cache, or package file(s) were ignored by the server policy.",
     "cancel": "Cancel",
     "createWorkbenchAndV1": "Create workbench and publish V1",
     "publishingVersion": "Validating and publishing V1",
     "nameRequired": "Enter a workbench name.",
     "errors": {
-      "sourceRequired": "Choose one file, a complete folder, or a ZIP archive.",
-      "singleFileRequired": "A single-file source must contain exactly one file.",
+      "sourceRequired": "Choose a complete Skill folder or ZIP archive.",
       "folderSelectionRequired": "Use “Choose Skill folder” to preserve relative paths. A normal multi-file drop cannot reliably restore the directory structure.",
+      "folderPolicyUnavailable": "The folder upload policy is not ready yet. Select the folder again in a moment.",
+      "folderFilesIgnored": "Every file in the selected folder was ignored by the upload policy.",
       "zipRequired": "Choose one valid .zip archive."
     },
     "createFailed": "V1 creation failed",
