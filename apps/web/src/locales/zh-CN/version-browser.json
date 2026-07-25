@@ -39,7 +39,6 @@
     "corruptedFileTitle": "文件缺失或与 Manifest 不一致",
     "snapshotUnavailableTitle": "此 Snapshot 当前不可浏览",
     "invalidUtf8Title": "文件不是有效的 UTF-8 文本",
-    "largeFileTitle": "文件过大，未进行内联预览",
     "binaryFileTitle": "二进制文件不进行内联预览",
     "imageUnavailableTitle": "图片缺失、损坏或不允许内联预览",
     "workspaceUnavailable": "工作台不存在或暂时无法读取。"

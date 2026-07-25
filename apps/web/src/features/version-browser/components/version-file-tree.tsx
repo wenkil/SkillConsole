@@ -144,7 +144,7 @@ export function VersionFileTree({
       </header>
 
       <div
-        className="relative min-h-[24rem] flex-1 overflow-hidden px-1 py-2"
+        className="relative min-h-0 flex-1 overflow-hidden px-1 py-2"
         ref={ref}
       >
         {hasSearchMatches ? (
@@ -154,7 +154,7 @@ export function VersionFileTree({
             disableDrop
             disableEdit
             disableMultiSelection
-            height={Math.max(height ?? 384, 240)}
+            height={Math.max(height ?? 240, 1)}
             indent={17}
             onActivate={(node) => {
               if (node.data.kind === "file") onFileSelect(node.data.path)

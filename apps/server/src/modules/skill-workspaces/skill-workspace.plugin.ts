@@ -222,7 +222,6 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
           200: TextFilePreviewSchema,
           404: ErrorResponseSchema,
           409: ErrorResponseSchema,
-          413: ErrorResponseSchema,
           415: ErrorResponseSchema,
         },
       },

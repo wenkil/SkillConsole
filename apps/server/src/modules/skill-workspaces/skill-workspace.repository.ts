@@ -107,7 +107,7 @@ export async function listSkillWorkspaces(
   database: Database,
 ): Promise<SkillWorkspace[]> {
   const rows = await baseWorkspaceQuery(database).orderBy(
-    desc(skillWorkspaces.updatedAt),
+    desc(skillWorkspaces.createdAt),
   )
   return rows.map(mapWorkspaceRow)
 }

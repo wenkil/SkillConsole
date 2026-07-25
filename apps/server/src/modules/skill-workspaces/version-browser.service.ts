@@ -12,8 +12,6 @@ import type {
 } from "./version-browser.contract.js"
 import type { VersionFileRecord } from "./version-browser.repository.js"
 
-export const MAX_TEXT_PREVIEW_BYTES = 2 * 1024 * 1024
-
 const inlineImageMediaTypes = new Set([
   "image/gif",
   "image/jpeg",
@@ -61,7 +59,7 @@ export function classifySnapshotFile(
 
   return {
     previewKind,
-    previewable: file.byteSize <= MAX_TEXT_PREVIEW_BYTES,
+    previewable: true,
   }
 }
 
@@ -132,18 +130,6 @@ export async function readTextPreview(
       details: {
         path: record.file.relativePath,
         mediaType: record.file.mediaTypeHint,
-      },
-    })
-  }
-
-  if (!classification.previewable) {
-    throw new DomainError({
-      code: "FILE_PREVIEW_TOO_LARGE",
-      message: "This text file is too large for inline preview.",
-      kind: "payload_too_large",
-      details: {
-        path: record.file.relativePath,
-        limit: MAX_TEXT_PREVIEW_BYTES,
       },
     })
   }

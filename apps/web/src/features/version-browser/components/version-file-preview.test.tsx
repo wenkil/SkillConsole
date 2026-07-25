@@ -167,7 +167,6 @@ describe("VersionFilePreview", () => {
 
   it.each([
     ["missing", "Manifest 中不存在所选文件"],
-    ["too_large", "文件过大，未进行内联预览"],
     ["invalid_utf8", "文件不是有效的 UTF-8 文本"],
   ] as const)("shows an explicit %s state", (previewIssue, title) => {
     render(

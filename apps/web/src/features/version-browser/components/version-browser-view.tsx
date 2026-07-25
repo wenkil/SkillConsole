@@ -44,7 +44,7 @@ export function VersionBrowserView({
 
   if (controller.loading) {
     return (
-      <main className="flex min-w-0 items-center justify-center px-10 py-9">
+      <main className="flex h-full min-h-0 min-w-0 items-center justify-center overflow-hidden px-10 py-9">
         <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground uppercase">
           <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
           {copy.loading}
@@ -55,7 +55,7 @@ export function VersionBrowserView({
 
   if (controller.error || !selectedVersion) {
     return (
-      <main className="flex min-w-0 items-center justify-center px-10 py-9">
+      <main className="flex h-full min-h-0 min-w-0 items-center justify-center overflow-hidden px-10 py-9">
         <div className="max-w-md border border-destructive/50 bg-paper-raised p-7 text-center">
           <PackageOpen
             aria-hidden="true"
@@ -80,8 +80,8 @@ export function VersionBrowserView({
   }
 
   return (
-    <main className="flex min-h-[calc(100vh-var(--app-header-height)-2px)] min-w-0 flex-col">
-      <header className="border-b border-foreground bg-background px-7 pt-5 pb-4">
+    <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+      <header className="shrink-0 border-b border-foreground bg-background px-7 pt-5 pb-4">
         <div className="flex items-start justify-between gap-6">
           <div className="min-w-0">
             <Button
@@ -157,7 +157,7 @@ export function VersionBrowserView({
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(14rem,17rem)_minmax(24rem,1fr)_minmax(14rem,17rem)]">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(14rem,17rem)_minmax(24rem,1fr)_minmax(14rem,17rem)] overflow-hidden">
         <VersionFileTree
           copy={copy}
           fileCount={controller.files.length}

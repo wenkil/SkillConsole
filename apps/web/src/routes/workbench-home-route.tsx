@@ -49,7 +49,7 @@ export function WorkbenchHomeRoute() {
       />
 
       <ApplicationFrame
-        sidebar={
+        sidebar={!workspaceId ? (
           <WorkbenchSidebar
             activeWorkspaceId={controller.activeWorkspace?.id ?? null}
             copy={copy}
@@ -61,7 +61,7 @@ export function WorkbenchHomeRoute() {
             }
             workspaces={controller.workspaces}
           />
-        }
+        ) : undefined}
       >
         {controller.activeWorkspace ? (
           <VersionBrowserView

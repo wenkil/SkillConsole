@@ -28,7 +28,6 @@ export interface VersionBrowserCopy {
   corruptedFileTitle: string
   snapshotUnavailableTitle: string
   invalidUtf8Title: string
-  largeFileTitle: string
   binaryFileTitle: string
   imageUnavailableTitle: string
   download: string
@@ -94,7 +93,6 @@ export function getVersionBrowserCopy(
     corruptedFileTitle: translate("states.corruptedFileTitle"),
     snapshotUnavailableTitle: translate("states.snapshotUnavailableTitle"),
     invalidUtf8Title: translate("states.invalidUtf8Title"),
-    largeFileTitle: translate("states.largeFileTitle"),
     binaryFileTitle: translate("states.binaryFileTitle"),
     imageUnavailableTitle: translate("states.imageUnavailableTitle"),
     download: translate("actions.download"),

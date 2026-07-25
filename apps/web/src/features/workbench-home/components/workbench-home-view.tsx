@@ -14,7 +14,7 @@ export function WorkbenchHomeView({
   onCreateWorkbench,
 }: WorkbenchHomeViewProps) {
   return (
-    <main className="min-w-0 px-10 py-9">
+    <main className="h-full min-h-0 min-w-0 overflow-y-auto px-10 py-9">
       <section className="border-b border-rule pb-7">
         <div className="mb-2.5 flex items-center gap-2 font-mono text-[11px] font-bold tracking-[0.08em] text-signal-dark uppercase">
           <Gauge aria-hidden="true" className="size-3.5" />

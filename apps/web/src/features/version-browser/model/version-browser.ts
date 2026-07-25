@@ -13,7 +13,6 @@ export type VersionPreviewIssue =
   | "corrupted"
   | "snapshot_unavailable"
   | "invalid_utf8"
-  | "too_large"
   | "binary"
   | "unavailable"
 

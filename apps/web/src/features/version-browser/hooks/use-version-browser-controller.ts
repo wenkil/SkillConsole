@@ -160,8 +160,7 @@ export function useVersionBrowserController({
               ? "missing"
               : "unavailable"
   } else if (selectedFile && !selectedFile.previewable) {
-    previewIssue =
-      selectedFile.previewKind === "binary" ? "binary" : "too_large"
+    previewIssue = "binary"
   }
 
   return {

@@ -146,7 +146,6 @@ function getPreviewIssueTitle(
     corrupted: copy.corruptedFileTitle,
     snapshot_unavailable: copy.snapshotUnavailableTitle,
     invalid_utf8: copy.invalidUtf8Title,
-    too_large: copy.largeFileTitle,
     binary: copy.binaryFileTitle,
     unavailable: copy.unavailableTitle,
   }

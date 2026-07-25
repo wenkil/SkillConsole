@@ -30,7 +30,6 @@ import {
 } from "../src/modules/skill-workspaces/upload-validation.js"
 import {
   classifySnapshotFile,
-  MAX_TEXT_PREVIEW_BYTES,
   readTextPreview,
 } from "../src/modules/skill-workspaces/version-browser.service.js"
 import type { VersionFileRecord } from "../src/modules/skill-workspaces/version-browser.repository.js"
@@ -141,7 +140,7 @@ test("builds a stable SHA-256 manifest from actual file bytes", async () => {
   }
 })
 
-test("classifies safe previews without treating binary or large text as inline content", () => {
+test("classifies all UTF-8 text candidates as previewable regardless of size", () => {
   assert.deepEqual(
     classifySnapshotFile({
       relativePath: "SKILL.md",
@@ -172,15 +171,15 @@ test("classifies safe previews without treating binary or large text as inline c
   assert.deepEqual(
     classifySnapshotFile({
       relativePath: "logs/large.txt",
-      byteSize: MAX_TEXT_PREVIEW_BYTES + 1,
+      byteSize: 8 * 1024 * 1024,
       mediaTypeHint: "text/plain",
       contentKind: "text",
     }),
-    { previewKind: "text", previewable: false },
+    { previewKind: "text", previewable: true },
   )
 })
 
-test("returns explicit states for unsafe or corrupted Snapshot text reads", async () => {
+test("reads large text and returns explicit unsafe or corrupted Snapshot states", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "skillconsole-browser-"))
   const storage = new LocalSnapshotStorage(root)
   const snapshotId = randomUUID()
@@ -221,6 +220,14 @@ test("returns explicit states for unsafe or corrupted Snapshot text reads", asyn
       () => storage.getSnapshotFilePath(snapshotId, "../escape.txt"),
       /invalid/,
     )
+
+    const largeText = Buffer.alloc(2 * 1024 * 1024 + 1, 0x61)
+    await writeSnapshotFile("large.txt", largeText)
+    const largePreview = await readTextPreview(
+      storage,
+      createRecord("large.txt", largeText),
+    )
+    assert.equal(largePreview.content.length, largeText.length)
 
     const corruptedContent = Buffer.from("tampered", "utf8")
     await writeSnapshotFile("corrupted.txt", corruptedContent)

@@ -39,7 +39,6 @@
     "corruptedFileTitle": "The file is missing or no longer matches the Manifest",
     "snapshotUnavailableTitle": "This Snapshot is not currently available for browsing",
     "invalidUtf8Title": "The file is not valid UTF-8 text",
-    "largeFileTitle": "The file is too large for inline preview",
     "binaryFileTitle": "Binary files are not rendered inline",
     "imageUnavailableTitle": "The image is missing, corrupted, or not allowed inline",
     "workspaceUnavailable": "The workbench does not exist or is temporarily unavailable."
