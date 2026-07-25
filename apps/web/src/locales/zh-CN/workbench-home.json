@@ -1,75 +1,125 @@
 {
   "sidebar": {
-    "workbenches": "测试工作台",
-    "projectList": "项目列表",
-    "emptyTitle": "暂无项目",
-    "emptyDescription": "创建第一个 Skill 测试工作台后，项目会显示在这里。"
+    "workbenches": "Skill 测试工作台",
+    "workbenchList": "工作台列表",
+    "loading": "正在读取",
+    "errorTitle": "无法读取工作台",
+    "errorDescription": "请确认本地服务与数据库已启动，然后重试。",
+    "retry": "重新加载",
+    "emptyTitle": "暂无工作台",
+    "emptyDescription": "创建第一个 Skill 测试工作台后，它会显示在这里。"
   },
   "hero": {
-    "eyebrow": "Skill 质量度量工具",
+    "eyebrow": "Skill 版本与测试证据工作台",
     "title": "创建 Skill 测试工作台",
-    "description": "测试工作台将一个 Skill 来源、测试定义、运行配置、执行轨迹和产物绑定在一起，并由你在本地管理。",
+    "description": "从一个真实 Skill 来源建立不可变 V1，把后续版本、测试输入、运行证据和报告组织在同一个长期工作台中。",
     "createWorkbench": "创建测试工作台"
   },
   "setup": {
-    "title": "工作台初始化",
-    "description": "按照下面四个步骤创建测试工作台。创建完成后，项目会显示在左侧列表中。",
+    "title": "首次版本初始化",
+    "description": "选择 Skill 来源后，系统会在服务端重新校验路径与资源限制，并原子发布不可变 V1。",
     "steps": {
       "name": {
         "title": "命名工作台",
-        "description": "使用清晰的名称标识当前 Skill 测试项目，并方便在左侧项目列表中快速找到。"
+        "description": "使用清晰名称标识这个 Skill 的长期版本与测试边界。"
       },
       "source": {
-        "title": "导入 Skill 来源",
-        "description": "选择本地 Skill 文件夹，或者导入包含完整 Skill 文件的 ZIP 压缩包。"
-      },
-      "runtime": {
-        "title": "配置运行环境",
-        "description": "填写用户管理的 Endpoint URL、API Key 和 Model ID，连接兼容的推理服务。"
+        "title": "选择 Skill 来源",
+        "description": "上传单文件、完整文件夹，或仅用于首次版本的 ZIP 压缩包。"
       },
       "validate": {
-        "title": "验证并进入",
-        "description": "检查 Skill 结构和运行环境是否可用，验证通过后进入项目详情页开始测试。"
+        "title": "校验与生成清单",
+        "description": "服务端检查路径、大小和冲突，逐文件计算 SHA-256 与 Manifest。"
+      },
+      "publish": {
+        "title": "原子发布 V1",
+        "description": "完整 Snapshot 就绪后再写入正式版本，并自动设为默认基线。"
       }
     }
   },
   "localFirst": {
-    "title": "本地优先设计",
-    "description": "Skill 文件和测试数据保存在本机，前端不会直接上传项目数据。"
+    "title": "本地部署的数据边界",
+    "description": "Skill 文件只复制到自托管服务的受控数据目录，不读取真实绝对路径，也不会写回用户原目录。"
   },
   "createDialog": {
-    "title": "创建测试工作台",
+    "initialVersion": "首次正式版本",
+    "title": "创建 Skill 测试工作台",
+    "description": "本次操作会同时创建工作台、完整文件 Snapshot 和不可变 V1。",
     "workbenchName": "工作台名称",
     "workbenchNamePlaceholder": "例如：发票审核 Skill 工作台",
-    "workbenchNameHelp": "该名称会显示在左侧项目列表中。",
+    "workbenchNameHelp": "一个工作台长期管理一个 Skill；名称不可与已有工作台重复。",
     "skillSource": "Skill 来源",
-    "folder": "文件夹",
-    "folderDescription": "选择包含 Skill 文件的本地文件夹。",
-    "zip": "ZIP 压缩包",
-    "zipDescription": "导入包含完整 Skill 文件的 ZIP 包。",
-    "chooseFolder": "选择 Skill 文件夹",
-    "chooseZip": "选择 ZIP 压缩包",
+    "sourceScope": "ZIP 仅首次创建可用",
+    "sources": {
+      "singleFile": {
+        "label": "单文件",
+        "description": "直接使用一个 SKILL.md 或其他 Skill 文件。",
+        "choose": "选择一个 Skill 文件"
+      },
+      "folder": {
+        "label": "完整文件夹",
+        "description": "保留脚本、模板、图片和引用文件的目录结构。",
+        "choose": "选择 Skill 文件夹"
+      },
+      "zip": {
+        "label": "ZIP 压缩包",
+        "description": "安全解压后形成文件树，不把 ZIP 本身保存为 Skill。",
+        "choose": "选择 ZIP 压缩包"
+      }
+    },
     "dropHint": "点击浏览，也可以将来源拖放到这里。",
-    "selectedSource": "已选择",
+    "importSummary": "导入摘要",
+    "readyForValidation": "等待服务端校验",
+    "sourceType": "来源类型",
+    "fileCount": "文件数",
+    "totalSize": "总大小",
+    "directoryDepth": "目录深度",
+    "serverValidationNote": "浏览器摘要仅用于确认；路径、Hash、大小和 ZIP 安全规则将由服务端重新校验。",
     "cancel": "取消",
-    "createProject": "创建项目",
+    "createWorkbenchAndV1": "创建工作台并发布 V1",
+    "publishingVersion": "正在校验并发布 V1",
     "nameRequired": "请填写工作台名称。",
-    "sourceRequired": "请选择 Skill 文件夹或 ZIP 压缩包。"
+    "errors": {
+      "sourceRequired": "请选择单文件、完整文件夹或 ZIP 压缩包。",
+      "singleFileRequired": "单文件来源只能选择一个文件。",
+      "folderSelectionRequired": "请使用“选择 Skill 文件夹”保留完整相对路径；普通多文件拖放不能可靠还原目录。",
+      "zipRequired": "请选择一个有效的 .zip 压缩包。"
+    },
+    "createFailed": "V1 创建失败",
+    "unknownCreateError": "无法完成创建，请确认本地服务状态后重试。"
   },
   "settingsDialog": {
     "title": "默认运行环境",
-    "description": "只配置新项目默认使用的 Endpoint URL、API Key 和 Model ID。",
+    "description": "配置新工作台默认使用的 Endpoint URL、API Key 和 Model ID。",
     "endpointUrl": "Endpoint URL",
     "apiKey": "API Key",
     "modelId": "Model ID",
     "saveSettings": "保存设置"
   },
   "notifications": {
-    "projectCreated": "项目已创建",
+    "workspaceCreated": "工作台与 V1 已创建",
     "settingsSaved": "设置已保存"
   },
-  "detail": {
-    "backToHome": "返回创建首页",
-    "placeholder": "项目详情页将在下一阶段单独设计。当前页面只保留从项目列表进入详情的导航边界。"
+  "overview": {
+    "backToHome": "返回工作台首页",
+    "eyebrow": "工作台概览",
+    "description": "V1 已从服务端校验后的完整文件清单发布。当前页面只展示第一阶段已经形成的版本事实，不提前展示草稿或测试占位数据。",
+    "versionState": "版本状态",
+    "publishedWithoutTests": "已发布 · 尚未测试",
+    "versionSummary": "版本摘要",
+    "currentVersion": "当前正式版本",
+    "defaultBaseline": "默认基线",
+    "v1DefaultBaseline": "V1 · 默认基线",
+    "notBaseline": "非默认基线",
+    "testState": "测试状态",
+    "notTested": "尚未测试",
+    "snapshotEvidence": "Snapshot 事实",
+    "manifestIdentity": "Manifest 身份",
+    "manifestHash": "Manifest Hash",
+    "publishRecord": "发布记录",
+    "sourceName": "来源名称",
+    "publishedAt": "发布时间",
+    "immutableVersionTitle": "正式版本不可编辑。",
+    "immutableVersionDescription": "后续修改将在草稿中进行；本阶段不会把 V1 文件直接改写，也不会将“默认基线”表示为已经测试通过。"
   }
 }

@@ -16,6 +16,11 @@ export function registerOpenApi(application: FastifyInstance): void {
           name: "health",
           description: "Application liveness and dependency readiness.",
         },
+        {
+          name: "skill-workspaces",
+          description:
+            "Skill testing workbench creation, immutable V1, and upload diagnostics.",
+        },
       ],
     },
   })

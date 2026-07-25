@@ -6,4 +6,5 @@ export {
   type ApplicationConfig,
   type ApplicationEnvironment,
   type LogLevel,
+  type UploadLimits,
 } from "./application-config.js"

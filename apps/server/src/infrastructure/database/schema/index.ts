@@ -1,5 +1,18 @@
 export {
-  projects,
-  type NewProjectRow,
-  type ProjectRow,
-} from "./projects.js"
+  skillSnapshotFiles,
+  skillSnapshotKind,
+  skillSnapshots,
+  skillSnapshotState,
+  skillSourceType,
+  skillVersions,
+  skillWorkspaces,
+  uploadOperations,
+  uploadOperationState,
+  type NewSkillWorkspaceRow,
+  type SkillSnapshotFileRow,
+  type SkillSnapshotRow,
+  type SkillSourceType,
+  type SkillVersionRow,
+  type SkillWorkspaceRow,
+  type UploadOperationRow,
+} from "./skill-workspaces.js"

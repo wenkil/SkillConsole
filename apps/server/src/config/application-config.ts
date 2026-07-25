@@ -1,3 +1,6 @@
+import path from "node:path"
+import { fileURLToPath } from "node:url"
+
 export const applicationEnvironments = [
   "development",
   "test",
@@ -24,10 +27,26 @@ export interface ApplicationConfig {
   readonly databaseUrl: string
   readonly logLevel: LogLevel
   readonly openApiEnabled: boolean
+  readonly dataRoot: string
+  readonly uploadLimits: UploadLimits
   readonly staticRoot?: string
 }
 
+export interface UploadLimits {
+  readonly maxFiles: number
+  readonly maxFileBytes: number
+  readonly maxTotalBytes: number
+  readonly maxDirectoryDepth: number
+  readonly maxPathLength: number
+  readonly maxZipBytes: number
+  readonly maxZipCompressionRatio: number
+}
+
 type EnvironmentSource = Readonly<Record<string, string | undefined>>
+const defaultDataRoot = path.resolve(
+  fileURLToPath(new URL("../../../../", import.meta.url)),
+  "var",
+)
 
 export class ConfigurationError extends Error {
   readonly issues: readonly string[]
@@ -75,6 +94,28 @@ function parsePort(value: string | undefined, issues: string[]): number {
   }
 
   return port
+}
+
+function parsePositiveInteger(
+  value: string | undefined,
+  fallback: number,
+  key: string,
+  issues: string[],
+): number {
+  const rawValue = value?.trim()
+  if (!rawValue) return fallback
+
+  const parsedValue = Number(rawValue)
+  if (
+    !/^\d+$/.test(rawValue) ||
+    !Number.isSafeInteger(parsedValue) ||
+    parsedValue < 1
+  ) {
+    issues.push(`${key} must be a positive safe integer`)
+    return fallback
+  }
+
+  return parsedValue
 }
 
 function parseDatabaseUrl(
@@ -128,6 +169,7 @@ export function parseApplicationConfig(
   }
 
   const staticRoot = environment.STATIC_ROOT?.trim()
+  const configuredDataRoot = environment.SKILLCONSOLE_DATA_ROOT?.trim()
   const config: ApplicationConfig = {
     nodeEnvironment,
     host: environment.HOST?.trim() || "0.0.0.0",
@@ -140,6 +182,53 @@ export function parseApplicationConfig(
       "OPENAPI_ENABLED",
       issues,
     ),
+    dataRoot: configuredDataRoot
+      ? path.resolve(configuredDataRoot)
+      : defaultDataRoot,
+    uploadLimits: {
+      maxFiles: parsePositiveInteger(
+        environment.SKILLCONSOLE_UPLOAD_MAX_FILES,
+        2_000,
+        "SKILLCONSOLE_UPLOAD_MAX_FILES",
+        issues,
+      ),
+      maxFileBytes: parsePositiveInteger(
+        environment.SKILLCONSOLE_UPLOAD_MAX_FILE_BYTES,
+        20 * 1024 * 1024,
+        "SKILLCONSOLE_UPLOAD_MAX_FILE_BYTES",
+        issues,
+      ),
+      maxTotalBytes: parsePositiveInteger(
+        environment.SKILLCONSOLE_UPLOAD_MAX_TOTAL_BYTES,
+        200 * 1024 * 1024,
+        "SKILLCONSOLE_UPLOAD_MAX_TOTAL_BYTES",
+        issues,
+      ),
+      maxDirectoryDepth: parsePositiveInteger(
+        environment.SKILLCONSOLE_UPLOAD_MAX_DIRECTORY_DEPTH,
+        32,
+        "SKILLCONSOLE_UPLOAD_MAX_DIRECTORY_DEPTH",
+        issues,
+      ),
+      maxPathLength: parsePositiveInteger(
+        environment.SKILLCONSOLE_UPLOAD_MAX_PATH_LENGTH,
+        512,
+        "SKILLCONSOLE_UPLOAD_MAX_PATH_LENGTH",
+        issues,
+      ),
+      maxZipBytes: parsePositiveInteger(
+        environment.SKILLCONSOLE_UPLOAD_MAX_ZIP_BYTES,
+        100 * 1024 * 1024,
+        "SKILLCONSOLE_UPLOAD_MAX_ZIP_BYTES",
+        issues,
+      ),
+      maxZipCompressionRatio: parsePositiveInteger(
+        environment.SKILLCONSOLE_UPLOAD_MAX_ZIP_COMPRESSION_RATIO,
+        100,
+        "SKILLCONSOLE_UPLOAD_MAX_ZIP_COMPRESSION_RATIO",
+        issues,
+      ),
+    },
     ...(staticRoot ? { staticRoot } : {}),
   }
 

@@ -1,75 +1,125 @@
 {
   "sidebar": {
-    "workbenches": "Workbenches",
-    "projectList": "Project list",
-    "emptyTitle": "No projects yet",
+    "workbenches": "Skill testing workbenches",
+    "workbenchList": "Workbench list",
+    "loading": "Loading",
+    "errorTitle": "Workbenches unavailable",
+    "errorDescription": "Make sure the local service and database are running, then retry.",
+    "retry": "Reload",
+    "emptyTitle": "No workbenches yet",
     "emptyDescription": "Your first Skill testing workbench will appear here after it is created."
   },
   "hero": {
-    "eyebrow": "Skill quality measurement tool",
+    "eyebrow": "Skill version and test evidence workbench",
     "title": "Create a Skill testing workbench",
-    "description": "A workbench binds one Skill source, test definitions, runtime configuration, execution traces, and artifacts into a locally managed project.",
+    "description": "Create an immutable V1 from a real Skill source, then keep future versions, test inputs, execution evidence, and reports in one long-lived workbench.",
     "createWorkbench": "Create workbench"
   },
   "setup": {
-    "title": "Workbench initialization",
-    "description": "Create a testing workbench in four steps. The completed project will appear in the list on the left.",
+    "title": "Initial version setup",
+    "description": "After you select a Skill source, the server validates paths and resource limits again before atomically publishing an immutable V1.",
     "steps": {
       "name": {
         "title": "Name the workbench",
-        "description": "Give the Skill testing project a clear name so it is easy to identify in the project list."
+        "description": "Give this Skill's long-lived version and testing boundary a clear name."
       },
       "source": {
-        "title": "Import Skill source",
-        "description": "Choose a local Skill folder or import a ZIP archive containing the complete Skill files."
-      },
-      "runtime": {
-        "title": "Configure runtime",
-        "description": "Enter a user-managed Endpoint URL, API Key, and Model ID for a compatible inference service."
+        "title": "Select Skill source",
+        "description": "Upload one file, a complete folder, or a ZIP archive used only for the initial version."
       },
       "validate": {
-        "title": "Validate and enter",
-        "description": "Check the Skill structure and runtime connection, then enter the project to begin testing."
+        "title": "Validate and manifest",
+        "description": "The server checks paths, sizes, and conflicts, then calculates SHA-256 for every file."
+      },
+      "publish": {
+        "title": "Publish V1 atomically",
+        "description": "Only a ready, complete Snapshot becomes V1 and the default baseline."
       }
     }
   },
   "localFirst": {
-    "title": "Local-first design",
-    "description": "Skill files and test data stay on this computer. The frontend does not upload project data directly."
+    "title": "Local deployment data boundary",
+    "description": "Skill files are copied only into the self-hosted service's controlled data directory. Real absolute paths are not read and source files are never written back."
   },
   "createDialog": {
-    "title": "Create testing workbench",
+    "initialVersion": "Initial formal version",
+    "title": "Create Skill testing workbench",
+    "description": "This creates the workbench, a complete file Snapshot, and immutable V1 together.",
     "workbenchName": "Workbench name",
     "workbenchNamePlaceholder": "For example: Invoice Review Skill Workbench",
-    "workbenchNameHelp": "This name appears in the project list on the left.",
+    "workbenchNameHelp": "One workbench manages one Skill over time. The name must be unique.",
     "skillSource": "Skill source",
-    "folder": "Folder",
-    "folderDescription": "Choose a local folder containing the Skill files.",
-    "zip": "ZIP archive",
-    "zipDescription": "Import a ZIP archive containing the complete Skill.",
-    "chooseFolder": "Choose Skill folder",
-    "chooseZip": "Choose ZIP archive",
+    "sourceScope": "ZIP is available only for initial creation",
+    "sources": {
+      "singleFile": {
+        "label": "Single file",
+        "description": "Start directly from one SKILL.md or another Skill file.",
+        "choose": "Choose one Skill file"
+      },
+      "folder": {
+        "label": "Complete folder",
+        "description": "Preserve scripts, templates, images, references, and their directory structure.",
+        "choose": "Choose Skill folder"
+      },
+      "zip": {
+        "label": "ZIP archive",
+        "description": "Safely extract a file tree instead of storing the ZIP as the Skill.",
+        "choose": "Choose ZIP archive"
+      }
+    },
     "dropHint": "Click to browse or drop the source here.",
-    "selectedSource": "Selected",
+    "importSummary": "Import summary",
+    "readyForValidation": "Awaiting server validation",
+    "sourceType": "Source type",
+    "fileCount": "Files",
+    "totalSize": "Total size",
+    "directoryDepth": "Directory depth",
+    "serverValidationNote": "The browser summary is for confirmation only. The server revalidates paths, hashes, sizes, and ZIP safety rules.",
     "cancel": "Cancel",
-    "createProject": "Create project",
+    "createWorkbenchAndV1": "Create workbench and publish V1",
+    "publishingVersion": "Validating and publishing V1",
     "nameRequired": "Enter a workbench name.",
-    "sourceRequired": "Choose a Skill folder or ZIP archive."
+    "errors": {
+      "sourceRequired": "Choose one file, a complete folder, or a ZIP archive.",
+      "singleFileRequired": "A single-file source must contain exactly one file.",
+      "folderSelectionRequired": "Use “Choose Skill folder” to preserve relative paths. A normal multi-file drop cannot reliably restore the directory structure.",
+      "zipRequired": "Choose one valid .zip archive."
+    },
+    "createFailed": "V1 creation failed",
+    "unknownCreateError": "Creation could not be completed. Check the local service and try again."
   },
   "settingsDialog": {
     "title": "Default runtime",
-    "description": "Configure only the Endpoint URL, API Key, and Model ID used by new projects.",
+    "description": "Configure the Endpoint URL, API Key, and Model ID used by new workbenches.",
     "endpointUrl": "Endpoint URL",
     "apiKey": "API Key",
     "modelId": "Model ID",
     "saveSettings": "Save settings"
   },
   "notifications": {
-    "projectCreated": "Project created",
+    "workspaceCreated": "Workbench and V1 created",
     "settingsSaved": "Settings saved"
   },
-  "detail": {
-    "backToHome": "Back to creation home",
-    "placeholder": "The project detail page will be designed separately. This screen only preserves the navigation boundary from the project list."
+  "overview": {
+    "backToHome": "Back to workbench home",
+    "eyebrow": "Workbench overview",
+    "description": "V1 was published from the complete file manifest validated by the server. This screen shows only facts created in iteration one, without draft or testing placeholders.",
+    "versionState": "Version state",
+    "publishedWithoutTests": "Published · not tested",
+    "versionSummary": "Version summary",
+    "currentVersion": "Current formal version",
+    "defaultBaseline": "Default baseline",
+    "v1DefaultBaseline": "V1 · default baseline",
+    "notBaseline": "Not the default baseline",
+    "testState": "Test state",
+    "notTested": "Not tested",
+    "snapshotEvidence": "Snapshot facts",
+    "manifestIdentity": "Manifest identity",
+    "manifestHash": "Manifest hash",
+    "publishRecord": "Publish record",
+    "sourceName": "Source name",
+    "publishedAt": "Published at",
+    "immutableVersionTitle": "Formal versions are immutable.",
+    "immutableVersionDescription": "Future changes will happen in a draft. This iteration never rewrites V1 and never presents “default baseline” as a passing test result."
   }
 }

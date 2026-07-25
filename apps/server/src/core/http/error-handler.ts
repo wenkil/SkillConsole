@@ -10,7 +10,9 @@ import type {
 
 const domainStatusCodes: Record<DomainErrorKind, number> = {
   conflict: 409,
+  internal: 500,
   not_found: 404,
+  payload_too_large: 413,
   validation: 422,
 }
 
@@ -51,6 +53,10 @@ export function registerErrorHandling(application: FastifyInstance): void {
       }
 
       if (error instanceof DomainError) {
+        if (error.kind === "internal") {
+          request.log.error({ err: error }, "Internal domain operation error")
+        }
+
         return sendError(
           reply,
           request.id,

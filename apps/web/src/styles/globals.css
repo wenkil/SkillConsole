@@ -47,7 +47,7 @@
   --status-running: #2563eb;
   --status-cancelled: #64748b;
   --app-header-height: 4.5rem;
-  --project-sidebar-width: 17.875rem;
+  --workbench-sidebar-width: 17.875rem;
 }
 
 @theme inline {

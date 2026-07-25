@@ -63,5 +63,3 @@ Open `http://localhost:5173`. Vite proxies `/api/*` to the Fastify container.
 ## Component architecture
 
 The first implemented Feature is `workbench-home`. It uses controlled view components and a headless controller so downstream projects can replace layouts and UI without changing validation or interaction rules.
-
-See [Frontend component architecture](../../docs/architecture/frontend-component-architecture.md) for the dependency rules, component catalog, theme tokens, and extension examples.

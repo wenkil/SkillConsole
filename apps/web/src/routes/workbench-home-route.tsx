@@ -1,10 +1,10 @@
 import { toast } from "sonner"
 
 import { CreateWorkbenchDialog } from "@/features/workbench-home/components/create-workbench-dialog"
-import { ProjectSidebar } from "@/features/workbench-home/components/project-sidebar"
 import { RuntimeSettingsDialog } from "@/features/workbench-home/components/runtime-settings-dialog"
-import { WorkbenchDetailPlaceholder } from "@/features/workbench-home/components/workbench-detail-placeholder"
 import { WorkbenchHomeView } from "@/features/workbench-home/components/workbench-home-view"
+import { WorkbenchOverview } from "@/features/workbench-home/components/workbench-overview"
+import { WorkbenchSidebar } from "@/features/workbench-home/components/workbench-sidebar"
 import { useWorkbenchHomeController } from "@/features/workbench-home/hooks/use-workbench-home-controller"
 import { AppHeader } from "@/shared/components/layout/app-header"
 import { ApplicationFrame } from "@/shared/components/layout/application-frame"
@@ -13,11 +13,11 @@ export function WorkbenchHomeRoute() {
   const controller = useWorkbenchHomeController()
   const { actions, copy } = controller
 
-  function handleCreateProject() {
-    const project = actions.createProject()
-    if (project) {
-      toast.success(copy.projectCreated, {
-        description: project.name,
+  async function handleCreateWorkspace() {
+    const workspace = await actions.createWorkspace()
+    if (workspace) {
+      toast.success(copy.workspaceCreated, {
+        description: workspace.name,
       })
     }
   }
@@ -38,19 +38,23 @@ export function WorkbenchHomeRoute() {
 
       <ApplicationFrame
         sidebar={
-          <ProjectSidebar
-            activeProjectId={controller.activeProject?.id ?? null}
+          <WorkbenchSidebar
+            activeWorkspaceId={controller.activeWorkspace?.id ?? null}
             copy={copy}
-            onProjectSelect={actions.openProject}
-            projects={controller.projects}
+            error={controller.workspaceList.error}
+            loading={controller.workspaceList.loading}
+            onRetry={actions.retryWorkspaceList}
+            onWorkspaceSelect={actions.openWorkspace}
+            workspaces={controller.workspaces}
           />
         }
       >
-        {controller.activeProject ? (
-          <WorkbenchDetailPlaceholder
+        {controller.activeWorkspace ? (
+          <WorkbenchOverview
             copy={copy}
-            onBack={actions.closeProject}
-            project={controller.activeProject}
+            locale={controller.locale}
+            onBack={actions.closeWorkspace}
+            workspace={controller.activeWorkspace}
           />
         ) : (
           <WorkbenchHomeView
@@ -71,8 +75,11 @@ export function WorkbenchHomeRoute() {
         }}
         onSourceKindChange={actions.updateSourceKind}
         onSourceSelect={actions.selectSource}
-        onSubmit={handleCreateProject}
+        onSubmit={() => {
+          void handleCreateWorkspace()
+        }}
         open={controller.createDialog.open}
+        submitting={controller.createDialog.submitting}
       />
 
       <RuntimeSettingsDialog

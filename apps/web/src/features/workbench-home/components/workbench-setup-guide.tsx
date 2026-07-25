@@ -1,9 +1,10 @@
 import {
   ArrowRight,
   FolderOpen,
+  PackageCheck,
   Ruler,
+  ScanSearch,
   ShieldCheck,
-  SlidersHorizontal,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -18,8 +19,8 @@ interface WorkbenchSetupGuideProps {
 const stepIcons: LucideIcon[] = [
   Ruler,
   FolderOpen,
-  SlidersHorizontal,
-  ShieldCheck,
+  ScanSearch,
+  PackageCheck,
 ]
 
 export function WorkbenchSetupGuide({ copy }: WorkbenchSetupGuideProps) {

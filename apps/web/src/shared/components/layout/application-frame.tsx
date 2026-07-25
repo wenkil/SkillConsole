@@ -10,7 +10,7 @@ export function ApplicationFrame({
   children,
 }: ApplicationFrameProps) {
   return (
-    <div className="grid min-h-[calc(100vh-var(--app-header-height))] grid-cols-[var(--project-sidebar-width)_minmax(0,1fr)] border-x border-b border-foreground">
+    <div className="grid min-h-[calc(100vh-var(--app-header-height))] grid-cols-[var(--workbench-sidebar-width)_minmax(0,1fr)] border-x border-b border-foreground">
       {sidebar}
       {children}
     </div>

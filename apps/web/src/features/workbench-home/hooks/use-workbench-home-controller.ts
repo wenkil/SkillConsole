@@ -1,16 +1,23 @@
-import { useMemo, useState } from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import {
+  createSkillWorkspace,
+  listSkillWorkspaces,
+  SkillConsoleApiError,
+} from "@/features/workbench-home/api/skill-workspaces-api"
+import {
   createEmptyRuntimeDefaults,
   createEmptyWorkbenchDraft,
-  createWorkbenchProject,
+  createSelectedSkillSource,
+  SourceSelectionError,
   validateWorkbenchDraft,
   type CreateWorkbenchDraft,
   type CreateWorkbenchErrors,
   type RuntimeDefaults,
   type SkillSourceKind,
-  type WorkbenchProject,
+  type SkillWorkspace,
 } from "@/features/workbench-home/model/workbench"
 import {
   getWorkbenchHomeCopy,
@@ -19,15 +26,22 @@ import {
 import { usePreferencesStore } from "@/shared/stores/preferences/preferences-store"
 import type { AppLocale } from "@/shared/types/locale"
 
+const workspacesQueryKey = ["skill-workspaces"] as const
+
 export interface WorkbenchHomeController {
   locale: AppLocale
   copy: WorkbenchHomeCopy
-  projects: WorkbenchProject[]
-  activeProject: WorkbenchProject | null
+  workspaces: SkillWorkspace[]
+  activeWorkspace: SkillWorkspace | null
+  workspaceList: {
+    loading: boolean
+    error: boolean
+  }
   createDialog: {
     open: boolean
     draft: CreateWorkbenchDraft
     errors: CreateWorkbenchErrors
+    submitting: boolean
   }
   settingsDialog: {
     open: boolean
@@ -39,10 +53,11 @@ export interface WorkbenchHomeController {
     closeCreateDialog: () => void
     updateWorkbenchName: (name: string) => void
     updateSourceKind: (kind: SkillSourceKind) => void
-    selectSource: (sourceName: string) => void
-    createProject: () => WorkbenchProject | null
-    openProject: (projectId: string) => void
-    closeProject: () => void
+    selectSource: (files: readonly File[]) => void
+    createWorkspace: () => Promise<SkillWorkspace | null>
+    openWorkspace: (workspaceId: string) => void
+    closeWorkspace: () => void
+    retryWorkspaceList: () => void
     openSettingsDialog: () => void
     closeSettingsDialog: () => void
     updateRuntimeDefaults: (values: RuntimeDefaults) => void
@@ -51,12 +66,14 @@ export interface WorkbenchHomeController {
 }
 
 export function useWorkbenchHomeController(): WorkbenchHomeController {
+  const queryClient = useQueryClient()
   const { t: translateCommon } = useTranslation("common")
   const { t: translateWorkbenchHome } = useTranslation("workbenchHome")
   const locale = usePreferencesStore((state) => state.locale)
   const setLocale = usePreferencesStore((state) => state.setLocale)
-  const [projects, setProjects] = useState<WorkbenchProject[]>([])
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(
+    null,
+  )
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false)
   const [draft, setDraft] = useState<CreateWorkbenchDraft>(
     createEmptyWorkbenchDraft,
@@ -66,70 +83,117 @@ export function useWorkbenchHomeController(): WorkbenchHomeController {
   const [runtimeDefaults, setRuntimeDefaults] = useState<RuntimeDefaults>(
     createEmptyRuntimeDefaults,
   )
+  const createOperationIdRef = useRef<string | null>(null)
+
+  const workspaceQuery = useQuery({
+    queryKey: workspacesQueryKey,
+    queryFn: listSkillWorkspaces,
+  })
+  const workspaces = workspaceQuery.data ?? []
+  const createMutation = useMutation({
+    mutationFn: ({
+      currentDraft,
+      operationId,
+    }: {
+      currentDraft: CreateWorkbenchDraft
+      operationId: string
+    }) => createSkillWorkspace(currentDraft, operationId),
+    onSuccess: ({ workspace }) => {
+      queryClient.setQueryData<SkillWorkspace[]>(
+        workspacesQueryKey,
+        (current = []) => [
+          workspace,
+          ...current.filter((item) => item.id !== workspace.id),
+        ],
+      )
+      setActiveWorkspaceId(workspace.id)
+      setCreateDialogOpen(false)
+      setDraft(createEmptyWorkbenchDraft())
+      setErrors({})
+      createOperationIdRef.current = null
+    },
+  })
 
   const copy = useMemo(
     () =>
       getWorkbenchHomeCopy(translateCommon, translateWorkbenchHome),
     [translateCommon, translateWorkbenchHome],
   )
-  const activeProject =
-    projects.find((project) => project.id === activeProjectId) ?? null
+  const activeWorkspace =
+    workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null
 
   function openCreateDialog() {
     setDraft(createEmptyWorkbenchDraft())
     setErrors({})
+    createMutation.reset()
+    createOperationIdRef.current = null
     setCreateDialogOpen(true)
   }
 
   function closeCreateDialog() {
+    if (createMutation.isPending) return
     setCreateDialogOpen(false)
     setErrors({})
+    createOperationIdRef.current = null
   }
 
   function updateWorkbenchName(name: string) {
     setDraft((current) => ({ ...current, name }))
-    setErrors((current) => ({ ...current, name: undefined }))
+    setErrors((current) => ({ ...current, name: undefined, upload: undefined }))
+    createOperationIdRef.current = null
   }
 
   function updateSourceKind(sourceKind: SkillSourceKind) {
     setDraft((current) => ({
       ...current,
       sourceKind,
-      sourceName: null,
+      source: null,
     }))
-    setErrors((current) => ({ ...current, source: undefined }))
+    setErrors((current) => ({ ...current, source: undefined, upload: undefined }))
+    createOperationIdRef.current = null
   }
 
-  function selectSource(sourceName: string) {
-    setDraft((current) => ({ ...current, sourceName }))
-    setErrors((current) => ({ ...current, source: undefined }))
+  function selectSource(files: readonly File[]) {
+    try {
+      const source = createSelectedSkillSource(draft.sourceKind, files)
+      setDraft((current) => ({ ...current, source }))
+      setErrors((current) => ({
+        ...current,
+        source: undefined,
+        upload: undefined,
+      }))
+      createOperationIdRef.current = null
+    } catch (error) {
+      if (error instanceof SourceSelectionError) {
+        setDraft((current) => ({ ...current, source: null }))
+        setErrors((current) => ({ ...current, source: error.code }))
+        return
+      }
+
+      throw error
+    }
   }
 
-  function createProject() {
+  async function createWorkspace(): Promise<SkillWorkspace | null> {
     const validationErrors = validateWorkbenchDraft(draft)
     setErrors(validationErrors)
+    if (Object.keys(validationErrors).length > 0) return null
 
-    if (Object.keys(validationErrors).length > 0) {
+    try {
+      createOperationIdRef.current ??= crypto.randomUUID()
+      const response = await createMutation.mutateAsync({
+        currentDraft: draft,
+        operationId: createOperationIdRef.current,
+      })
+      return response.workspace
+    } catch (error) {
+      const message =
+        error instanceof SkillConsoleApiError
+          ? error.message
+          : copy.unknownCreateError
+      setErrors((current) => ({ ...current, upload: message }))
       return null
     }
-
-    const project = createWorkbenchProject(draft, {
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
-    })
-
-    setProjects((current) => [project, ...current])
-    setCreateDialogOpen(false)
-    setDraft(createEmptyWorkbenchDraft())
-    return project
-  }
-
-  function openProject(projectId: string) {
-    setActiveProjectId(projectId)
-  }
-
-  function closeProject() {
-    setActiveProjectId(null)
   }
 
   function saveRuntimeDefaults() {
@@ -140,12 +204,17 @@ export function useWorkbenchHomeController(): WorkbenchHomeController {
   return {
     locale,
     copy,
-    projects,
-    activeProject,
+    workspaces,
+    activeWorkspace,
+    workspaceList: {
+      loading: workspaceQuery.isPending,
+      error: workspaceQuery.isError,
+    },
     createDialog: {
       open: isCreateDialogOpen,
       draft,
       errors,
+      submitting: createMutation.isPending,
     },
     settingsDialog: {
       open: isSettingsDialogOpen,
@@ -158,9 +227,12 @@ export function useWorkbenchHomeController(): WorkbenchHomeController {
       updateWorkbenchName,
       updateSourceKind,
       selectSource,
-      createProject,
-      openProject,
-      closeProject,
+      createWorkspace,
+      openWorkspace: setActiveWorkspaceId,
+      closeWorkspace: () => setActiveWorkspaceId(null),
+      retryWorkspaceList: () => {
+        void workspaceQuery.refetch()
+      },
       openSettingsDialog: () => setSettingsDialogOpen(true),
       closeSettingsDialog: () => setSettingsDialogOpen(false),
       updateRuntimeDefaults: setRuntimeDefaults,
