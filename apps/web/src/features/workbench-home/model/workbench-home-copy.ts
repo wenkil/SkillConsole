@@ -21,6 +21,8 @@ export interface WorkbenchHomeCopy {
   retry: string
   emptyTitle: string
   emptyDescription: string
+  initialCandidateStatus: string
+  noFormalVersion: string
   eyebrow: string
   heroTitle: string
   heroDescription: string
@@ -33,7 +35,7 @@ export interface WorkbenchHomeCopy {
   }>
   localFirstTitle: string
   localFirstDescription: string
-  initialVersion: string
+  initialCandidate: string
   createDialogTitle: string
   createDialogDescription: string
   workbenchName: string
@@ -54,8 +56,8 @@ export interface WorkbenchHomeCopy {
   serverValidationNote: string
   ignoredFolderFiles: (count: number) => string
   cancel: string
-  createWorkbenchAndV1: string
-  publishingVersion: string
+  createWorkbenchAndCandidate: string
+  savingCandidate: string
   nameRequired: string
   sourceErrors: Record<
     NonNullable<CreateWorkbenchErrors["source"]>,
@@ -76,6 +78,7 @@ export interface WorkbenchHomeCopy {
   overviewDescription: string
   versionState: string
   publishedWithoutTests: string
+  candidateWithoutTests: string
   versionSummary: string
   currentVersion: string
   defaultBaseline: string
@@ -91,6 +94,8 @@ export interface WorkbenchHomeCopy {
   publishedAt: string
   immutableVersionTitle: string
   immutableVersionDescription: string
+  candidateContentTitle: string
+  candidateContentDescription: string
 }
 
 export function getWorkbenchHomeCopy(
@@ -107,6 +112,8 @@ export function getWorkbenchHomeCopy(
     retry: translate("sidebar.retry"),
     emptyTitle: translate("sidebar.emptyTitle"),
     emptyDescription: translate("sidebar.emptyDescription"),
+    initialCandidateStatus: translate("sidebar.initialCandidate"),
+    noFormalVersion: translate("sidebar.noFormalVersion"),
     eyebrow: translate("hero.eyebrow"),
     heroTitle: translate("hero.title"),
     heroDescription: translate("hero.description"),
@@ -133,7 +140,7 @@ export function getWorkbenchHomeCopy(
     ],
     localFirstTitle: translate("localFirst.title"),
     localFirstDescription: translate("localFirst.description"),
-    initialVersion: translate("createDialog.initialVersion"),
+    initialCandidate: translate("createDialog.initialCandidate"),
     createDialogTitle: translate("createDialog.title"),
     createDialogDescription: translate("createDialog.description"),
     workbenchName: translate("createDialog.workbenchName"),
@@ -175,8 +182,10 @@ export function getWorkbenchHomeCopy(
     ignoredFolderFiles: (count) =>
       translate("createDialog.ignoredFolderFiles", { count }),
     cancel: translate("createDialog.cancel"),
-    createWorkbenchAndV1: translate("createDialog.createWorkbenchAndV1"),
-    publishingVersion: translate("createDialog.publishingVersion"),
+    createWorkbenchAndCandidate: translate(
+      "createDialog.createWorkbenchAndCandidate",
+    ),
+    savingCandidate: translate("createDialog.savingCandidate"),
     nameRequired: translate("createDialog.nameRequired"),
     sourceErrors: {
       sourceRequired: translate("createDialog.errors.sourceRequired"),
@@ -206,6 +215,7 @@ export function getWorkbenchHomeCopy(
     overviewDescription: translate("overview.description"),
     versionState: translate("overview.versionState"),
     publishedWithoutTests: translate("overview.publishedWithoutTests"),
+    candidateWithoutTests: translate("overview.candidateWithoutTests"),
     versionSummary: translate("overview.versionSummary"),
     currentVersion: translate("overview.currentVersion"),
     defaultBaseline: translate("overview.defaultBaseline"),
@@ -222,6 +232,10 @@ export function getWorkbenchHomeCopy(
     immutableVersionTitle: translate("overview.immutableVersionTitle"),
     immutableVersionDescription: translate(
       "overview.immutableVersionDescription",
+    ),
+    candidateContentTitle: translate("overview.candidateContentTitle"),
+    candidateContentDescription: translate(
+      "overview.candidateContentDescription",
     ),
   }
 }

@@ -10,10 +10,10 @@ import type {
   SkillSourceType,
 } from "../../infrastructure/database/index.js"
 import {
+  createInitialCandidate,
   failUploadOperation,
   getSkillWorkspace,
   prepareUploadOperation,
-  publishInitialVersion,
   updateUploadOperationState,
 } from "./skill-workspace.repository.js"
 import type { CreateSkillWorkspaceResponse } from "./skill-workspace.contract.js"
@@ -141,7 +141,7 @@ function mapUploadError(
 
   return new DomainError({
     code: "UPLOAD_FAILED",
-    message: "The Skill source could not be uploaded and published.",
+    message: "The Skill source could not be saved as an initial candidate.",
     kind: "internal",
     cause: error,
   })
@@ -191,7 +191,7 @@ export class CreateSkillWorkspaceService {
     const incomingFiles: IncomingFile[] = []
     let metadata: UploadMetadata | undefined
     let prepared = false
-    let published = false
+    let committed = false
     let zipSourceName: string | undefined
     let uploadedBytes = 0
 
@@ -260,12 +260,11 @@ export class CreateSkillWorkspaceService {
               replayed: true,
               upload: {
                 operationId: metadata.operationId,
-                fileCount: workspace.currentVersion.snapshot.fileCount,
-                totalBytes: workspace.currentVersion.snapshot.totalBytes,
+                fileCount: operation.fileCount,
+                totalBytes: operation.totalBytes,
                 ignoredFileCount: operation.ignoredFileCount,
                 strippedRoot: operation.strippedRoot,
-                manifestHash:
-                  workspace.currentVersion.snapshot.manifestHash,
+                manifestHash: operation.manifestHash,
               },
             }
           }
@@ -355,11 +354,11 @@ export class CreateSkillWorkspaceService {
             replayed: true,
             upload: {
               operationId: metadata.operationId,
-              fileCount: workspace.currentVersion.snapshot.fileCount,
-              totalBytes: workspace.currentVersion.snapshot.totalBytes,
+              fileCount: operation.fileCount,
+              totalBytes: operation.totalBytes,
               ignoredFileCount: operation.ignoredFileCount,
               strippedRoot: operation.strippedRoot,
-              manifestHash: workspace.currentVersion.snapshot.manifestHash,
+              manifestHash: operation.manifestHash,
             },
           }
         }
@@ -439,13 +438,14 @@ export class CreateSkillWorkspaceService {
       await updateUploadOperationState(
         this.database,
         metadata.operationId,
-        "PUBLISHING",
+        "COMMITTING",
         sourceName,
       )
 
       const workspaceId = randomUUID()
       const snapshotId = randomUUID()
-      const versionId = randomUUID()
+      const draftId = randomUUID()
+      const improvementCycleId = randomUUID()
       const storageLocator = await this.storage.promoteSnapshot(
         metadata.operationId,
         snapshotId,
@@ -453,12 +453,13 @@ export class CreateSkillWorkspaceService {
       )
 
       try {
-        await publishInitialVersion(this.database, {
+        await createInitialCandidate(this.database, {
           operationId: metadata.operationId,
           workspaceId,
           workspaceName: metadata.workspaceName,
           snapshotId,
-          versionId,
+          draftId,
+          improvementCycleId,
           sourceType: metadata.sourceType,
           sourceName,
           ignoredFileCount,
@@ -466,7 +467,7 @@ export class CreateSkillWorkspaceService {
           storageLocator,
           manifest,
         })
-        published = true
+        committed = true
       } catch (error) {
         await this.storage.removeSnapshot(snapshotId)
         throw error
@@ -494,7 +495,7 @@ export class CreateSkillWorkspaceService {
         const cleanupTasks: Promise<unknown>[] = [
           this.storage.cleanupOperation(metadata.operationId),
         ]
-        if (!published) {
+        if (!committed) {
           cleanupTasks.push(
             failUploadOperation(
               this.database,

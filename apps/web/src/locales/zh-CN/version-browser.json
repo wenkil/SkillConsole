@@ -4,11 +4,13 @@
     "download": "下载原文件"
   },
   "header": {
-    "eyebrow": "Skill 正式版本",
+    "eyebrow": "Skill 内容浏览",
     "formalVersion": "正式版本",
-    "versionPicker": "选择正式版本",
+    "versionPicker": "选择候选或版本",
     "currentVersion": "当前正式版本",
     "historicalVersion": "正在查看历史版本",
+    "initialCandidate": "初始候选",
+    "candidateState": "待测试与确认",
     "defaultBaseline": "默认基线",
     "notTested": "尚未测试"
   },
@@ -16,8 +18,12 @@
     "title": "只读正式版本",
     "description": "此页面展示不可变 Snapshot。文件内容、Manifest 和版本元数据不会在浏览过程中被修改。"
   },
+  "candidate": {
+    "title": "可演进的初始候选",
+    "description": "该 Snapshot 是测试前的工作内容，不是 V1，也不是默认基线；测试通过后仍需由用户手动确认发布。"
+  },
   "tree": {
-    "files": "正式版本文件",
+    "files": "Snapshot 文件",
     "search": "搜索路径或文件名",
     "noResults": "没有匹配的文件",
     "keyboardHelp": "使用方向键浏览，空格键打开文件"
@@ -29,8 +35,8 @@
     "rawHtmlDisabled": "原始 HTML 已禁用"
   },
   "states": {
-    "loading": "正在读取正式版本",
-    "loadError": "无法读取正式版本内容",
+    "loading": "正在读取 Skill 内容",
+    "loadError": "无法读取 Skill 内容",
     "retry": "重新加载",
     "noFileSelected": "从左侧文件树选择一个文件",
     "unavailableTitle": "此文件不支持内联预览",
@@ -45,11 +51,14 @@
   },
   "metadata": {
     "version": "版本信息",
+    "candidate": "候选信息",
     "snapshot": "Snapshot 信息",
     "versionNumber": "版本号",
     "sourceType": "来源类型",
     "sourceName": "来源名称",
     "publishedAt": "发布时间",
+    "updatedAt": "候选更新时间",
+    "contentRevision": "内容修订号",
     "createdAt": "创建时间",
     "snapshotState": "Snapshot 状态",
     "fileCount": "文件数",

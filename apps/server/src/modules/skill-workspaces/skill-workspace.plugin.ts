@@ -22,6 +22,7 @@ import {
 } from "./skill-workspace.repository.js"
 import { validateOperationId } from "./upload-validation.js"
 import {
+  SkillDraftBrowserSchema,
   SkillVersionBrowserListSchema,
   SkillVersionBrowserSchema,
   SnapshotFileListSchema,
@@ -30,8 +31,11 @@ import {
   WorkspaceVersionParamsSchema,
 } from "./version-browser.contract.js"
 import {
+  getActiveSkillDraft,
+  getDraftFileRecord,
   getSkillVersion,
   getVersionFileRecord,
+  listDraftFiles,
   listSkillVersions,
   listVersionFiles,
 } from "./version-browser.repository.js"
@@ -129,7 +133,7 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
     {
       schema: {
         tags: ["skill-workspaces"],
-        summary: "Create a Skill testing workbench and immutable V1",
+        summary: "Create a Skill testing workbench and initial candidate",
         description:
           "Accepts multipart/form-data with operationId, name, sourceType, and one or more files fields. Metadata fields must precede file parts.",
         consumes: ["multipart/form-data"],
@@ -146,6 +150,138 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
     async (request, reply) => {
       const response = await createService.create(request.parts())
       return reply.code(response.replayed ? 200 : 201).send(response)
+    },
+  )
+
+  application.get(
+    "/api/skill-workspaces/:workspaceId/draft",
+    {
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "Read the active Skill candidate metadata",
+        params: WorkspaceIdParamsSchema,
+        response: {
+          200: SkillDraftBrowserSchema,
+          404: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request) =>
+      getActiveSkillDraft(
+        application.databaseClient.database,
+        request.params.workspaceId,
+      ),
+  )
+
+  application.get(
+    "/api/skill-workspaces/:workspaceId/draft/files",
+    {
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "List the active candidate Snapshot Manifest",
+        params: WorkspaceIdParamsSchema,
+        response: {
+          200: SnapshotFileListSchema,
+          404: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request) =>
+      listDraftFiles(
+        application.databaseClient.database,
+        request.params.workspaceId,
+        classifySnapshotFile,
+      ),
+  )
+
+  application.get(
+    "/api/skill-workspaces/:workspaceId/draft/files/text-preview",
+    {
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "Read a controlled UTF-8 candidate file preview",
+        params: WorkspaceIdParamsSchema,
+        querystring: VersionFilePathQuerySchema,
+        response: {
+          200: TextFilePreviewSchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          415: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request) => {
+      const record = await getDraftFileRecord(
+        application.databaseClient.database,
+        request.params.workspaceId,
+        request.query.path,
+      )
+      return readTextPreview(storage, record)
+    },
+  )
+
+  application.get(
+    "/api/skill-workspaces/:workspaceId/draft/files/image-preview",
+    {
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "Read a controlled candidate raster image preview",
+        params: WorkspaceIdParamsSchema,
+        querystring: VersionFilePathQuerySchema,
+        response: {
+          200: Type.Any(),
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          415: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const record = await getDraftFileRecord(
+        application.databaseClient.database,
+        request.params.workspaceId,
+        request.query.path,
+      )
+      const preview = await readImagePreview(storage, record)
+      setControlledContentHeaders(reply)
+      return reply
+        .header("Content-Length", preview.content.byteLength)
+        .type(preview.mediaType)
+        .send(preview.content)
+    },
+  )
+
+  application.get(
+    "/api/skill-workspaces/:workspaceId/draft/files/download",
+    {
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "Download one candidate Snapshot file as an attachment",
+        params: WorkspaceIdParamsSchema,
+        querystring: VersionFilePathQuerySchema,
+        response: {
+          200: Type.Any(),
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const record = await getDraftFileRecord(
+        application.databaseClient.database,
+        request.params.workspaceId,
+        request.query.path,
+      )
+      const content = await readFileDownload(storage, record)
+      setControlledContentHeaders(reply)
+      return reply
+        .header(
+          "Content-Disposition",
+          contentDispositionFilename(record.file.relativePath),
+        )
+        .header("Content-Length", content.byteLength)
+        .type("application/octet-stream")
+        .send(content)
     },
   )
 

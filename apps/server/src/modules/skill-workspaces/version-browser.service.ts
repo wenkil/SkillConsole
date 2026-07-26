@@ -10,7 +10,7 @@ import type {
   SnapshotFilePreviewKind,
   TextFilePreview,
 } from "./version-browser.contract.js"
-import type { VersionFileRecord } from "./version-browser.repository.js"
+import type { SnapshotFileRecord } from "./version-browser.repository.js"
 
 const inlineImageMediaTypes = new Set([
   "image/gif",
@@ -63,11 +63,11 @@ export function classifySnapshotFile(
   }
 }
 
-function assertSnapshotReady(record: VersionFileRecord): void {
+function assertSnapshotReady(record: SnapshotFileRecord): void {
   if (record.snapshotState !== "READY") {
     throw new DomainError({
       code: "SNAPSHOT_NOT_READY",
-      message: "This formal version Snapshot is not available for browsing.",
+      message: "This Snapshot is not available for browsing.",
       kind: "conflict",
       details: { state: record.snapshotState },
     })
@@ -76,7 +76,7 @@ function assertSnapshotReady(record: VersionFileRecord): void {
 
 async function readVerifiedFile(
   storage: LocalSnapshotStorage,
-  record: VersionFileRecord,
+  record: SnapshotFileRecord,
 ): Promise<Buffer> {
   assertSnapshotReady(record)
 
@@ -116,7 +116,7 @@ async function readVerifiedFile(
 
 export async function readTextPreview(
   storage: LocalSnapshotStorage,
-  record: VersionFileRecord,
+  record: SnapshotFileRecord,
 ): Promise<TextFilePreview> {
   const classification = classifySnapshotFile(record.file)
   if (
@@ -159,7 +159,7 @@ export async function readTextPreview(
 
 export async function readImagePreview(
   storage: LocalSnapshotStorage,
-  record: VersionFileRecord,
+  record: SnapshotFileRecord,
 ): Promise<{
   content: Buffer
   mediaType: string
@@ -185,7 +185,7 @@ export async function readImagePreview(
 
 export async function readFileDownload(
   storage: LocalSnapshotStorage,
-  record: VersionFileRecord,
+  record: SnapshotFileRecord,
 ): Promise<Buffer> {
   return readVerifiedFile(storage, record)
 }

@@ -1,7 +1,9 @@
-import { and, asc, desc, eq } from "drizzle-orm"
+import { and, asc, desc, eq, inArray } from "drizzle-orm"
 
 import { DomainError } from "../../core/errors/domain-error.js"
 import {
+  skillDrafts,
+  skillImprovementCycles,
   skillSnapshotFiles,
   skillSnapshots,
   skillVersions,
@@ -13,6 +15,7 @@ import {
 } from "../../infrastructure/database/index.js"
 
 import type {
+  SkillDraftBrowser,
   SkillVersionBrowser,
   SnapshotFile,
 } from "./version-browser.contract.js"
@@ -141,7 +144,82 @@ export async function getSkillVersion(
   return mapVersion(row)
 }
 
-export interface VersionFileRecord {
+export async function getActiveSkillDraft(
+  database: Database,
+  workspaceId: string,
+): Promise<SkillDraftBrowser> {
+  const [row] = await database
+    .select({
+      id: skillDrafts.id,
+      improvementCycleId: skillImprovementCycles.id,
+      baseVersionId: skillDrafts.baseVersionId,
+      baseSnapshotId: skillDrafts.baseSnapshotId,
+      contentRevision: skillDrafts.contentRevision,
+      status: skillDrafts.status,
+      sourceType: skillDrafts.sourceType,
+      sourceName: skillDrafts.sourceName,
+      createdAt: skillDrafts.createdAt,
+      updatedAt: skillDrafts.updatedAt,
+      snapshotId: skillSnapshots.id,
+      snapshotState: skillSnapshots.state,
+      manifestHash: skillSnapshots.manifestHash,
+      fileCount: skillSnapshots.fileCount,
+      totalBytes: skillSnapshots.totalBytes,
+      snapshotCreatedAt: skillSnapshots.createdAt,
+    })
+    .from(skillDrafts)
+    .innerJoin(
+      skillImprovementCycles,
+      eq(skillImprovementCycles.draftId, skillDrafts.id),
+    )
+    .innerJoin(
+      skillSnapshots,
+      eq(skillSnapshots.id, skillDrafts.currentSnapshotId),
+    )
+    .where(
+      and(
+        eq(skillDrafts.workspaceId, workspaceId),
+        inArray(skillDrafts.status, ["OPEN", "FINALIZING"]),
+      ),
+    )
+    .limit(1)
+
+  if (!row) {
+    await assertWorkspaceExists(database, workspaceId)
+    throw new DomainError({
+      code: "SKILL_DRAFT_NOT_FOUND",
+      message: "The requested active Skill candidate was not found.",
+      kind: "not_found",
+    })
+  }
+
+  if (row.status !== "OPEN" && row.status !== "FINALIZING") {
+    throw new Error(`Active draft ${row.id} has an invalid status.`)
+  }
+
+  return {
+    id: row.id,
+    improvementCycleId: row.improvementCycleId,
+    baseVersionId: row.baseVersionId,
+    baseSnapshotId: row.baseSnapshotId,
+    contentRevision: row.contentRevision,
+    status: row.status,
+    sourceType: row.sourceType,
+    sourceName: row.sourceName,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    snapshot: {
+      id: row.snapshotId,
+      state: row.snapshotState,
+      manifestHash: row.manifestHash,
+      fileCount: row.fileCount,
+      totalBytes: row.totalBytes,
+      createdAt: row.snapshotCreatedAt.toISOString(),
+    },
+  }
+}
+
+export interface SnapshotFileRecord {
   readonly snapshotId: string
   readonly snapshotState: SkillSnapshotRow["state"]
   readonly file: SkillSnapshotFileRow
@@ -164,6 +242,26 @@ function mapFile(
   }
 }
 
+async function listSnapshotFiles(
+  database: Database,
+  snapshotId: string,
+  classifyPreview: (file: SkillSnapshotFileRow) => {
+    previewKind: SnapshotFile["previewKind"]
+    previewable: boolean
+  },
+): Promise<{ snapshotId: string; files: SnapshotFile[] }> {
+  const rows = await database
+    .select()
+    .from(skillSnapshotFiles)
+    .where(eq(skillSnapshotFiles.snapshotId, snapshotId))
+    .orderBy(asc(skillSnapshotFiles.relativePath))
+
+  return {
+    snapshotId,
+    files: rows.map((row) => mapFile(row, classifyPreview)),
+  }
+}
+
 export async function listVersionFiles(
   database: Database,
   workspaceId: string,
@@ -174,31 +272,20 @@ export async function listVersionFiles(
   },
 ): Promise<{ snapshotId: string; files: SnapshotFile[] }> {
   const version = await getSkillVersion(database, workspaceId, versionId)
-  const rows = await database
-    .select()
-    .from(skillSnapshotFiles)
-    .where(eq(skillSnapshotFiles.snapshotId, version.snapshot.id))
-    .orderBy(asc(skillSnapshotFiles.relativePath))
-
-  return {
-    snapshotId: version.snapshot.id,
-    files: rows.map((row) => mapFile(row, classifyPreview)),
-  }
+  return listSnapshotFiles(database, version.snapshot.id, classifyPreview)
 }
 
-export async function getVersionFileRecord(
+async function getSnapshotFileRecord(
   database: Database,
-  workspaceId: string,
-  versionId: string,
+  snapshot: { readonly id: string; readonly state: SkillSnapshotRow["state"] },
   relativePath: string,
-): Promise<VersionFileRecord> {
-  const version = await getSkillVersion(database, workspaceId, versionId)
+): Promise<SnapshotFileRecord> {
   const [file] = await database
     .select()
     .from(skillSnapshotFiles)
     .where(
       and(
-        eq(skillSnapshotFiles.snapshotId, version.snapshot.id),
+        eq(skillSnapshotFiles.snapshotId, snapshot.id),
         eq(skillSnapshotFiles.relativePath, relativePath),
       ),
     )
@@ -207,15 +294,46 @@ export async function getVersionFileRecord(
   if (!file) {
     throw new DomainError({
       code: "SNAPSHOT_FILE_NOT_FOUND",
-      message: "The requested file does not exist in this formal version.",
+      message: "The requested file does not exist in this Snapshot.",
       kind: "not_found",
       details: { path: relativePath },
     })
   }
 
   return {
-    snapshotId: version.snapshot.id,
-    snapshotState: version.snapshot.state,
+    snapshotId: snapshot.id,
+    snapshotState: snapshot.state,
     file,
   }
+}
+
+export async function getVersionFileRecord(
+  database: Database,
+  workspaceId: string,
+  versionId: string,
+  relativePath: string,
+): Promise<SnapshotFileRecord> {
+  const version = await getSkillVersion(database, workspaceId, versionId)
+  return getSnapshotFileRecord(database, version.snapshot, relativePath)
+}
+
+export async function listDraftFiles(
+  database: Database,
+  workspaceId: string,
+  classifyPreview: (file: SkillSnapshotFileRow) => {
+    previewKind: SnapshotFile["previewKind"]
+    previewable: boolean
+  },
+): Promise<{ snapshotId: string; files: SnapshotFile[] }> {
+  const draft = await getActiveSkillDraft(database, workspaceId)
+  return listSnapshotFiles(database, draft.snapshot.id, classifyPreview)
+}
+
+export async function getDraftFileRecord(
+  database: Database,
+  workspaceId: string,
+  relativePath: string,
+): Promise<SnapshotFileRecord> {
+  const draft = await getActiveSkillDraft(database, workspaceId)
+  return getSnapshotFileRecord(database, draft.snapshot, relativePath)
 }

@@ -29,13 +29,37 @@ export const SkillVersionSummarySchema = Type.Object(
   { additionalProperties: false },
 )
 
+export const SkillDraftSummarySchema = Type.Object(
+  {
+    id: Type.String({ format: "uuid" }),
+    improvementCycleId: Type.String({ format: "uuid" }),
+    baseVersionId: Type.Union([
+      Type.String({ format: "uuid" }),
+      Type.Null(),
+    ]),
+    baseSnapshotId: Type.String({ format: "uuid" }),
+    contentRevision: Type.Integer({ minimum: 1 }),
+    status: Type.Union([
+      Type.Literal("OPEN"),
+      Type.Literal("FINALIZING"),
+    ]),
+    sourceType: SkillSourceTypeSchema,
+    sourceName: Type.String({ minLength: 1 }),
+    createdAt: Type.String({ format: "date-time" }),
+    updatedAt: Type.String({ format: "date-time" }),
+    snapshot: SnapshotSummarySchema,
+  },
+  { additionalProperties: false },
+)
+
 export const SkillWorkspaceSchema = Type.Object(
   {
     id: Type.String({ format: "uuid" }),
     name: Type.String({ minLength: 1, maxLength: 120 }),
     createdAt: Type.String({ format: "date-time" }),
     updatedAt: Type.String({ format: "date-time" }),
-    currentVersion: SkillVersionSummarySchema,
+    currentVersion: Type.Union([SkillVersionSummarySchema, Type.Null()]),
+    activeDraft: Type.Union([SkillDraftSummarySchema, Type.Null()]),
   },
   { additionalProperties: false },
 )
@@ -83,11 +107,17 @@ export const UploadOperationSchema = Type.Object(
     state: Type.Union([
       Type.Literal("RECEIVING"),
       Type.Literal("VALIDATING"),
-      Type.Literal("PUBLISHING"),
+      Type.Literal("COMMITTING"),
       Type.Literal("SUCCEEDED"),
       Type.Literal("FAILED"),
     ]),
     workspaceId: Type.Union([Type.String({ format: "uuid" }), Type.Null()]),
+    snapshotId: Type.Union([Type.String({ format: "uuid" }), Type.Null()]),
+    draftId: Type.Union([Type.String({ format: "uuid" }), Type.Null()]),
+    improvementCycleId: Type.Union([
+      Type.String({ format: "uuid" }),
+      Type.Null(),
+    ]),
     error: Type.Union([
       Type.Object(
         {

@@ -4,11 +4,13 @@
     "download": "Download original"
   },
   "header": {
-    "eyebrow": "Formal Skill version",
+    "eyebrow": "Skill content browser",
     "formalVersion": "Formal version",
-    "versionPicker": "Select formal version",
+    "versionPicker": "Select candidate or version",
     "currentVersion": "Current formal version",
     "historicalVersion": "Viewing a historical version",
+    "initialCandidate": "Initial candidate",
+    "candidateState": "Awaiting test and confirmation",
     "defaultBaseline": "Default baseline",
     "notTested": "Not tested"
   },
@@ -16,8 +18,12 @@
     "title": "Read-only formal version",
     "description": "This page displays an immutable Snapshot. Browsing never changes file content, the Manifest, or version metadata."
   },
+  "candidate": {
+    "title": "Evolvable initial candidate",
+    "description": "This Snapshot is working content before testing, not V1 or a default baseline. Publishing still requires passing tests and explicit user confirmation."
+  },
   "tree": {
-    "files": "Formal version files",
+    "files": "Snapshot files",
     "search": "Search path or file name",
     "noResults": "No matching files",
     "keyboardHelp": "Use arrow keys to browse and Space to open a file"
@@ -29,8 +35,8 @@
     "rawHtmlDisabled": "Raw HTML disabled"
   },
   "states": {
-    "loading": "Loading formal version",
-    "loadError": "Formal version content is unavailable",
+    "loading": "Loading Skill content",
+    "loadError": "Skill content is unavailable",
     "retry": "Reload",
     "noFileSelected": "Select a file from the tree",
     "unavailableTitle": "Inline preview is not available for this file",
@@ -45,11 +51,14 @@
   },
   "metadata": {
     "version": "Version information",
+    "candidate": "Candidate information",
     "snapshot": "Snapshot information",
     "versionNumber": "Version number",
     "sourceType": "Source type",
     "sourceName": "Source name",
     "publishedAt": "Published at",
+    "updatedAt": "Candidate updated at",
+    "contentRevision": "Content revision",
     "createdAt": "Created at",
     "snapshotState": "Snapshot state",
     "fileCount": "Files",

@@ -3,15 +3,17 @@ import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import {
-  getFileDownloadUrl,
-  getImagePreviewUrl,
+  getActiveSkillDraft,
+  getTargetFileDownloadUrl,
+  getTargetImagePreviewUrl,
   listSkillVersions,
-  listVersionFiles,
-  readTextFilePreview,
+  listTargetFiles,
+  readTargetTextFilePreview,
 } from "@/features/version-browser/api/version-browser-api"
 import {
   buildVersionFileTree,
   getDefaultFilePath,
+  type SkillBrowserTarget,
   type SkillVersionBrowser,
   type SnapshotFile,
   type TextFilePreview,
@@ -26,6 +28,7 @@ import { SkillConsoleApiError } from "@/shared/api/http"
 
 interface UseVersionBrowserControllerOptions {
   workspaceId: string
+  activeDraftId: string | null
   selectedVersionId: string | null
   selectedFilePath: string | null
 }
@@ -33,7 +36,8 @@ interface UseVersionBrowserControllerOptions {
 export interface VersionBrowserController {
   copy: VersionBrowserCopy
   versions: SkillVersionBrowser[]
-  selectedVersion: SkillVersionBrowser | null
+  targets: SkillBrowserTarget[]
+  selectedTarget: SkillBrowserTarget | null
   tree: VersionFileTreeNode[]
   files: SnapshotFile[]
   selectedFile: SnapshotFile | null
@@ -58,6 +62,7 @@ export interface VersionBrowserController {
 
 export function useVersionBrowserController({
   workspaceId,
+  activeDraftId,
   selectedVersionId,
   selectedFilePath,
 }: UseVersionBrowserControllerOptions): VersionBrowserController {
@@ -71,23 +76,55 @@ export function useVersionBrowserController({
     queryKey: ["skill-workspaces", workspaceId, "versions"],
     queryFn: () => listSkillVersions(workspaceId),
   })
-  const versions = versionsQuery.data ?? []
-  const selectedVersion =
-    versions.find((version) => version.id === selectedVersionId) ??
+  const draftQuery = useQuery({
+    queryKey: ["skill-workspaces", workspaceId, "draft", activeDraftId],
+    queryFn: () => getActiveSkillDraft(workspaceId),
+    enabled: Boolean(activeDraftId),
+  })
+  const versions = useMemo(
+    () => versionsQuery.data ?? [],
+    [versionsQuery.data],
+  )
+  const targets = useMemo<SkillBrowserTarget[]>(() => {
+    const draftTargets: SkillBrowserTarget[] = draftQuery.data
+      ? [{ ...draftQuery.data, kind: "draft" }]
+      : []
+    return [
+      ...draftTargets,
+      ...versions.map(
+        (version): SkillBrowserTarget => ({ ...version, kind: "version" }),
+      ),
+    ]
+  }, [draftQuery.data, versions])
+  const selectedTarget =
+    targets.find(
+      (target) =>
+        target.kind === "version" && target.id === selectedVersionId,
+    ) ??
     (selectedVersionId
       ? null
-      : (versions.find((version) => version.isCurrent) ?? versions[0] ?? null))
+      : (targets.find((target) => target.kind === "draft") ??
+        targets.find(
+          (target) => target.kind === "version" && target.isCurrent,
+        ) ??
+        targets[0] ??
+        null))
 
   const filesQuery = useQuery({
     queryKey: [
       "skill-workspaces",
       workspaceId,
-      "versions",
-      selectedVersion?.id,
+      selectedTarget?.kind,
+      selectedTarget?.id,
       "files",
     ],
-    queryFn: () => listVersionFiles(workspaceId, selectedVersion!.id),
-    enabled: Boolean(selectedVersion),
+    queryFn: () => {
+      if (!selectedTarget) {
+        throw new Error("A browser target is required to list files.")
+      }
+      return listTargetFiles(workspaceId, selectedTarget)
+    },
+    enabled: Boolean(selectedTarget),
   })
   const files = useMemo(
     () => filesQuery.data?.files ?? [],
@@ -107,35 +144,39 @@ export function useVersionBrowserController({
     queryKey: [
       "skill-workspaces",
       workspaceId,
-      "versions",
-      selectedVersion?.id,
+      selectedTarget?.kind,
+      selectedTarget?.id,
       "text-preview",
       selectedFile?.relativePath,
     ],
-    queryFn: () =>
-      readTextFilePreview(
+    queryFn: () => {
+      if (!selectedTarget || !selectedFile) {
+        throw new Error("A browser target and file are required for preview.")
+      }
+      return readTargetTextFilePreview(
         workspaceId,
-        selectedVersion!.id,
-        selectedFile!.relativePath,
-      ),
-    enabled: Boolean(selectedVersion && selectedFile && canReadText),
+        selectedTarget,
+        selectedFile.relativePath,
+      )
+    },
+    enabled: Boolean(selectedTarget && selectedFile && canReadText),
   })
 
   const imagePreviewUrl =
-    selectedVersion &&
+    selectedTarget &&
     selectedFile?.previewable &&
     selectedFile.previewKind === "image"
-      ? getImagePreviewUrl(
+      ? getTargetImagePreviewUrl(
           workspaceId,
-          selectedVersion.id,
+          selectedTarget,
           selectedFile.relativePath,
         )
       : null
   const downloadUrl =
-    selectedVersion && selectedFile
-      ? getFileDownloadUrl(
+    selectedTarget && selectedFile
+      ? getTargetFileDownloadUrl(
           workspaceId,
-          selectedVersion.id,
+          selectedTarget,
           selectedFile.relativePath,
         )
       : null
@@ -144,8 +185,8 @@ export function useVersionBrowserController({
   if (selectedFilePath && filesQuery.isSuccess && !selectedFile) {
     previewIssue = "missing"
   } else if (
-    selectedVersion &&
-    selectedVersion.snapshot.state !== "READY"
+    selectedTarget &&
+    selectedTarget.snapshot.state !== "READY"
   ) {
     previewIssue = "snapshot_unavailable"
   } else if (textPreviewQuery.error instanceof SkillConsoleApiError) {
@@ -166,7 +207,8 @@ export function useVersionBrowserController({
   return {
     copy,
     versions,
-    selectedVersion,
+    targets,
+    selectedTarget,
     tree,
     files,
     selectedFile,
@@ -176,20 +218,24 @@ export function useVersionBrowserController({
     downloadUrl,
     searchTerm,
     markdownView,
-    loading: versionsQuery.isPending,
-    filesLoading: filesQuery.isPending && Boolean(selectedVersion),
+    loading:
+      versionsQuery.isPending ||
+      (Boolean(activeDraftId) && draftQuery.isPending),
+    filesLoading: filesQuery.isPending && Boolean(selectedTarget),
     previewLoading: textPreviewQuery.isPending && canReadText,
     error:
       versionsQuery.isError ||
-      (Boolean(selectedVersion) && filesQuery.isError) ||
+      (Boolean(activeDraftId) && draftQuery.isError) ||
+      (Boolean(selectedTarget) && filesQuery.isError) ||
       (!versionsQuery.isPending &&
         Boolean(selectedVersionId) &&
-        !selectedVersion),
+        !selectedTarget),
     previewIssue,
     actions: {
       retry: () => {
         void versionsQuery.refetch()
-        if (selectedVersion) void filesQuery.refetch()
+        if (activeDraftId) void draftQuery.refetch()
+        if (selectedTarget) void filesQuery.refetch()
       },
       retryPreview: () => {
         void textPreviewQuery.refetch()

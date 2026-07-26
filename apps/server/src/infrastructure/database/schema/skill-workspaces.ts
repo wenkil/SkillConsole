@@ -35,10 +35,22 @@ export const skillSnapshotState = pgEnum("skill_snapshot_state", [
 export const uploadOperationState = pgEnum("upload_operation_state", [
   "RECEIVING",
   "VALIDATING",
-  "PUBLISHING",
+  "COMMITTING",
   "SUCCEEDED",
   "FAILED",
 ])
+
+export const skillDraftStatus = pgEnum("skill_draft_status", [
+  "OPEN",
+  "FINALIZING",
+  "CLOSED",
+  "ABANDONED",
+])
+
+export const skillImprovementCycleStatus = pgEnum(
+  "skill_improvement_cycle_status",
+  ["DRAFTING", "VERSION_PUBLISHED", "VALIDATING", "COMPLETED", "ABANDONED"],
+)
 
 export const skillWorkspaces = pgTable(
   "skill_workspaces",
@@ -196,6 +208,104 @@ export const skillVersions = pgTable(
   ],
 )
 
+export const skillDrafts = pgTable(
+  "skill_drafts",
+  {
+    id: uuid("id").primaryKey().default(sql`uuidv7()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => skillWorkspaces.id, { onDelete: "cascade" }),
+    baseVersionId: uuid("base_version_id").references(
+      () => skillVersions.id,
+      { onDelete: "set null" },
+    ),
+    baseSnapshotId: uuid("base_snapshot_id")
+      .notNull()
+      .references(() => skillSnapshots.id, { onDelete: "restrict" }),
+    currentSnapshotId: uuid("current_snapshot_id")
+      .notNull()
+      .references(() => skillSnapshots.id, { onDelete: "restrict" }),
+    status: skillDraftStatus("status").notNull(),
+    contentRevision: integer("content_revision").default(1).notNull(),
+    sourceType: skillSourceType("source_type").notNull(),
+    sourceName: text("source_name").notNull(),
+    createdAt: timestamp("created_at", {
+      mode: "date",
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", {
+      mode: "date",
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    check(
+      "skill_drafts_content_revision_check",
+      sql`${table.contentRevision} >= 1`,
+    ),
+    uniqueIndex("skill_drafts_active_workspace_unique")
+      .on(table.workspaceId)
+      .where(sql`${table.status} in ('OPEN', 'FINALIZING')`),
+    index("skill_drafts_workspace_updated_idx").on(
+      table.workspaceId,
+      table.updatedAt,
+    ),
+  ],
+)
+
+export const skillImprovementCycles = pgTable(
+  "skill_improvement_cycles",
+  {
+    id: uuid("id").primaryKey().default(sql`uuidv7()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => skillWorkspaces.id, { onDelete: "cascade" }),
+    baseVersionId: uuid("base_version_id").references(
+      () => skillVersions.id,
+      { onDelete: "set null" },
+    ),
+    draftId: uuid("draft_id")
+      .notNull()
+      .references(() => skillDrafts.id, { onDelete: "cascade" }),
+    releasedVersionId: uuid("released_version_id").references(
+      () => skillVersions.id,
+      { onDelete: "set null" },
+    ),
+    status: skillImprovementCycleStatus("status").notNull(),
+    createdAt: timestamp("created_at", {
+      mode: "date",
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", {
+      mode: "date",
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+    versionPublishedAt: timestamp("version_published_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+    completedAt: timestamp("completed_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+  },
+  (table) => [
+    uniqueIndex("skill_improvement_cycles_draft_unique").on(table.draftId),
+    index("skill_improvement_cycles_workspace_updated_idx").on(
+      table.workspaceId,
+      table.updatedAt,
+    ),
+  ],
+)
+
 export const uploadOperations = pgTable(
   "upload_operations",
   {
@@ -206,9 +316,15 @@ export const uploadOperations = pgTable(
     snapshotId: uuid("snapshot_id").references(() => skillSnapshots.id, {
       onDelete: "set null",
     }),
-    versionId: uuid("version_id").references(() => skillVersions.id, {
+    draftId: uuid("draft_id").references(() => skillDrafts.id, {
       onDelete: "set null",
     }),
+    improvementCycleId: uuid("improvement_cycle_id").references(
+      () => skillImprovementCycles.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     workspaceName: text("workspace_name").notNull(),
     sourceType: skillSourceType("source_type").notNull(),
     sourceName: text("source_name"),
@@ -257,4 +373,7 @@ export type NewSkillWorkspaceRow = typeof skillWorkspaces.$inferInsert
 export type SkillSnapshotRow = typeof skillSnapshots.$inferSelect
 export type SkillSnapshotFileRow = typeof skillSnapshotFiles.$inferSelect
 export type SkillVersionRow = typeof skillVersions.$inferSelect
+export type SkillDraftRow = typeof skillDrafts.$inferSelect
+export type SkillImprovementCycleRow =
+  typeof skillImprovementCycles.$inferSelect
 export type UploadOperationRow = typeof uploadOperations.$inferSelect

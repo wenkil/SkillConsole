@@ -21,12 +21,27 @@ export interface SkillVersionSummary {
   snapshot: SkillSnapshotSummary
 }
 
+export interface SkillDraftSummary {
+  id: string
+  improvementCycleId: string
+  baseVersionId: string | null
+  baseSnapshotId: string
+  contentRevision: number
+  status: "OPEN" | "FINALIZING"
+  sourceType: SkillSourceKind
+  sourceName: string
+  createdAt: string
+  updatedAt: string
+  snapshot: SkillSnapshotSummary
+}
+
 export interface SkillWorkspace {
   id: string
   name: string
   createdAt: string
   updatedAt: string
-  currentVersion: SkillVersionSummary
+  currentVersion: SkillVersionSummary | null
+  activeDraft: SkillDraftSummary | null
 }
 
 export interface SelectedSkillSource {

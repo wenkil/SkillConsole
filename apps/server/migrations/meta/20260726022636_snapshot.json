@@ -1,9 +1,357 @@
 {
-  "id": "819d048e-5fca-4f91-acb8-353d6f04b3c2",
+  "id": "5a0e0cf4-dd78-4511-a549-5a8796574df5",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.skill_drafts": {
+      "name": "skill_drafts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuidv7()"
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "base_version_id": {
+          "name": "base_version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "base_snapshot_id": {
+          "name": "base_snapshot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "current_snapshot_id": {
+          "name": "current_snapshot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "skill_draft_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content_revision": {
+          "name": "content_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "source_type": {
+          "name": "source_type",
+          "type": "skill_source_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_name": {
+          "name": "source_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "skill_drafts_active_workspace_unique": {
+          "name": "skill_drafts_active_workspace_unique",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"skill_drafts\".\"status\" in ('OPEN', 'FINALIZING')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "skill_drafts_workspace_updated_idx": {
+          "name": "skill_drafts_workspace_updated_idx",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "skill_drafts_workspace_id_skill_workspaces_id_fk": {
+          "name": "skill_drafts_workspace_id_skill_workspaces_id_fk",
+          "tableFrom": "skill_drafts",
+          "tableTo": "skill_workspaces",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "skill_drafts_base_version_id_skill_versions_id_fk": {
+          "name": "skill_drafts_base_version_id_skill_versions_id_fk",
+          "tableFrom": "skill_drafts",
+          "tableTo": "skill_versions",
+          "columnsFrom": [
+            "base_version_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "skill_drafts_base_snapshot_id_skill_snapshots_id_fk": {
+          "name": "skill_drafts_base_snapshot_id_skill_snapshots_id_fk",
+          "tableFrom": "skill_drafts",
+          "tableTo": "skill_snapshots",
+          "columnsFrom": [
+            "base_snapshot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "skill_drafts_current_snapshot_id_skill_snapshots_id_fk": {
+          "name": "skill_drafts_current_snapshot_id_skill_snapshots_id_fk",
+          "tableFrom": "skill_drafts",
+          "tableTo": "skill_snapshots",
+          "columnsFrom": [
+            "current_snapshot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "skill_drafts_content_revision_check": {
+          "name": "skill_drafts_content_revision_check",
+          "value": "\"skill_drafts\".\"content_revision\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.skill_improvement_cycles": {
+      "name": "skill_improvement_cycles",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuidv7()"
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "base_version_id": {
+          "name": "base_version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "draft_id": {
+          "name": "draft_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "released_version_id": {
+          "name": "released_version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "skill_improvement_cycle_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "version_published_at": {
+          "name": "version_published_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "skill_improvement_cycles_draft_unique": {
+          "name": "skill_improvement_cycles_draft_unique",
+          "columns": [
+            {
+              "expression": "draft_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "skill_improvement_cycles_workspace_updated_idx": {
+          "name": "skill_improvement_cycles_workspace_updated_idx",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "skill_improvement_cycles_workspace_id_skill_workspaces_id_fk": {
+          "name": "skill_improvement_cycles_workspace_id_skill_workspaces_id_fk",
+          "tableFrom": "skill_improvement_cycles",
+          "tableTo": "skill_workspaces",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "skill_improvement_cycles_base_version_id_skill_versions_id_fk": {
+          "name": "skill_improvement_cycles_base_version_id_skill_versions_id_fk",
+          "tableFrom": "skill_improvement_cycles",
+          "tableTo": "skill_versions",
+          "columnsFrom": [
+            "base_version_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "skill_improvement_cycles_draft_id_skill_drafts_id_fk": {
+          "name": "skill_improvement_cycles_draft_id_skill_drafts_id_fk",
+          "tableFrom": "skill_improvement_cycles",
+          "tableTo": "skill_drafts",
+          "columnsFrom": [
+            "draft_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "skill_improvement_cycles_released_version_id_skill_versions_id_fk": {
+          "name": "skill_improvement_cycles_released_version_id_skill_versions_id_fk",
+          "tableFrom": "skill_improvement_cycles",
+          "tableTo": "skill_versions",
+          "columnsFrom": [
+            "released_version_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.skill_snapshot_files": {
       "name": "skill_snapshot_files",
       "schema": "",
@@ -546,8 +894,14 @@
           "primaryKey": false,
           "notNull": false
         },
-        "version_id": {
-          "name": "version_id",
+        "draft_id": {
+          "name": "draft_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "improvement_cycle_id": {
+          "name": "improvement_cycle_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -680,12 +1034,25 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
-        "upload_operations_version_id_skill_versions_id_fk": {
-          "name": "upload_operations_version_id_skill_versions_id_fk",
+        "upload_operations_draft_id_skill_drafts_id_fk": {
+          "name": "upload_operations_draft_id_skill_drafts_id_fk",
           "tableFrom": "upload_operations",
-          "tableTo": "skill_versions",
+          "tableTo": "skill_drafts",
           "columnsFrom": [
-            "version_id"
+            "draft_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "upload_operations_improvement_cycle_id_skill_improvement_cycles_id_fk": {
+          "name": "upload_operations_improvement_cycle_id_skill_improvement_cycles_id_fk",
+          "tableFrom": "upload_operations",
+          "tableTo": "skill_improvement_cycles",
+          "columnsFrom": [
+            "improvement_cycle_id"
           ],
           "columnsTo": [
             "id"
@@ -711,6 +1078,27 @@
     }
   },
   "enums": {
+    "public.skill_draft_status": {
+      "name": "skill_draft_status",
+      "schema": "public",
+      "values": [
+        "OPEN",
+        "FINALIZING",
+        "CLOSED",
+        "ABANDONED"
+      ]
+    },
+    "public.skill_improvement_cycle_status": {
+      "name": "skill_improvement_cycle_status",
+      "schema": "public",
+      "values": [
+        "DRAFTING",
+        "VERSION_PUBLISHED",
+        "VALIDATING",
+        "COMPLETED",
+        "ABANDONED"
+      ]
+    },
     "public.skill_snapshot_kind": {
       "name": "skill_snapshot_kind",
       "schema": "public",
@@ -744,7 +1132,7 @@
       "values": [
         "RECEIVING",
         "VALIDATING",
-        "PUBLISHING",
+        "COMMITTING",
         "SUCCEEDED",
         "FAILED"
       ]

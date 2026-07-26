@@ -117,7 +117,7 @@ export function CreateWorkbenchDialog({
           <div className="mb-2 flex items-center gap-2 font-mono text-[10px] font-bold tracking-[0.08em] text-signal-dark uppercase">
             <span>01</span>
             <span>/</span>
-            <span>{copy.initialVersion}</span>
+            <span>{copy.initialCandidate}</span>
           </div>
           <DialogTitle className="flex items-center gap-2.5 font-mono text-base">
             <FolderPlus aria-hidden="true" className="size-5 text-primary" />
@@ -344,7 +344,9 @@ export function CreateWorkbenchDialog({
             ) : (
               <FolderPlus aria-hidden="true" data-icon="inline-start" />
             )}
-            {submitting ? copy.publishingVersion : copy.createWorkbenchAndV1}
+            {submitting
+              ? copy.savingCandidate
+              : copy.createWorkbenchAndCandidate}
           </Button>
         </DialogFooter>
       </DialogContent>

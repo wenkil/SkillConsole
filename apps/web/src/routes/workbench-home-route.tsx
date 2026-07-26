@@ -70,9 +70,11 @@ export function WorkbenchHomeRoute() {
             onFileSelect={(relativePath) => {
               setSearchParams({ path: relativePath }, { replace: true })
             }}
-            onVersionSelect={(selectedVersionId) => {
+            onTargetSelect={(target) => {
               navigate(
-                `/workbenches/${controller.activeWorkspace!.id}/versions/${selectedVersionId}`,
+                target.kind === "draft"
+                  ? `/workbenches/${controller.activeWorkspace!.id}`
+                  : `/workbenches/${controller.activeWorkspace!.id}/versions/${target.id}`,
               )
             }}
             selectedFilePath={searchParams.get("path")}

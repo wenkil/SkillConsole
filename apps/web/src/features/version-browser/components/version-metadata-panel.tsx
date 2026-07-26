@@ -4,18 +4,19 @@ import {
   FileKey2,
   Fingerprint,
   PackageCheck,
+  PencilLine,
 } from "lucide-react"
 
 import {
   formatBytes,
-  type SkillVersionBrowser,
+  type SkillBrowserTarget,
   type SnapshotFile,
 } from "@/features/version-browser/model/version-browser"
 import type { VersionBrowserCopy } from "@/features/version-browser/model/version-browser-copy"
 import { cn } from "@/shared/lib/utils"
 
 interface VersionMetadataPanelProps {
-  version: SkillVersionBrowser
+  target: SkillBrowserTarget
   file: SnapshotFile | null
   locale: string
   copy: VersionBrowserCopy
@@ -69,7 +70,7 @@ function MetadataRow({
 }
 
 export function VersionMetadataPanel({
-  version,
+  target,
   file,
   locale,
   copy,
@@ -86,22 +87,50 @@ export function VersionMetadataPanel({
 
   return (
     <aside className="min-h-0 overflow-y-auto border-l border-foreground bg-paper-raised">
-      <MetadataSection number="01" title={copy.versionInfo}>
+      <MetadataSection
+        number="01"
+        title={
+          target.kind === "draft" ? copy.candidateInfo : copy.versionInfo
+        }
+      >
         <div className="mb-4 flex items-center gap-2 text-technical-foreground">
-          <PackageCheck aria-hidden="true" className="size-4" />
-          <strong className="text-sm">V{version.versionNumber}</strong>
+          {target.kind === "draft" ? (
+            <PencilLine aria-hidden="true" className="size-4" />
+          ) : (
+            <PackageCheck aria-hidden="true" className="size-4" />
+          )}
+          <strong className="text-sm">
+            {target.kind === "draft"
+              ? copy.initialCandidate
+              : `V${target.versionNumber}`}
+          </strong>
         </div>
         <dl className="grid min-w-0 gap-4">
           <MetadataRow label={copy.sourceType}>
-            {copy.sourceTypes[version.sourceType]}
+            {copy.sourceTypes[target.sourceType]}
           </MetadataRow>
           <MetadataRow label={copy.sourceName}>
-            {version.sourceName}
+            {target.sourceName}
           </MetadataRow>
-          <MetadataRow label={copy.publishedAt}>
+          {target.kind === "draft" ? (
+            <MetadataRow label={copy.contentRevision}>
+              {target.contentRevision}
+            </MetadataRow>
+          ) : null}
+          <MetadataRow
+            label={
+              target.kind === "draft" ? copy.updatedAt : copy.publishedAt
+            }
+          >
             <span className="inline-flex items-center gap-1.5">
               <CalendarClock aria-hidden="true" className="size-3.5" />
-              {dateFormatter.format(new Date(version.publishedAt))}
+              {dateFormatter.format(
+                new Date(
+                  target.kind === "draft"
+                    ? target.updatedAt
+                    : target.publishedAt,
+                ),
+              )}
             </span>
           </MetadataRow>
         </dl>
@@ -111,25 +140,25 @@ export function VersionMetadataPanel({
         <div className="mb-4 flex items-center gap-2 text-technical-foreground">
           <Fingerprint aria-hidden="true" className="size-4" />
           <strong className="text-xs">
-            {snapshotStateCopy[version.snapshot.state]}
+            {snapshotStateCopy[target.snapshot.state]}
           </strong>
         </div>
         <dl className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-4">
           <MetadataRow label={copy.fileCount}>
-            {version.snapshot.fileCount}
+            {target.snapshot.fileCount}
           </MetadataRow>
           <MetadataRow label={copy.totalSize}>
-            {formatBytes(version.snapshot.totalBytes)}
+            {formatBytes(target.snapshot.totalBytes)}
           </MetadataRow>
           <div className="col-span-2">
             <MetadataRow label={copy.createdAt}>
-              {dateFormatter.format(new Date(version.snapshot.createdAt))}
+              {dateFormatter.format(new Date(target.snapshot.createdAt))}
             </MetadataRow>
           </div>
           <div className="col-span-2">
             <MetadataRow label={copy.manifestHash} mono>
-              <span title={version.snapshot.manifestHash}>
-                {version.snapshot.manifestHash}
+              <span title={target.snapshot.manifestHash}>
+                {target.snapshot.manifestHash}
               </span>
             </MetadataRow>
           </div>

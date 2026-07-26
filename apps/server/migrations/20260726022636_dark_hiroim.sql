@@ -1,7 +1,37 @@
+CREATE TYPE "public"."skill_draft_status" AS ENUM('OPEN', 'FINALIZING', 'CLOSED', 'ABANDONED');--> statement-breakpoint
+CREATE TYPE "public"."skill_improvement_cycle_status" AS ENUM('DRAFTING', 'VERSION_PUBLISHED', 'VALIDATING', 'COMPLETED', 'ABANDONED');--> statement-breakpoint
 CREATE TYPE "public"."skill_snapshot_kind" AS ENUM('DRAFT_WORKING', 'DRAFT_FROZEN', 'VERSION');--> statement-breakpoint
 CREATE TYPE "public"."skill_snapshot_state" AS ENUM('STAGING', 'READY', 'CORRUPTED');--> statement-breakpoint
 CREATE TYPE "public"."skill_source_type" AS ENUM('single_file', 'folder', 'zip');--> statement-breakpoint
-CREATE TYPE "public"."upload_operation_state" AS ENUM('RECEIVING', 'VALIDATING', 'PUBLISHING', 'SUCCEEDED', 'FAILED');--> statement-breakpoint
+CREATE TYPE "public"."upload_operation_state" AS ENUM('RECEIVING', 'VALIDATING', 'COMMITTING', 'SUCCEEDED', 'FAILED');--> statement-breakpoint
+CREATE TABLE "skill_drafts" (
+	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
+	"workspace_id" uuid NOT NULL,
+	"base_version_id" uuid,
+	"base_snapshot_id" uuid NOT NULL,
+	"current_snapshot_id" uuid NOT NULL,
+	"status" "skill_draft_status" NOT NULL,
+	"content_revision" integer DEFAULT 1 NOT NULL,
+	"source_type" "skill_source_type" NOT NULL,
+	"source_name" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "skill_drafts_content_revision_check" CHECK ("skill_drafts"."content_revision" >= 1)
+);
+--> statement-breakpoint
+CREATE TABLE "skill_improvement_cycles" (
+	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
+	"workspace_id" uuid NOT NULL,
+	"base_version_id" uuid,
+	"draft_id" uuid NOT NULL,
+	"released_version_id" uuid,
+	"status" "skill_improvement_cycle_status" NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version_published_at" timestamp with time zone,
+	"completed_at" timestamp with time zone
+);
+--> statement-breakpoint
 CREATE TABLE "skill_snapshot_files" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"snapshot_id" uuid NOT NULL,
@@ -57,7 +87,8 @@ CREATE TABLE "upload_operations" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"workspace_id" uuid,
 	"snapshot_id" uuid,
-	"version_id" uuid,
+	"draft_id" uuid,
+	"improvement_cycle_id" uuid,
 	"workspace_name" text NOT NULL,
 	"source_type" "skill_source_type" NOT NULL,
 	"source_name" text,
@@ -74,6 +105,14 @@ CREATE TABLE "upload_operations" (
 	CONSTRAINT "upload_operations_ignored_count_check" CHECK ("upload_operations"."ignored_file_count" >= 0)
 );
 --> statement-breakpoint
+ALTER TABLE "skill_drafts" ADD CONSTRAINT "skill_drafts_workspace_id_skill_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."skill_workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "skill_drafts" ADD CONSTRAINT "skill_drafts_base_version_id_skill_versions_id_fk" FOREIGN KEY ("base_version_id") REFERENCES "public"."skill_versions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "skill_drafts" ADD CONSTRAINT "skill_drafts_base_snapshot_id_skill_snapshots_id_fk" FOREIGN KEY ("base_snapshot_id") REFERENCES "public"."skill_snapshots"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "skill_drafts" ADD CONSTRAINT "skill_drafts_current_snapshot_id_skill_snapshots_id_fk" FOREIGN KEY ("current_snapshot_id") REFERENCES "public"."skill_snapshots"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "skill_improvement_cycles" ADD CONSTRAINT "skill_improvement_cycles_workspace_id_skill_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."skill_workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "skill_improvement_cycles" ADD CONSTRAINT "skill_improvement_cycles_base_version_id_skill_versions_id_fk" FOREIGN KEY ("base_version_id") REFERENCES "public"."skill_versions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "skill_improvement_cycles" ADD CONSTRAINT "skill_improvement_cycles_draft_id_skill_drafts_id_fk" FOREIGN KEY ("draft_id") REFERENCES "public"."skill_drafts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "skill_improvement_cycles" ADD CONSTRAINT "skill_improvement_cycles_released_version_id_skill_versions_id_fk" FOREIGN KEY ("released_version_id") REFERENCES "public"."skill_versions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "skill_snapshot_files" ADD CONSTRAINT "skill_snapshot_files_snapshot_id_skill_snapshots_id_fk" FOREIGN KEY ("snapshot_id") REFERENCES "public"."skill_snapshots"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "skill_snapshots" ADD CONSTRAINT "skill_snapshots_workspace_id_skill_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."skill_workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "skill_versions" ADD CONSTRAINT "skill_versions_workspace_id_skill_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."skill_workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -82,7 +121,12 @@ ALTER TABLE "skill_workspaces" ADD CONSTRAINT "skill_workspaces_current_version_
 ALTER TABLE "skill_workspaces" ADD CONSTRAINT "skill_workspaces_default_baseline_version_id_skill_versions_id_fk" FOREIGN KEY ("default_baseline_version_id") REFERENCES "public"."skill_versions"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "upload_operations" ADD CONSTRAINT "upload_operations_workspace_id_skill_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."skill_workspaces"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "upload_operations" ADD CONSTRAINT "upload_operations_snapshot_id_skill_snapshots_id_fk" FOREIGN KEY ("snapshot_id") REFERENCES "public"."skill_snapshots"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "upload_operations" ADD CONSTRAINT "upload_operations_version_id_skill_versions_id_fk" FOREIGN KEY ("version_id") REFERENCES "public"."skill_versions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "upload_operations" ADD CONSTRAINT "upload_operations_draft_id_skill_drafts_id_fk" FOREIGN KEY ("draft_id") REFERENCES "public"."skill_drafts"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "upload_operations" ADD CONSTRAINT "upload_operations_improvement_cycle_id_skill_improvement_cycles_id_fk" FOREIGN KEY ("improvement_cycle_id") REFERENCES "public"."skill_improvement_cycles"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "skill_drafts_active_workspace_unique" ON "skill_drafts" USING btree ("workspace_id") WHERE "skill_drafts"."status" in ('OPEN', 'FINALIZING');--> statement-breakpoint
+CREATE INDEX "skill_drafts_workspace_updated_idx" ON "skill_drafts" USING btree ("workspace_id","updated_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "skill_improvement_cycles_draft_unique" ON "skill_improvement_cycles" USING btree ("draft_id");--> statement-breakpoint
+CREATE INDEX "skill_improvement_cycles_workspace_updated_idx" ON "skill_improvement_cycles" USING btree ("workspace_id","updated_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "skill_snapshot_files_path_unique" ON "skill_snapshot_files" USING btree ("snapshot_id","relative_path");--> statement-breakpoint
 CREATE UNIQUE INDEX "skill_snapshot_files_casefold_path_unique" ON "skill_snapshot_files" USING btree ("snapshot_id",lower("relative_path"));--> statement-breakpoint
 CREATE UNIQUE INDEX "skill_snapshots_storage_locator_unique" ON "skill_snapshots" USING btree ("storage_locator");--> statement-breakpoint

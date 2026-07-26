@@ -7,17 +7,19 @@
     "errorDescription": "请确认本地服务与数据库已启动，然后重试。",
     "retry": "重新加载",
     "emptyTitle": "暂无工作台",
-    "emptyDescription": "创建第一个 Skill 测试工作台后，它会显示在这里。"
+    "emptyDescription": "创建第一个 Skill 测试工作台后，它会显示在这里。",
+    "initialCandidate": "初始候选 · 无正式版本",
+    "noFormalVersion": "无正式版本"
   },
   "hero": {
     "eyebrow": "Skill 版本与测试证据工作台",
     "title": "创建 Skill 测试工作台",
-    "description": "从一个真实 Skill 来源建立不可变 V1，把后续版本、测试输入、运行证据和报告组织在同一个长期工作台中。",
+    "description": "从一个真实 Skill 来源建立待测试的初始候选，把后续改进、测试输入、运行证据和正式版本组织在同一个长期工作台中。",
     "createWorkbench": "创建测试工作台"
   },
   "setup": {
-    "title": "首次版本初始化",
-    "description": "选择 Skill 来源后，系统会在服务端重新校验路径与资源限制，并原子发布不可变 V1。",
+    "title": "初始候选初始化",
+    "description": "选择 Skill 来源后，系统会在服务端重新校验路径与资源限制，并原子保存待测试的初始候选。",
     "steps": {
       "name": {
         "title": "命名工作台",
@@ -25,15 +27,15 @@
       },
       "source": {
         "title": "选择 Skill 来源",
-        "description": "选择完整 Skill 文件夹，或导入仅用于首次版本的 ZIP 压缩包。"
+        "description": "选择完整 Skill 文件夹，或导入仅用于首次创建的 ZIP 压缩包。"
       },
       "validate": {
         "title": "校验与生成清单",
         "description": "服务端检查路径、大小和冲突，逐文件计算 SHA-256 与 Manifest。"
       },
       "publish": {
-        "title": "原子发布 V1",
-        "description": "完整 Snapshot 就绪后再写入正式版本，并自动设为默认基线。"
+        "title": "原子保存候选",
+        "description": "完整 Snapshot 就绪后创建开放 Draft 和改进周期；此时不生成正式版本或默认基线。"
       }
     }
   },
@@ -42,9 +44,9 @@
     "description": "Skill 文件只复制到自托管服务的受控数据目录，不读取真实绝对路径，也不会写回用户原目录。"
   },
   "createDialog": {
-    "initialVersion": "首次正式版本",
+    "initialCandidate": "首次内容候选",
     "title": "创建 Skill 测试工作台",
-    "description": "本次操作会同时创建工作台、完整文件 Snapshot 和不可变 V1。",
+    "description": "本次操作会同时创建工作台、完整文件 Snapshot、开放 Draft 和改进周期；不会直接发布 V1。",
     "workbenchName": "工作台名称",
     "workbenchNamePlaceholder": "例如：发票审核 Skill 工作台",
     "workbenchNameHelp": "一个工作台长期管理一个 Skill；名称不可与已有工作台重复。",
@@ -79,8 +81,8 @@
     "serverValidationNote": "浏览器摘要仅用于确认；路径、Hash、大小和 ZIP 安全规则将由服务端重新校验。",
     "ignoredFolderFiles": "已按服务器策略忽略 {{count}} 个依赖、缓存或安装包文件。",
     "cancel": "取消",
-    "createWorkbenchAndV1": "创建工作台并发布 V1",
-    "publishingVersion": "正在校验并发布 V1",
+    "createWorkbenchAndCandidate": "创建工作台并保存候选",
+    "savingCandidate": "正在校验并保存候选",
     "nameRequired": "请填写工作台名称。",
     "errors": {
       "sourceRequired": "请选择完整 Skill 文件夹或 ZIP 压缩包。",
@@ -89,7 +91,7 @@
       "folderFilesIgnored": "所选文件夹中的文件全部被上传过滤策略忽略。",
       "zipRequired": "请选择一个有效的 .zip 压缩包。"
     },
-    "createFailed": "V1 创建失败",
+    "createFailed": "初始候选创建失败",
     "unknownCreateError": "无法完成创建，请确认本地服务状态后重试。"
   },
   "settingsDialog": {
@@ -101,29 +103,32 @@
     "saveSettings": "保存设置"
   },
   "notifications": {
-    "workspaceCreated": "工作台与 V1 已创建",
+    "workspaceCreated": "工作台与初始候选已创建",
     "settingsSaved": "设置已保存"
   },
   "overview": {
     "backToHome": "返回工作台首页",
     "eyebrow": "工作台概览",
-    "description": "V1 已从服务端校验后的完整文件清单发布。当前页面只展示第一阶段已经形成的版本事实，不提前展示草稿或测试占位数据。",
-    "versionState": "版本状态",
+    "description": "当前内容来自服务端校验后的完整 Snapshot；初始候选仍需测试通过并由用户手动确认后，才能发布为不可变正式版本。",
+    "versionState": "内容状态",
     "publishedWithoutTests": "已发布 · 尚未测试",
-    "versionSummary": "版本摘要",
-    "currentVersion": "当前正式版本",
+    "candidateWithoutTests": "候选已保存 · 尚未测试",
+    "versionSummary": "内容摘要",
+    "currentVersion": "当前内容",
     "defaultBaseline": "默认基线",
     "v1DefaultBaseline": "V1 · 默认基线",
-    "notBaseline": "非默认基线",
+    "notBaseline": "尚未建立默认基线",
     "testState": "测试状态",
     "notTested": "尚未测试",
     "snapshotEvidence": "Snapshot 事实",
     "manifestIdentity": "Manifest 身份",
     "manifestHash": "Manifest Hash",
-    "publishRecord": "发布记录",
+    "publishRecord": "来源记录",
     "sourceName": "来源名称",
-    "publishedAt": "发布时间",
+    "publishedAt": "记录时间",
     "immutableVersionTitle": "正式版本不可编辑。",
-    "immutableVersionDescription": "后续修改将在草稿中进行；本阶段不会把 V1 文件直接改写，也不会将“默认基线”表示为已经测试通过。"
+    "immutableVersionDescription": "正式版本内容和 Manifest 保持不可变，后续修改必须在新的版本优化周期中进行。",
+    "candidateContentTitle": "初始候选不是正式版本。",
+    "candidateContentDescription": "候选可以进入后续改进与测试流程；只有测试通过并经用户手动确认，才会生成不可修改的正式版本。"
   }
 }

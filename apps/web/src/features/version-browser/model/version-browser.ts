@@ -35,6 +35,31 @@ export interface SkillVersionBrowser {
   }
 }
 
+export interface SkillDraftBrowser {
+  id: string
+  improvementCycleId: string
+  baseVersionId: string | null
+  baseSnapshotId: string
+  contentRevision: number
+  status: "OPEN" | "FINALIZING"
+  sourceType: SkillSourceKind
+  sourceName: string
+  createdAt: string
+  updatedAt: string
+  snapshot: {
+    id: string
+    state: SnapshotState
+    manifestHash: string
+    fileCount: number
+    totalBytes: number
+    createdAt: string
+  }
+}
+
+export type SkillBrowserTarget =
+  | (SkillDraftBrowser & { kind: "draft" })
+  | (SkillVersionBrowser & { kind: "version" })
+
 export interface SnapshotFile {
   relativePath: string
   sha256: string

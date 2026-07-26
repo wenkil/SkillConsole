@@ -9,7 +9,10 @@ import { I18nextProvider } from "react-i18next"
 import { beforeAll, describe, expect, it, vi } from "vitest"
 
 import { VersionBrowserView } from "@/features/version-browser/components/version-browser-view"
-import type { SkillVersionBrowser } from "@/features/version-browser/model/version-browser"
+import type {
+  SkillDraftBrowser,
+  SkillVersionBrowser,
+} from "@/features/version-browser/model/version-browser"
 import { i18n } from "@/shared/i18n/i18n"
 
 const versions: SkillVersionBrowser[] = [
@@ -51,17 +54,48 @@ const versions: SkillVersionBrowser[] = [
   },
 ]
 
+const initialCandidate: SkillDraftBrowser = {
+  id: "01900000-0000-7000-8000-000000000301",
+  improvementCycleId: "01900000-0000-7000-8000-000000000302",
+  baseVersionId: null,
+  baseSnapshotId: "01900000-0000-7000-8000-000000000303",
+  contentRevision: 1,
+  status: "OPEN",
+  sourceType: "folder",
+  sourceName: "candidate-source",
+  createdAt: "2026-07-25T03:00:00.000Z",
+  updatedAt: "2026-07-25T03:00:00.000Z",
+  snapshot: {
+    id: "01900000-0000-7000-8000-000000000303",
+    state: "READY",
+    manifestHash: "c".repeat(64),
+    fileCount: 1,
+    totalBytes: 28,
+    createdAt: "2026-07-25T03:00:00.000Z",
+  },
+}
+
 vi.mock("@/features/version-browser/api/version-browser-api", () => ({
-  listSkillVersions: vi.fn(async () => versions),
-  listVersionFiles: vi.fn(async (_workspaceId: string, versionId: string) => ({
+  listSkillVersions: vi.fn(async (workspaceId: string) =>
+    workspaceId.endsWith("999") ? [] : versions,
+  ),
+  getActiveSkillDraft: vi.fn(async () => initialCandidate),
+  listTargetFiles: vi.fn(async (_workspaceId: string, target: { id: string }) => ({
     snapshotId:
-      versionId === versions[0]!.id
+      target.id === initialCandidate.id
+        ? initialCandidate.snapshot.id
+        : target.id === versions[0]!.id
         ? versions[0]!.snapshot.id
         : versions[1]!.snapshot.id,
     files: [
       {
         relativePath: "SKILL.md",
-        sha256: versionId === versions[0]!.id ? "b".repeat(64) : "a".repeat(64),
+        sha256:
+          target.id === initialCandidate.id
+            ? "c".repeat(64)
+            : target.id === versions[0]!.id
+              ? "b".repeat(64)
+              : "a".repeat(64),
         byteSize: 20,
         mediaTypeHint: "text/markdown",
         contentKind: "text",
@@ -70,18 +104,22 @@ vi.mock("@/features/version-browser/api/version-browser-api", () => ({
       },
     ],
   })),
-  readTextFilePreview: vi.fn(
-    async (_workspaceId: string, versionId: string) => ({
+  readTargetTextFilePreview: vi.fn(
+    async (_workspaceId: string, target: { id: string }) => ({
       kind: "markdown",
       relativePath: "SKILL.md",
       mediaType: "text/markdown",
       encoding: "utf-8",
       content:
-        versionId === versions[0]!.id ? "# V2 content" : "# V1 content",
+        target.id === initialCandidate.id
+          ? "# Candidate content"
+          : target.id === versions[0]!.id
+            ? "# V2 content"
+            : "# V1 content",
     }),
   ),
-  getImagePreviewUrl: vi.fn(() => "/image"),
-  getFileDownloadUrl: vi.fn(() => "/download"),
+  getTargetImagePreviewUrl: vi.fn(() => "/image"),
+  getTargetFileDownloadUrl: vi.fn(() => "/download"),
 }))
 
 beforeAll(() => {
@@ -100,7 +138,9 @@ function VersionSwitchHarness() {
       locale="zh-CN"
       onBack={vi.fn()}
       onFileSelect={vi.fn()}
-      onVersionSelect={setVersionId}
+      onTargetSelect={(target) => {
+        if (target.kind === "version") setVersionId(target.id)
+      }}
       selectedFilePath={null}
       selectedVersionId={versionId}
       workspace={{
@@ -108,6 +148,7 @@ function VersionSwitchHarness() {
         name: "版本切换工作台",
         createdAt: "2026-07-25T00:00:00.000Z",
         updatedAt: "2026-07-25T02:00:00.000Z",
+        activeDraft: null,
         currentVersion: {
           id: versions[0]!.id,
           versionNumber: 2,
@@ -128,6 +169,49 @@ function VersionSwitchHarness() {
 }
 
 describe("VersionBrowserView", () => {
+  it("browses the initial candidate without presenting it as V1", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <I18nextProvider i18n={i18n}>
+        <QueryClientProvider client={queryClient}>
+          <VersionBrowserView
+            locale="en"
+            onBack={vi.fn()}
+            onFileSelect={vi.fn()}
+            onTargetSelect={vi.fn()}
+            selectedFilePath={null}
+            selectedVersionId={null}
+            workspace={{
+              id: "01900000-0000-7000-8000-000000000999",
+              name: "Candidate workbench",
+              createdAt: initialCandidate.createdAt,
+              updatedAt: initialCandidate.updatedAt,
+              currentVersion: null,
+              activeDraft: {
+                ...initialCandidate,
+                snapshot: {
+                  id: initialCandidate.snapshot.id,
+                  manifestHash: initialCandidate.snapshot.manifestHash,
+                  fileCount: initialCandidate.snapshot.fileCount,
+                  totalBytes: initialCandidate.snapshot.totalBytes,
+                },
+              },
+            }}
+          />
+        </QueryClientProvider>
+      </I18nextProvider>,
+    )
+
+    expect(
+      await screen.findByRole("heading", { name: "Candidate content" }),
+    ).toBeInTheDocument()
+    expect(screen.getAllByText("Initial candidate").length).toBeGreaterThan(0)
+    expect(screen.getByText("Awaiting test and confirmation")).toBeInTheDocument()
+    expect(screen.queryByText("V1")).not.toBeInTheDocument()
+  })
+
   it("synchronizes preview and metadata when switching to a historical version", async () => {
     const user = userEvent.setup()
     const queryClient = new QueryClient({
@@ -146,8 +230,10 @@ describe("VersionBrowserView", () => {
     ).toBeInTheDocument()
 
     await user.selectOptions(
-      screen.getByRole("combobox", { name: "Select formal version" }),
-      versions[1]!.id,
+      screen.getByRole("combobox", {
+        name: "Select candidate or version",
+      }),
+      `version:${versions[1]!.id}`,
     )
 
     expect(
@@ -158,7 +244,9 @@ describe("VersionBrowserView", () => {
       expect(screen.getByText("first-source")).toBeInTheDocument()
     })
     expect(
-      screen.getByRole("combobox", { name: "Select formal version" }),
-    ).toHaveValue(versions[1]!.id)
+      screen.getByRole("combobox", {
+        name: "Select candidate or version",
+      }),
+    ).toHaveValue(`version:${versions[1]!.id}`)
   })
 })

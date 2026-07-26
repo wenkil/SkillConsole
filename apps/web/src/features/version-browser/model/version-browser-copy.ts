@@ -7,10 +7,14 @@ export interface VersionBrowserCopy {
   versionPicker: string
   currentVersion: string
   historicalVersion: string
+  initialCandidate: string
+  candidateState: string
   defaultBaseline: string
   notTested: string
   immutableTitle: string
   immutableDescription: string
+  candidateTitle: string
+  candidateDescription: string
   files: string
   searchFiles: string
   noSearchResults: string
@@ -32,11 +36,14 @@ export interface VersionBrowserCopy {
   imageUnavailableTitle: string
   download: string
   versionInfo: string
+  candidateInfo: string
   snapshotInfo: string
   versionNumber: string
   sourceType: string
   sourceName: string
   publishedAt: string
+  updatedAt: string
+  contentRevision: string
   createdAt: string
   snapshotState: string
   fileCount: string
@@ -72,10 +79,14 @@ export function getVersionBrowserCopy(
     versionPicker: translate("header.versionPicker"),
     currentVersion: translate("header.currentVersion"),
     historicalVersion: translate("header.historicalVersion"),
+    initialCandidate: translate("header.initialCandidate"),
+    candidateState: translate("header.candidateState"),
     defaultBaseline: translate("header.defaultBaseline"),
     notTested: translate("header.notTested"),
     immutableTitle: translate("immutable.title"),
     immutableDescription: translate("immutable.description"),
+    candidateTitle: translate("candidate.title"),
+    candidateDescription: translate("candidate.description"),
     files: translate("tree.files"),
     searchFiles: translate("tree.search"),
     noSearchResults: translate("tree.noResults"),
@@ -97,11 +108,14 @@ export function getVersionBrowserCopy(
     imageUnavailableTitle: translate("states.imageUnavailableTitle"),
     download: translate("actions.download"),
     versionInfo: translate("metadata.version"),
+    candidateInfo: translate("metadata.candidate"),
     snapshotInfo: translate("metadata.snapshot"),
     versionNumber: translate("metadata.versionNumber"),
     sourceType: translate("metadata.sourceType"),
     sourceName: translate("metadata.sourceName"),
     publishedAt: translate("metadata.publishedAt"),
+    updatedAt: translate("metadata.updatedAt"),
+    contentRevision: translate("metadata.contentRevision"),
     createdAt: translate("metadata.createdAt"),
     snapshotState: translate("metadata.snapshotState"),
     fileCount: translate("metadata.fileCount"),

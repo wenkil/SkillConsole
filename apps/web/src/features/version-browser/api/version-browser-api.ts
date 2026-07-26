@@ -1,4 +1,6 @@
 import type {
+  SkillBrowserTarget,
+  SkillDraftBrowser,
   SkillVersionBrowser,
   SnapshotFileList,
   TextFilePreview,
@@ -9,12 +11,31 @@ function versionBaseUrl(workspaceId: string, versionId: string): string {
   return `/api/skill-workspaces/${encodeURIComponent(workspaceId)}/versions/${encodeURIComponent(versionId)}`
 }
 
+function draftBaseUrl(workspaceId: string): string {
+  return `/api/skill-workspaces/${encodeURIComponent(workspaceId)}/draft`
+}
+
+function targetBaseUrl(
+  workspaceId: string,
+  target: Pick<SkillBrowserTarget, "kind" | "id">,
+): string {
+  return target.kind === "draft"
+    ? draftBaseUrl(workspaceId)
+    : versionBaseUrl(workspaceId, target.id)
+}
+
 async function readJson<T>(url: string): Promise<T> {
   const response = await fetch(url, {
     headers: { Accept: "application/json" },
   })
   if (!response.ok) throw await readApiError(response)
   return (await response.json()) as T
+}
+
+export function getActiveSkillDraft(
+  workspaceId: string,
+): Promise<SkillDraftBrowser> {
+  return readJson(draftBaseUrl(workspaceId))
 }
 
 export function listSkillVersions(
@@ -25,38 +46,38 @@ export function listSkillVersions(
   )
 }
 
-export function listVersionFiles(
+export function listTargetFiles(
   workspaceId: string,
-  versionId: string,
+  target: Pick<SkillBrowserTarget, "kind" | "id">,
 ): Promise<SnapshotFileList> {
-  return readJson(`${versionBaseUrl(workspaceId, versionId)}/files`)
+  return readJson(`${targetBaseUrl(workspaceId, target)}/files`)
 }
 
-export function readTextFilePreview(
+export function readTargetTextFilePreview(
   workspaceId: string,
-  versionId: string,
+  target: Pick<SkillBrowserTarget, "kind" | "id">,
   relativePath: string,
 ): Promise<TextFilePreview> {
   const query = new URLSearchParams({ path: relativePath })
   return readJson(
-    `${versionBaseUrl(workspaceId, versionId)}/files/text-preview?${query}`,
+    `${targetBaseUrl(workspaceId, target)}/files/text-preview?${query}`,
   )
 }
 
-export function getImagePreviewUrl(
+export function getTargetImagePreviewUrl(
   workspaceId: string,
-  versionId: string,
+  target: Pick<SkillBrowserTarget, "kind" | "id">,
   relativePath: string,
 ): string {
   const query = new URLSearchParams({ path: relativePath })
-  return `${versionBaseUrl(workspaceId, versionId)}/files/image-preview?${query}`
+  return `${targetBaseUrl(workspaceId, target)}/files/image-preview?${query}`
 }
 
-export function getFileDownloadUrl(
+export function getTargetFileDownloadUrl(
   workspaceId: string,
-  versionId: string,
+  target: Pick<SkillBrowserTarget, "kind" | "id">,
   relativePath: string,
 ): string {
   const query = new URLSearchParams({ path: relativePath })
-  return `${versionBaseUrl(workspaceId, versionId)}/files/download?${query}`
+  return `${targetBaseUrl(workspaceId, target)}/files/download?${query}`
 }

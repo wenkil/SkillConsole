@@ -44,6 +44,29 @@ export const SkillVersionBrowserListSchema = Type.Array(
   SkillVersionBrowserSchema,
 )
 
+export const SkillDraftBrowserSchema = Type.Object(
+  {
+    id: Type.String({ format: "uuid" }),
+    improvementCycleId: Type.String({ format: "uuid" }),
+    baseVersionId: Type.Union([
+      Type.String({ format: "uuid" }),
+      Type.Null(),
+    ]),
+    baseSnapshotId: Type.String({ format: "uuid" }),
+    contentRevision: Type.Integer({ minimum: 1 }),
+    status: Type.Union([
+      Type.Literal("OPEN"),
+      Type.Literal("FINALIZING"),
+    ]),
+    sourceType: SkillSourceTypeSchema,
+    sourceName: Type.String({ minLength: 1 }),
+    createdAt: Type.String({ format: "date-time" }),
+    updatedAt: Type.String({ format: "date-time" }),
+    snapshot: VersionBrowserSnapshotSchema,
+  },
+  { additionalProperties: false },
+)
+
 export const WorkspaceVersionParamsSchema = Type.Object(
   {
     workspaceId: Type.String({ format: "uuid" }),
@@ -111,6 +134,7 @@ export const TextFilePreviewSchema = Type.Object(
 export type SkillVersionBrowser = Static<
   typeof SkillVersionBrowserSchema
 >
+export type SkillDraftBrowser = Static<typeof SkillDraftBrowserSchema>
 export type SnapshotFile = Static<typeof SnapshotFileSchema>
 export type SnapshotFilePreviewKind = Static<
   typeof SnapshotFilePreviewKindSchema

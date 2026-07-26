@@ -34,11 +34,34 @@ export function WorkbenchOverview({
   onBack,
 }: WorkbenchOverviewProps) {
   const version = workspace.currentVersion
-  const snapshot = version.snapshot
-  const publishedAt = new Intl.DateTimeFormat(locale, {
+  const candidate = workspace.activeDraft
+  const content = candidate ?? version
+  if (!content) {
+    return (
+      <main className="min-w-0 px-10 py-9">
+        <Button onClick={onBack} type="button" variant="link">
+          <ArrowLeft aria-hidden="true" data-icon="inline-start" />
+          {copy.backToHome}
+        </Button>
+        <p className="mt-6 text-sm text-muted-foreground">
+          {copy.noFormalVersion}
+        </p>
+      </main>
+    )
+  }
+
+  const snapshot = content.snapshot
+  const contentLabel = candidate
+    ? copy.initialCandidateStatus
+    : `V${version?.versionNumber ?? ""}`
+  const recordedAtSource =
+    candidate?.updatedAt ?? version?.publishedAt ?? workspace.createdAt
+  const recordedAt = new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
     timeStyle: "short",
-  }).format(new Date(version.publishedAt))
+  }).format(
+    new Date(recordedAtSource),
+  )
 
   return (
     <main className="min-w-0 px-10 py-9">
@@ -55,7 +78,8 @@ export function WorkbenchOverview({
       <header className="border-b border-foreground pb-7">
         <div className="mb-2.5 flex items-center gap-2 font-mono text-[11px] font-bold tracking-[0.08em] text-signal-dark uppercase">
           <PackageCheck aria-hidden="true" className="size-3.5" />
-          {copy.overviewEyebrow} / V{version.versionNumber}
+          {copy.overviewEyebrow} /{" "}
+          {contentLabel}
         </div>
         <div className="flex items-end justify-between gap-8">
           <div>
@@ -72,7 +96,9 @@ export function WorkbenchOverview({
             </span>
             <strong className="mt-1 flex items-center gap-1.5 text-sm text-technical-foreground">
               <CheckCircle2 aria-hidden="true" className="size-4" />
-              {copy.publishedWithoutTests}
+              {candidate
+                ? copy.candidateWithoutTests
+                : copy.publishedWithoutTests}
             </strong>
           </div>
         </div>
@@ -88,7 +114,7 @@ export function WorkbenchOverview({
             {copy.currentVersion}
           </span>
           <strong className="mt-1 block text-xl">
-            V{version.versionNumber}
+            {contentLabel}
           </strong>
         </article>
         <article className="border-r border-rule px-5 py-5">
@@ -97,7 +123,7 @@ export function WorkbenchOverview({
             {copy.defaultBaseline}
           </span>
           <strong className="mt-1 block text-sm">
-            {version.isDefaultBaseline
+            {version?.isDefaultBaseline
               ? copy.v1DefaultBaseline
               : copy.notBaseline}
           </strong>
@@ -108,7 +134,7 @@ export function WorkbenchOverview({
             {copy.sourceType}
           </span>
           <strong className="mt-1 block truncate text-sm">
-            {copy.sourceKinds[version.sourceType].label}
+            {copy.sourceKinds[content.sourceType].label}
           </strong>
         </article>
         <article className="px-5 py-5">
@@ -188,14 +214,14 @@ export function WorkbenchOverview({
                   {copy.sourceName}
                 </dt>
                 <dd className="mt-1 truncate text-sm font-semibold">
-                  {version.sourceName}
+                  {content.sourceName}
                 </dd>
               </div>
               <div>
                 <dt className="font-mono text-[10px] text-muted-foreground uppercase">
                   {copy.publishedAt}
                 </dt>
-                <dd className="mt-1 text-sm font-semibold">{publishedAt}</dd>
+                <dd className="mt-1 text-sm font-semibold">{recordedAt}</dd>
               </div>
             </dl>
           </article>
@@ -203,9 +229,13 @@ export function WorkbenchOverview({
 
         <div className="mt-4 border border-rule bg-paper-muted px-5 py-4 text-sm leading-relaxed text-muted-foreground">
           <strong className="mr-2 text-foreground">
-            {copy.immutableVersionTitle}
+            {candidate
+              ? copy.candidateContentTitle
+              : copy.immutableVersionTitle}
           </strong>
-          {copy.immutableVersionDescription}
+          {candidate
+            ? copy.candidateContentDescription
+            : copy.immutableVersionDescription}
         </div>
       </section>
     </main>

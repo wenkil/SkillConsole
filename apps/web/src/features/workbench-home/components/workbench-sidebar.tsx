@@ -114,10 +114,16 @@ export function WorkbenchSidebar({
                   </span>
                   <span className="mt-1.5 flex items-center justify-between gap-2 font-mono text-[10px] text-muted-foreground">
                     <span className="truncate">
-                      {workspace.currentVersion.sourceName}
+                      {workspace.activeDraft?.sourceName ??
+                        workspace.currentVersion?.sourceName ??
+                        copy.noFormalVersion}
                     </span>
                     <span className="shrink-0">
-                      V{workspace.currentVersion.versionNumber}
+                      {workspace.activeDraft
+                        ? copy.initialCandidateStatus
+                        : workspace.currentVersion
+                          ? `V${workspace.currentVersion.versionNumber}`
+                          : copy.noFormalVersion}
                     </span>
                   </span>
                 </button>

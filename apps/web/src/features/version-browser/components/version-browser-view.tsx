@@ -6,6 +6,7 @@ import {
   LoaderCircle,
   LockKeyhole,
   PackageOpen,
+  PencilLine,
   RotateCcw,
 } from "lucide-react"
 
@@ -13,6 +14,7 @@ import { VersionFilePreview } from "@/features/version-browser/components/versio
 import { VersionFileTree } from "@/features/version-browser/components/version-file-tree"
 import { VersionMetadataPanel } from "@/features/version-browser/components/version-metadata-panel"
 import { useVersionBrowserController } from "@/features/version-browser/hooks/use-version-browser-controller"
+import type { SkillBrowserTarget } from "@/features/version-browser/model/version-browser"
 import type { SkillWorkspace } from "@/features/workbench-home/model/workbench"
 import { Button } from "@/shared/components/ui/button"
 
@@ -22,7 +24,7 @@ interface VersionBrowserViewProps {
   selectedVersionId: string | null
   selectedFilePath: string | null
   onBack: () => void
-  onVersionSelect: (versionId: string) => void
+  onTargetSelect: (target: Pick<SkillBrowserTarget, "kind" | "id">) => void
   onFileSelect: (relativePath: string) => void
 }
 
@@ -32,15 +34,16 @@ export function VersionBrowserView({
   selectedVersionId,
   selectedFilePath,
   onBack,
-  onVersionSelect,
+  onTargetSelect,
   onFileSelect,
 }: VersionBrowserViewProps) {
   const controller = useVersionBrowserController({
     workspaceId: workspace.id,
+    activeDraftId: workspace.activeDraft?.id ?? null,
     selectedVersionId,
     selectedFilePath,
   })
-  const { copy, selectedVersion } = controller
+  const { copy, selectedTarget } = controller
 
   if (controller.loading) {
     return (
@@ -53,7 +56,7 @@ export function VersionBrowserView({
     )
   }
 
-  if (controller.error || !selectedVersion) {
+  if (controller.error || !selectedTarget) {
     return (
       <main className="flex h-full min-h-0 min-w-0 items-center justify-center overflow-hidden px-10 py-9">
         <div className="max-w-md border border-destructive/50 bg-paper-raised p-7 text-center">
@@ -94,12 +97,17 @@ export function VersionBrowserView({
               {copy.backToHome}
             </Button>
             <div className="mb-1.5 flex items-center gap-2 font-mono text-[10px] font-bold tracking-[0.08em] text-signal-dark uppercase">
-              {selectedVersion.isCurrent ? (
+              {selectedTarget.kind === "draft" ? (
+                <PencilLine aria-hidden="true" className="size-3.5" />
+              ) : selectedTarget.isCurrent ? (
                 <CheckCircle2 aria-hidden="true" className="size-3.5" />
               ) : (
                 <History aria-hidden="true" className="size-3.5" />
               )}
-              {copy.eyebrow} / V{selectedVersion.versionNumber}
+              {copy.eyebrow} /{" "}
+              {selectedTarget.kind === "draft"
+                ? copy.initialCandidate
+                : `V${selectedTarget.versionNumber}`}
             </div>
             <h1 className="truncate text-[clamp(1.75rem,2.4vw,2.5rem)] leading-none font-[780] tracking-[-0.035em]">
               {workspace.name}
@@ -112,19 +120,34 @@ export function VersionBrowserView({
               <select
                 aria-label={copy.versionPicker}
                 className="h-9 min-w-44 border border-foreground bg-paper-raised px-3 font-mono text-xs text-foreground outline-none focus:border-primary"
-                onChange={(event) => onVersionSelect(event.target.value)}
-                value={selectedVersion.id}
+                onChange={(event) => {
+                  const target = controller.targets.find(
+                    (item) =>
+                      `${item.kind}:${item.id}` === event.target.value,
+                  )
+                  if (target) onTargetSelect(target)
+                }}
+                value={`${selectedTarget.kind}:${selectedTarget.id}`}
               >
-                {controller.versions.map((version) => (
-                  <option key={version.id} value={version.id}>
-                    V{version.versionNumber}
-                    {version.isCurrent ? ` · ${copy.currentVersion}` : ""}
+                {controller.targets.map((target) => (
+                  <option
+                    key={`${target.kind}:${target.id}`}
+                    value={`${target.kind}:${target.id}`}
+                  >
+                    {target.kind === "draft"
+                      ? copy.initialCandidate
+                      : `V${target.versionNumber}${target.isCurrent ? ` · ${copy.currentVersion}` : ""}`}
                   </option>
                 ))}
               </select>
             </label>
             <div className="flex h-9 items-center gap-2 border border-rule bg-paper-raised px-3 font-mono text-[10px]">
-              {selectedVersion.isCurrent ? (
+              {selectedTarget.kind === "draft" ? (
+                <>
+                  <PencilLine aria-hidden="true" className="size-3.5 text-primary" />
+                  {copy.candidateState}
+                </>
+              ) : selectedTarget.isCurrent ? (
                 <>
                   <CheckCircle2 aria-hidden="true" className="size-3.5 text-signal-dark" />
                   {copy.currentVersion}
@@ -136,7 +159,8 @@ export function VersionBrowserView({
                 </>
               )}
             </div>
-            {selectedVersion.isDefaultBaseline ? (
+            {selectedTarget.kind === "version" &&
+            selectedTarget.isDefaultBaseline ? (
               <div className="flex h-9 items-center gap-2 border border-rule bg-paper-raised px-3 font-mono text-[10px]">
                 <Baseline aria-hidden="true" className="size-3.5 text-technical" />
                 {copy.defaultBaseline}
@@ -149,10 +173,20 @@ export function VersionBrowserView({
         </div>
 
         <div className="mt-4 flex items-center gap-3 border border-technical/55 bg-technical/5 px-3.5 py-2 text-xs text-technical-foreground">
-          <LockKeyhole aria-hidden="true" className="size-4 shrink-0" />
-          <strong>{copy.immutableTitle}</strong>
+          {selectedTarget.kind === "draft" ? (
+            <PencilLine aria-hidden="true" className="size-4 shrink-0" />
+          ) : (
+            <LockKeyhole aria-hidden="true" className="size-4 shrink-0" />
+          )}
+          <strong>
+            {selectedTarget.kind === "draft"
+              ? copy.candidateTitle
+              : copy.immutableTitle}
+          </strong>
           <span className="text-muted-foreground">
-            {copy.immutableDescription}
+            {selectedTarget.kind === "draft"
+              ? copy.candidateDescription
+              : copy.immutableDescription}
           </span>
         </div>
       </header>
@@ -184,7 +218,7 @@ export function VersionBrowserView({
           copy={copy}
           file={controller.selectedFile}
           locale={locale}
-          version={selectedVersion}
+          target={selectedTarget}
         />
       </div>
     </main>

@@ -7,17 +7,19 @@
     "errorDescription": "Make sure the local service and database are running, then retry.",
     "retry": "Reload",
     "emptyTitle": "No workbenches yet",
-    "emptyDescription": "Your first Skill testing workbench will appear here after it is created."
+    "emptyDescription": "Your first Skill testing workbench will appear here after it is created.",
+    "initialCandidate": "Initial candidate · no formal version",
+    "noFormalVersion": "No formal version"
   },
   "hero": {
     "eyebrow": "Skill version and test evidence workbench",
     "title": "Create a Skill testing workbench",
-    "description": "Create an immutable V1 from a real Skill source, then keep future versions, test inputs, execution evidence, and reports in one long-lived workbench.",
+    "description": "Create an initial candidate from a real Skill source, then keep improvements, test inputs, execution evidence, and formal versions in one long-lived workbench.",
     "createWorkbench": "Create workbench"
   },
   "setup": {
-    "title": "Initial version setup",
-    "description": "After you select a Skill source, the server validates paths and resource limits again before atomically publishing an immutable V1.",
+    "title": "Initial candidate setup",
+    "description": "After you select a Skill source, the server validates paths and resource limits again before atomically saving a candidate for testing.",
     "steps": {
       "name": {
         "title": "Name the workbench",
@@ -25,15 +27,15 @@
       },
       "source": {
         "title": "Select Skill source",
-        "description": "Choose a complete Skill folder or import a ZIP archive used only for the initial version."
+        "description": "Choose a complete Skill folder or import a ZIP archive used only for initial creation."
       },
       "validate": {
         "title": "Validate and manifest",
         "description": "The server checks paths, sizes, and conflicts, then calculates SHA-256 for every file."
       },
       "publish": {
-        "title": "Publish V1 atomically",
-        "description": "Only a ready, complete Snapshot becomes V1 and the default baseline."
+        "title": "Save candidate atomically",
+        "description": "A ready Snapshot creates an open Draft and improvement cycle, without a formal version or default baseline."
       }
     }
   },
@@ -42,9 +44,9 @@
     "description": "Skill files are copied only into the self-hosted service's controlled data directory. Real absolute paths are not read and source files are never written back."
   },
   "createDialog": {
-    "initialVersion": "Initial formal version",
+    "initialCandidate": "Initial content candidate",
     "title": "Create Skill testing workbench",
-    "description": "This creates the workbench, a complete file Snapshot, and immutable V1 together.",
+    "description": "This creates the workbench, a complete file Snapshot, an open Draft, and an improvement cycle without publishing V1.",
     "workbenchName": "Workbench name",
     "workbenchNamePlaceholder": "For example: Invoice Review Skill Workbench",
     "workbenchNameHelp": "One workbench manages one Skill over time. The name must be unique.",
@@ -79,8 +81,8 @@
     "serverValidationNote": "The browser summary is for confirmation only. The server revalidates paths, hashes, sizes, and ZIP safety rules.",
     "ignoredFolderFiles": "{{count}} dependency, cache, or package file(s) were ignored by the server policy.",
     "cancel": "Cancel",
-    "createWorkbenchAndV1": "Create workbench and publish V1",
-    "publishingVersion": "Validating and publishing V1",
+    "createWorkbenchAndCandidate": "Create workbench and save candidate",
+    "savingCandidate": "Validating and saving candidate",
     "nameRequired": "Enter a workbench name.",
     "errors": {
       "sourceRequired": "Choose a complete Skill folder or ZIP archive.",
@@ -89,7 +91,7 @@
       "folderFilesIgnored": "Every file in the selected folder was ignored by the upload policy.",
       "zipRequired": "Choose one valid .zip archive."
     },
-    "createFailed": "V1 creation failed",
+    "createFailed": "Initial candidate creation failed",
     "unknownCreateError": "Creation could not be completed. Check the local service and try again."
   },
   "settingsDialog": {
@@ -101,29 +103,32 @@
     "saveSettings": "Save settings"
   },
   "notifications": {
-    "workspaceCreated": "Workbench and V1 created",
+    "workspaceCreated": "Workbench and initial candidate created",
     "settingsSaved": "Settings saved"
   },
   "overview": {
     "backToHome": "Back to workbench home",
     "eyebrow": "Workbench overview",
-    "description": "V1 was published from the complete file manifest validated by the server. This screen shows only facts created in iteration one, without draft or testing placeholders.",
-    "versionState": "Version state",
+    "description": "The current content comes from a complete server-validated Snapshot. An initial candidate becomes an immutable formal version only after tests pass and the user confirms publication.",
+    "versionState": "Content state",
     "publishedWithoutTests": "Published · not tested",
-    "versionSummary": "Version summary",
-    "currentVersion": "Current formal version",
+    "candidateWithoutTests": "Candidate saved · not tested",
+    "versionSummary": "Content summary",
+    "currentVersion": "Current content",
     "defaultBaseline": "Default baseline",
     "v1DefaultBaseline": "V1 · default baseline",
-    "notBaseline": "Not the default baseline",
+    "notBaseline": "No default baseline yet",
     "testState": "Test state",
     "notTested": "Not tested",
     "snapshotEvidence": "Snapshot facts",
     "manifestIdentity": "Manifest identity",
     "manifestHash": "Manifest hash",
-    "publishRecord": "Publish record",
+    "publishRecord": "Source record",
     "sourceName": "Source name",
-    "publishedAt": "Published at",
+    "publishedAt": "Recorded at",
     "immutableVersionTitle": "Formal versions are immutable.",
-    "immutableVersionDescription": "Future changes will happen in a draft. This iteration never rewrites V1 and never presents “default baseline” as a passing test result."
+    "immutableVersionDescription": "Formal version content and its Manifest remain immutable. Future changes must happen in a new improvement cycle.",
+    "candidateContentTitle": "The initial candidate is not a formal version.",
+    "candidateContentDescription": "Candidates can move through improvement and testing. An immutable formal version is created only after tests pass and the user explicitly confirms publication."
   }
 }

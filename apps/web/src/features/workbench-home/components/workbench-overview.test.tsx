@@ -11,7 +11,7 @@ const copy = getWorkbenchHomeCopy(
 )
 
 describe("WorkbenchOverview", () => {
-  it("shows immutable V1 facts without presenting the baseline as passed", () => {
+  it("shows formal version facts without presenting the baseline as passed", () => {
     render(
       <WorkbenchOverview
         copy={copy}
@@ -22,6 +22,7 @@ describe("WorkbenchOverview", () => {
           name: "发票审核 Skill",
           createdAt: "2026-07-24T10:00:00.000Z",
           updatedAt: "2026-07-24T10:00:00.000Z",
+          activeDraft: null,
           currentVersion: {
             id: "01900000-0000-7000-8000-000000000002",
             versionNumber: 1,
