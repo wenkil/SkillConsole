@@ -1,6 +1,8 @@
 export {
   skillDrafts,
   skillDraftStatus,
+  skillDraftMutations,
+  skillDraftRevisions,
   skillImprovementCycles,
   skillImprovementCycleStatus,
   skillSnapshotFiles,
@@ -14,6 +16,8 @@ export {
   uploadOperationState,
   type NewSkillWorkspaceRow,
   type SkillDraftRow,
+  type SkillDraftMutationRow,
+  type SkillDraftRevisionRow,
   type SkillImprovementCycleRow,
   type SkillSnapshotFileRow,
   type SkillSnapshotRow,

@@ -12,7 +12,7 @@
     "migrate:dev": "tsx src/infrastructure/database/migrate.ts",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test test/first-iteration.test.ts"
+    "test": "tsx --test test/first-iteration.test.ts test/third-iteration.test.ts"
   },
   "dependencies": {
     "@fastify/helmet": "^13.1.0",

@@ -35,6 +35,7 @@ export interface VersionBrowserCopy {
   binaryFileTitle: string
   imageUnavailableTitle: string
   download: string
+  newVersionDraft: string
   versionInfo: string
   candidateInfo: string
   snapshotInfo: string
@@ -107,6 +108,7 @@ export function getVersionBrowserCopy(
     binaryFileTitle: translate("states.binaryFileTitle"),
     imageUnavailableTitle: translate("states.imageUnavailableTitle"),
     download: translate("actions.download"),
+    newVersionDraft: translate("draft.newVersion"),
     versionInfo: translate("metadata.version"),
     candidateInfo: translate("metadata.candidate"),
     snapshotInfo: translate("metadata.snapshot"),

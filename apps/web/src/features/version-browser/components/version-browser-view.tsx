@@ -11,6 +11,8 @@ import {
 } from "lucide-react"
 
 import { VersionFilePreview } from "@/features/version-browser/components/version-file-preview"
+import { DraftFileEditor } from "@/features/version-browser/components/draft-file-editor"
+import { DraftChangePanel } from "@/features/version-browser/components/draft-change-panel"
 import { VersionFileTree } from "@/features/version-browser/components/version-file-tree"
 import { VersionMetadataPanel } from "@/features/version-browser/components/version-metadata-panel"
 import { useVersionBrowserController } from "@/features/version-browser/hooks/use-version-browser-controller"
@@ -169,6 +171,28 @@ export function VersionBrowserView({
             <div className="flex h-9 items-center border border-rule bg-paper-muted px-3 font-mono text-[10px] text-muted-foreground">
               {copy.notTested}
             </div>
+            {selectedTarget.kind === "version" &&
+            selectedTarget.isCurrent &&
+            !controller.targets.some((target) => target.kind === "draft") ? (
+              <Button
+                className="h-9 rounded-none"
+                disabled={controller.mutationPending}
+                onClick={() => {
+                  void controller.actions
+                    .createDraft()
+                    .then((draftId) => {
+                      if (draftId) {
+                        onTargetSelect({ kind: "draft", id: draftId })
+                      }
+                    })
+                    .catch(() => undefined)
+                }}
+                type="button"
+              >
+                <PencilLine aria-hidden="true" data-icon="inline-start" />
+                {copy.newVersionDraft}
+              </Button>
+            ) : null}
           </div>
         </div>
 
@@ -201,25 +225,88 @@ export function VersionBrowserView({
           selectedPath={controller.selectedFilePath}
           tree={controller.tree}
         />
-        <VersionFilePreview
-          copy={copy}
-          downloadUrl={controller.downloadUrl}
-          file={controller.selectedFile}
-          imagePreviewUrl={controller.imagePreviewUrl}
-          loading={controller.filesLoading || controller.previewLoading}
-          markdownView={controller.markdownView}
-          onMarkdownViewChange={controller.actions.setMarkdownView}
-          onPathSelect={onFileSelect}
-          onRetry={controller.actions.retryPreview}
-          previewIssue={controller.previewIssue}
-          textPreview={controller.textPreview}
-        />
-        <VersionMetadataPanel
-          copy={copy}
-          file={controller.selectedFile}
-          locale={locale}
-          target={selectedTarget}
-        />
+        {selectedTarget.kind === "draft" &&
+        controller.selectedFile &&
+        controller.textPreview &&
+        [".md", ".txt", ".json", ".yaml", ".yml"].some((extension) =>
+          controller.selectedFile!.relativePath
+            .toLowerCase()
+            .endsWith(extension),
+        ) ? (
+          <DraftFileEditor
+            basePreview={controller.baseTextPreview}
+            conflict={controller.conflict}
+            conflictServerPreview={controller.conflictServerPreview}
+            diffEntry={
+              controller.draftDiff?.entries.find(
+                (entry) =>
+                  entry.relativePath ===
+                  controller.selectedFile?.relativePath,
+              ) ?? null
+            }
+            errorMessage={controller.mutationError?.message ?? null}
+            file={controller.selectedFile}
+            key={controller.selectedFile.relativePath}
+            onClearError={controller.actions.clearMutationError}
+            onSave={controller.actions.saveText}
+            preview={controller.textPreview}
+            saving={controller.mutationPending}
+          />
+        ) : (
+          <VersionFilePreview
+            copy={copy}
+            downloadUrl={controller.downloadUrl}
+            file={controller.selectedFile}
+            imagePreviewUrl={controller.imagePreviewUrl}
+            loading={controller.filesLoading || controller.previewLoading}
+            markdownView={controller.markdownView}
+            onMarkdownViewChange={controller.actions.setMarkdownView}
+            onPathSelect={onFileSelect}
+            onRetry={controller.actions.retryPreview}
+            previewIssue={controller.previewIssue}
+            textPreview={controller.textPreview}
+          />
+        )}
+        {selectedTarget.kind === "draft" ? (
+          <DraftChangePanel
+            diff={controller.draftDiff}
+            draft={selectedTarget}
+            errorMessage={controller.mutationError?.message ?? null}
+            file={controller.selectedFile}
+            folderPreview={controller.folderPreview}
+            onAbandon={async () => {
+              await controller.actions.abandonDraft()
+              onBack()
+            }}
+            onClearFolderPreview={controller.actions.clearFolderPreview}
+            onCommitFolder={controller.actions.commitFolder}
+            onDeleteFile={async (relativePath) => {
+              await controller.actions.deleteFile(relativePath)
+              const fallback = controller.files.find(
+                (candidate) => candidate.relativePath !== relativePath,
+              )
+              if (fallback) onFileSelect(fallback.relativePath)
+            }}
+            onMoveFile={async (fromPath, toPath) => {
+              await controller.actions.moveFile(fromPath, toPath)
+              onFileSelect(toPath)
+            }}
+            onPreviewFolder={controller.actions.previewFolder}
+            onSelectPath={onFileSelect}
+            onUploadFile={async (file, relativePath) => {
+              await controller.actions.uploadFile(file, relativePath)
+              onFileSelect(relativePath)
+            }}
+            pending={controller.mutationPending}
+          />
+        ) : (
+          <VersionMetadataPanel
+            copy={copy}
+            file={controller.selectedFile}
+            locale={locale}
+            target={selectedTarget}
+          />
+        )}
       </div>
     </main>
   )

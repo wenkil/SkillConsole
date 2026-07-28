@@ -158,6 +158,8 @@ export async function getActiveSkillDraft(
       status: skillDrafts.status,
       sourceType: skillDrafts.sourceType,
       sourceName: skillDrafts.sourceName,
+      ignoreRules: skillDrafts.ignoreRules,
+      ignoredPaths: skillDrafts.currentIgnoredPaths,
       createdAt: skillDrafts.createdAt,
       updatedAt: skillDrafts.updatedAt,
       snapshotId: skillSnapshots.id,
@@ -206,6 +208,8 @@ export async function getActiveSkillDraft(
     status: row.status,
     sourceType: row.sourceType,
     sourceName: row.sourceName,
+    ignoreRules: [...row.ignoreRules],
+    ignoredPaths: [...row.ignoredPaths],
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     snapshot: {

@@ -1,6 +1,8 @@
 import { createWriteStream } from "node:fs"
 import {
+  copyFile,
   mkdir,
+  readFile,
   rename,
   rm,
   writeFile,
@@ -107,10 +109,39 @@ export class LocalSnapshotStorage {
     return snapshotFilePath
   }
 
+  getOperationContentFilePath(
+    operationId: string,
+    relativePath: string,
+  ): string {
+    const operationRoot = this.getOperationRoot(operationId)
+    const contentRoot = path.join(operationRoot, "content")
+    const segments = relativePath.split("/")
+    if (
+      !relativePath ||
+      relativePath.includes("\\") ||
+      path.posix.isAbsolute(relativePath) ||
+      segments.some(
+        (segment) => segment === "" || segment === "." || segment === "..",
+      )
+    ) {
+      throw new Error("An operation content path is invalid.")
+    }
+
+    const target = path.join(contentRoot, ...segments)
+    assertWithinRoot(contentRoot, target)
+    return target
+  }
+
   async resetOperation(operationId: string): Promise<void> {
     const operationRoot = this.getOperationRoot(operationId)
     await rm(operationRoot, { recursive: true, force: true })
     await mkdir(path.join(operationRoot, "incoming"), { recursive: true })
+  }
+
+  async createOperation(operationId: string): Promise<void> {
+    const operationRoot = this.getOperationRoot(operationId)
+    await mkdir(operationRoot)
+    await mkdir(path.join(operationRoot, "incoming"))
   }
 
   async cleanupOperation(operationId: string): Promise<void> {
@@ -118,6 +149,21 @@ export class LocalSnapshotStorage {
       recursive: true,
       force: true,
     })
+  }
+
+  async retainOperationMetadataOnly(operationId: string): Promise<void> {
+    const operationRoot = this.getOperationRoot(operationId)
+    await Promise.all([
+      rm(path.join(operationRoot, "incoming"), {
+        recursive: true,
+        force: true,
+      }),
+      rm(path.join(operationRoot, "content"), {
+        recursive: true,
+        force: true,
+      }),
+      rm(path.join(operationRoot, "source.zip"), { force: true }),
+    ])
   }
 
   async writeIncomingStream(
@@ -213,6 +259,91 @@ export class LocalSnapshotStorage {
     }
 
     return contentRoot
+  }
+
+  async cloneSnapshotFiles(
+    operationId: string,
+    snapshotId: string,
+    relativePaths: readonly string[],
+  ): Promise<void> {
+    const operationRoot = this.getOperationRoot(operationId)
+    const contentRoot = path.join(operationRoot, "content")
+    await rm(contentRoot, { recursive: true, force: true })
+    await mkdir(contentRoot, { recursive: true })
+
+    for (const relativePath of relativePaths) {
+      const destination = this.getOperationContentFilePath(
+        operationId,
+        relativePath,
+      )
+      await mkdir(path.dirname(destination), { recursive: true })
+      await copyFile(
+        this.getSnapshotFilePath(snapshotId, relativePath),
+        destination,
+      )
+    }
+  }
+
+  async writeOperationTextFile(
+    operationId: string,
+    relativePath: string,
+    content: string,
+  ): Promise<void> {
+    const target = this.getOperationContentFilePath(operationId, relativePath)
+    await mkdir(path.dirname(target), { recursive: true })
+    await writeFile(target, content, { encoding: "utf8" })
+  }
+
+  async moveIncomingToContent(
+    operationId: string,
+    incomingIndex: number,
+    relativePath: string,
+  ): Promise<void> {
+    const target = this.getOperationContentFilePath(operationId, relativePath)
+    await mkdir(path.dirname(target), { recursive: true })
+    await rm(target, { force: true })
+    await rename(this.getIncomingPath(operationId, incomingIndex), target)
+  }
+
+  async removeOperationContentFile(
+    operationId: string,
+    relativePath: string,
+  ): Promise<void> {
+    await rm(this.getOperationContentFilePath(operationId, relativePath), {
+      force: true,
+    })
+  }
+
+  async moveOperationContentFile(
+    operationId: string,
+    fromPath: string,
+    toPath: string,
+  ): Promise<void> {
+    const source = this.getOperationContentFilePath(operationId, fromPath)
+    const target = this.getOperationContentFilePath(operationId, toPath)
+    await mkdir(path.dirname(target), { recursive: true })
+    await rename(source, target)
+  }
+
+  async writeOperationMetadata(
+    operationId: string,
+    value: unknown,
+  ): Promise<void> {
+    const operationRoot = this.getOperationRoot(operationId)
+    await writeFile(
+      path.join(operationRoot, "operation.json"),
+      `${JSON.stringify(value, null, 2)}\n`,
+      { encoding: "utf8", flag: "wx" },
+    )
+  }
+
+  async readOperationMetadata(operationId: string): Promise<unknown> {
+    const operationRoot = this.getOperationRoot(operationId)
+    const source = await readFile(
+      path.join(operationRoot, "operation.json"),
+      "utf8",
+    )
+    return JSON.parse(source) as unknown
   }
 
   async promoteSnapshot(

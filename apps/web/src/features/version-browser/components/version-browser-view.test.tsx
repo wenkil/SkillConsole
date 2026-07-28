@@ -63,6 +63,8 @@ const initialCandidate: SkillDraftBrowser = {
   status: "OPEN",
   sourceType: "folder",
   sourceName: "candidate-source",
+  ignoreRules: [],
+  ignoredPaths: [],
   createdAt: "2026-07-25T03:00:00.000Z",
   updatedAt: "2026-07-25T03:00:00.000Z",
   snapshot: {
@@ -79,7 +81,54 @@ vi.mock("@/features/version-browser/api/version-browser-api", () => ({
   listSkillVersions: vi.fn(async (workspaceId: string) =>
     workspaceId.endsWith("999") ? [] : versions,
   ),
-  getActiveSkillDraft: vi.fn(async () => initialCandidate),
+  getActiveSkillDraft: vi.fn(async () => ({
+    draft: initialCandidate,
+    etag: `"draft-${initialCandidate.id}-r1"`,
+  })),
+  readDraftDiff: vi.fn(async () => ({
+    basis: {
+      kind: "INITIAL_IMPORT",
+      snapshotId: initialCandidate.baseSnapshotId,
+      versionId: null,
+    },
+    currentSnapshotId: initialCandidate.snapshot.id,
+    contentRevision: 1,
+    summary: {
+      added: 0,
+      modified: 0,
+      deleted: 0,
+      unchanged: 1,
+      ignored: 0,
+      unpreviewable: 0,
+    },
+    entries: [
+      {
+        relativePath: "SKILL.md",
+        status: "UNCHANGED",
+        previewable: true,
+        base: {
+          sha256: "c".repeat(64),
+          byteSize: 20,
+          mediaTypeHint: "text/markdown",
+          contentKind: "text",
+        },
+        current: {
+          sha256: "c".repeat(64),
+          byteSize: 20,
+          mediaTypeHint: "text/markdown",
+          contentKind: "text",
+        },
+        ignoredReason: null,
+      },
+    ],
+  })),
+  readDraftBaseTextFile: vi.fn(async () => ({
+    kind: "markdown",
+    relativePath: "SKILL.md",
+    mediaType: "text/markdown",
+    encoding: "utf-8",
+    content: "# Candidate content",
+  })),
   listTargetFiles: vi.fn(async (_workspaceId: string, target: { id: string }) => ({
     snapshotId:
       target.id === initialCandidate.id
@@ -205,7 +254,7 @@ describe("VersionBrowserView", () => {
     )
 
     expect(
-      await screen.findByRole("heading", { name: "Candidate content" }),
+      await screen.findByRole("button", { name: "Save draft" }),
     ).toBeInTheDocument()
     expect(screen.getAllByText("Initial candidate").length).toBeGreaterThan(0)
     expect(screen.getByText("Awaiting test and confirmation")).toBeInTheDocument()

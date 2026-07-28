@@ -60,6 +60,22 @@ export const SkillDraftBrowserSchema = Type.Object(
     ]),
     sourceType: SkillSourceTypeSchema,
     sourceName: Type.String({ minLength: 1 }),
+    ignoreRules: Type.Array(Type.String({ maxLength: 512 }), {
+      maxItems: 200,
+    }),
+    ignoredPaths: Type.Array(
+      Type.Object(
+        {
+          relativePath: Type.String({ minLength: 1, maxLength: 512 }),
+          reason: Type.Union([
+            Type.Literal("protected"),
+            Type.Literal("skillconsoleignore"),
+            Type.Literal("custom"),
+          ]),
+        },
+        { additionalProperties: false },
+      ),
+    ),
     createdAt: Type.String({ format: "date-time" }),
     updatedAt: Type.String({ format: "date-time" }),
     snapshot: VersionBrowserSnapshotSchema,

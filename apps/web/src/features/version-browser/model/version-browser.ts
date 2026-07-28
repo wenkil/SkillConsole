@@ -44,6 +44,11 @@ export interface SkillDraftBrowser {
   status: "OPEN" | "FINALIZING"
   sourceType: SkillSourceKind
   sourceName: string
+  ignoreRules: string[]
+  ignoredPaths: Array<{
+    relativePath: string
+    reason: "protected" | "skillconsoleignore" | "custom"
+  }>
   createdAt: string
   updatedAt: string
   snapshot: {
@@ -54,6 +59,73 @@ export interface SkillDraftBrowser {
     totalBytes: number
     createdAt: string
   }
+}
+
+export interface DraftResource {
+  draft: SkillDraftBrowser
+  etag: string
+}
+
+export type DraftDiffStatus =
+  | "ADDED"
+  | "MODIFIED"
+  | "DELETED"
+  | "UNCHANGED"
+  | "IGNORED"
+
+export interface DraftDiffFileSide {
+  sha256: string
+  byteSize: number
+  mediaTypeHint: string
+  contentKind: "text" | "binary"
+}
+
+export interface DraftDiffEntry {
+  relativePath: string
+  status: DraftDiffStatus
+  previewable: boolean
+  base: DraftDiffFileSide | null
+  current: DraftDiffFileSide | null
+  ignoredReason:
+    | "protected"
+    | "skillconsoleignore"
+    | "custom"
+    | null
+}
+
+export interface DraftDiff {
+  basis: {
+    kind: "INITIAL_IMPORT" | "FORMAL_VERSION"
+    snapshotId: string
+    versionId: string | null
+  }
+  currentSnapshotId: string
+  contentRevision: number
+  summary: {
+    added: number
+    modified: number
+    deleted: number
+    unchanged: number
+    ignored: number
+    unpreviewable: number
+  }
+  entries: DraftDiffEntry[]
+}
+
+export interface DraftFolderReplacementPreview {
+  operationId: string
+  draftId: string
+  baseContentRevision: number
+  sourceName: string
+  ignoreRules: string[]
+  summary: DraftDiff["summary"] & {
+    conflicts: number
+    totalFiles: number
+    totalBytes: number
+  }
+  conflicts: string[]
+  requiresDeletionConfirmation: boolean
+  committable: boolean
 }
 
 export type SkillBrowserTarget =

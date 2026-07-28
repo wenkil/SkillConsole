@@ -25,6 +25,8 @@ import {
 } from "../src/infrastructure/database/client.js"
 import {
   skillDrafts,
+  skillDraftMutations,
+  skillDraftRevisions,
   skillImprovementCycles,
   skillSnapshots,
   skillVersions,
@@ -582,6 +584,120 @@ test(
         singleBody.upload.manifestHash,
       )
 
+      const singleDraftUrl =
+        `${address}/api/skill-workspaces/${singleBody.workspace.id}/draft`
+      const initialSingleDraftResponse = await fetch(singleDraftUrl)
+      assert.equal(initialSingleDraftResponse.status, 200)
+      let singleDraftEtag =
+        initialSingleDraftResponse.headers.get("etag")
+      assert.ok(singleDraftEtag)
+
+      const missingPrecondition = await fetch(
+        `${singleDraftUrl}/files/text`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": randomUUID(),
+          },
+          body: JSON.stringify({
+            path: "SKILL.md",
+            content: "# Missing precondition\n",
+          }),
+        },
+      )
+      assert.equal(missingPrecondition.status, 428)
+
+      const staleEtag = singleDraftEtag
+      let replayKey = ""
+      let replayBody = ""
+      for (let revision = 2; revision <= 11; revision += 1) {
+        const idempotencyKey = randomUUID()
+        const content = `# Single\n\nDraft revision ${revision}\n`
+        const response = await fetch(`${singleDraftUrl}/files/text`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "If-Match": singleDraftEtag,
+            "Idempotency-Key": idempotencyKey,
+          },
+          body: JSON.stringify({ path: "SKILL.md", content }),
+        })
+        assert.equal(response.status, 200)
+        const body = (await response.json()) as {
+          draft: { contentRevision: number }
+          replayed: boolean
+        }
+        assert.equal(body.draft.contentRevision, revision)
+        assert.equal(body.replayed, false)
+        singleDraftEtag = response.headers.get("etag")
+        assert.ok(singleDraftEtag)
+        if (revision === 2) {
+          replayKey = idempotencyKey
+          replayBody = content
+        }
+      }
+
+      const staleSave = await fetch(`${singleDraftUrl}/files/text`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "If-Match": staleEtag,
+          "Idempotency-Key": randomUUID(),
+        },
+        body: JSON.stringify({
+          path: "SKILL.md",
+          content: "# Must not overwrite\n",
+        }),
+      })
+      assert.equal(staleSave.status, 412)
+
+      const replayedSave = await fetch(`${singleDraftUrl}/files/text`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "If-Match": staleEtag,
+          "Idempotency-Key": replayKey,
+        },
+        body: JSON.stringify({
+          path: "SKILL.md",
+          content: replayBody,
+        }),
+      })
+      assert.equal(replayedSave.status, 200)
+      const replayedSaveBody = (await replayedSave.json()) as {
+        draft: { contentRevision: number }
+        replayed: boolean
+      }
+      assert.equal(replayedSaveBody.draft.contentRevision, 11)
+      assert.equal(replayedSaveBody.replayed, true)
+
+      const singleVersionsResponse = await fetch(
+        `${address}/api/skill-workspaces/${singleBody.workspace.id}/versions`,
+      )
+      assert.equal(singleVersionsResponse.status, 200)
+      assert.deepEqual(await singleVersionsResponse.json(), [])
+      const singleMutations = await application.databaseClient.database
+        .select()
+        .from(skillDraftMutations)
+        .where(
+          eq(
+            skillDraftMutations.draftId,
+            singleBody.workspace.activeDraft.id,
+          ),
+        )
+      assert.equal(singleMutations.length, 10)
+      const singleRevisions = await application.databaseClient.database
+        .select()
+        .from(skillDraftRevisions)
+        .where(
+          eq(
+            skillDraftRevisions.draftId,
+            singleBody.workspace.activeDraft.id,
+          ),
+        )
+      assert.equal(singleRevisions.length, 0)
+
       const folder = await createWorkspace("Folder Skill", "folder", [
         {
           name: "folder-skill/SKILL.md",
@@ -647,6 +763,8 @@ test(
       assert.equal(folderBody.upload.ignoredFileCount, 2)
       assert.equal(folderBody.upload.strippedRoot, "folder-skill")
       assert.equal(folderBody.workspace.currentVersion, null)
+      let expectedFolderSnapshotId =
+        folderBody.workspace.activeDraft.snapshot.id
 
       const versionsResponse = await fetch(
         `${address}/api/skill-workspaces/${folderBody.workspace.id}/versions`,
@@ -857,11 +975,66 @@ test(
       )
       assert.equal(missingFormalVersionResponse.status, 404)
 
+      const editableDraftResponse = await fetch(
+        `${address}/api/skill-workspaces/${folderBody.workspace.id}/draft`,
+      )
+      assert.equal(editableDraftResponse.status, 200)
+      let editableDraftEtag = editableDraftResponse.headers.get("etag")
+      assert.ok(editableDraftEtag)
+
+      const singleFileForm = new FormData()
+      singleFileForm.append("path", "references/new.txt")
+      singleFileForm.append(
+        "file",
+        new File(["single-file upload\n"], "new.txt", {
+          type: "text/plain",
+        }),
+      )
+      const singleFileMutation = await fetch(filesBase, {
+        method: "POST",
+        headers: {
+          "If-Match": editableDraftEtag,
+          "Idempotency-Key": randomUUID(),
+        },
+        body: singleFileForm,
+      })
+      assert.equal(singleFileMutation.status, 200)
+      const singleFileMutationBody =
+        (await singleFileMutation.json()) as {
+          draft: {
+            contentRevision: number
+            snapshot: { id: string }
+          }
+        }
+      assert.equal(singleFileMutationBody.draft.contentRevision, 2)
+      expectedFolderSnapshotId =
+        singleFileMutationBody.draft.snapshot.id
+      editableDraftEtag = singleFileMutation.headers.get("etag")
+      assert.ok(editableDraftEtag)
+
+      const afterSingleFileResponse = await fetch(filesBase)
+      assert.equal(afterSingleFileResponse.status, 200)
+      const afterSingleFile = (await afterSingleFileResponse.json()) as {
+        files: Array<{ relativePath: string }>
+      }
+      assert.deepEqual(
+        afterSingleFile.files.map((file) => file.relativePath),
+        [
+          "SKILL.md",
+          "assets/data.bin",
+          "assets/pixel.png",
+          "config/settings.json",
+          "config/settings.yaml",
+          "references/new.txt",
+          "scripts/check.py",
+        ],
+      )
+
       await writeFile(
         path.join(
           dataRoot,
           "snapshots",
-          folderBody.workspace.activeDraft.snapshot.id,
+          expectedFolderSnapshotId,
           "files",
           "config",
           "settings.json",
@@ -881,6 +1054,194 @@ test(
         ).error.code,
         "SNAPSHOT_FILE_CORRUPTED",
       )
+
+      const integrityProtectedSave = await fetch(
+        `${filesBase}/text`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "If-Match": editableDraftEtag,
+            "Idempotency-Key": randomUUID(),
+          },
+          body: JSON.stringify({
+            path: "SKILL.md",
+            content: "# Must not legitimize corrupted siblings\n",
+          }),
+        },
+      )
+      assert.equal(integrityProtectedSave.status, 409)
+      assert.equal(
+        (
+          (await integrityProtectedSave.json()) as {
+            error: { code: string }
+          }
+        ).error.code,
+        "SNAPSHOT_FILE_CORRUPTED",
+      )
+
+      const folderReplacementId = randomUUID()
+      const replacementForm = new FormData()
+      replacementForm.append("operationId", folderReplacementId)
+      replacementForm.append("sourceName", "replacement")
+      replacementForm.append(
+        "ignoreRules",
+        JSON.stringify(["*.tmp", "!keep.tmp"]),
+      )
+      for (const replacement of [
+        {
+          name: "replacement/SKILL.md",
+          content: "# Replacement\n",
+        },
+        {
+          name: "replacement/keep.tmp",
+          content: "kept by negation\n",
+        },
+        {
+          name: "replacement/drop.tmp",
+          content: "ignored\n",
+        },
+        {
+          name: "replacement/new.json",
+          content: '{"replacement":true}\n',
+        },
+      ]) {
+        replacementForm.append(
+          "files",
+          new File([replacement.content], path.basename(replacement.name)),
+          replacement.name,
+        )
+      }
+      const replacementPreviewResponse = await fetch(
+        `${address}/api/skill-workspaces/${folderBody.workspace.id}/draft/folder-replacements`,
+        {
+          method: "POST",
+          headers: { "If-Match": editableDraftEtag },
+          body: replacementForm,
+        },
+      )
+      assert.equal(replacementPreviewResponse.status, 200)
+      const replacementPreview =
+        (await replacementPreviewResponse.json()) as {
+          operationId: string
+          committable: boolean
+          requiresDeletionConfirmation: boolean
+          summary: {
+            added: number
+            modified: number
+            deleted: number
+            ignored: number
+            conflicts: number
+            unpreviewable: number
+          }
+        }
+      assert.equal(replacementPreview.operationId, folderReplacementId)
+      assert.equal(replacementPreview.committable, true)
+      assert.equal(
+        replacementPreview.requiresDeletionConfirmation,
+        true,
+      )
+      assert.deepEqual(replacementPreview.summary, {
+        added: 2,
+        modified: 1,
+        deleted: 6,
+        unchanged: 0,
+        ignored: 1,
+        unpreviewable: 1,
+        conflicts: 0,
+        totalFiles: 3,
+        totalBytes:
+          Buffer.byteLength("# Replacement\n") +
+          Buffer.byteLength("kept by negation\n") +
+          Buffer.byteLength('{"replacement":true}\n'),
+      })
+
+      const replacementCommitUrl =
+        `${address}/api/skill-workspaces/${folderBody.workspace.id}` +
+        `/draft/folder-replacements/${folderReplacementId}/commit`
+      const folderCommitKey = `folder-replacement-${folderReplacementId}`
+      const unconfirmedReplacement = await fetch(replacementCommitUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "If-Match": editableDraftEtag,
+          "Idempotency-Key": folderCommitKey,
+        },
+        body: JSON.stringify({ confirmDeletions: false }),
+      })
+      assert.equal(unconfirmedReplacement.status, 409)
+
+      const confirmedReplacement = await fetch(replacementCommitUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "If-Match": editableDraftEtag,
+          "Idempotency-Key": folderCommitKey,
+        },
+        body: JSON.stringify({ confirmDeletions: true }),
+      })
+      assert.equal(confirmedReplacement.status, 200)
+      const confirmedReplacementBody =
+        (await confirmedReplacement.json()) as {
+          draft: {
+            contentRevision: number
+            snapshot: { id: string }
+          }
+        }
+      assert.equal(confirmedReplacementBody.draft.contentRevision, 3)
+      expectedFolderSnapshotId =
+        confirmedReplacementBody.draft.snapshot.id
+
+      const draftDiffResponse = await fetch(
+        `${address}/api/skill-workspaces/${folderBody.workspace.id}/draft/diff`,
+      )
+      assert.equal(draftDiffResponse.status, 200)
+      const draftDiff = (await draftDiffResponse.json()) as {
+        basis: { kind: string; snapshotId: string; versionId: null }
+        summary: {
+          added: number
+          modified: number
+          deleted: number
+          ignored: number
+          unpreviewable: number
+        }
+        entries: Array<{
+          relativePath: string
+          status: string
+          previewable: boolean
+        }>
+      }
+      assert.deepEqual(draftDiff.basis, {
+        kind: "INITIAL_IMPORT",
+        snapshotId: draft.baseSnapshotId,
+        versionId: null,
+      })
+      assert.equal(draftDiff.summary.added, 2)
+      assert.equal(draftDiff.summary.modified, 1)
+      assert.equal(draftDiff.summary.deleted, 5)
+      assert.equal(draftDiff.summary.ignored, 1)
+      assert.equal(draftDiff.summary.unpreviewable, 1)
+      assert.ok(
+        draftDiff.entries.some(
+          (entry) =>
+            entry.relativePath === "drop.tmp" &&
+            entry.status === "IGNORED",
+        ),
+      )
+      assert.ok(
+        draftDiff.entries.some(
+          (entry) =>
+            entry.relativePath === "assets/data.bin" &&
+            entry.status === "DELETED" &&
+            !entry.previewable,
+        ),
+      )
+
+      const versionsAfterDraftChanges = await fetch(
+        `${address}/api/skill-workspaces/${folderBody.workspace.id}/versions`,
+      )
+      assert.equal(versionsAfterDraftChanges.status, 200)
+      assert.deepEqual(await versionsAfterDraftChanges.json(), [])
 
       const archive = createZip([
         { name: "zip-skill/SKILL.md", content: "# ZIP\n" },
@@ -1010,6 +1371,122 @@ test(
       ) as { manifestHash: string }
       assert.equal(snapshotManifest.manifestHash, singleBody.upload.manifestHash)
 
+      const latestSingleDraftResponse = await fetch(singleDraftUrl)
+      assert.equal(latestSingleDraftResponse.status, 200)
+      const latestSingleDraft = (await latestSingleDraftResponse.json()) as {
+        id: string
+        snapshot: { id: string }
+      }
+      const latestSingleEtag =
+        latestSingleDraftResponse.headers.get("etag")
+      assert.ok(latestSingleEtag)
+      const abandonSingleDraft = await fetch(singleDraftUrl, {
+        method: "DELETE",
+        headers: { "If-Match": latestSingleEtag },
+      })
+      assert.equal(abandonSingleDraft.status, 204)
+
+      const simulatedVersionId = randomUUID()
+      const simulatedVersionPublishedAt = new Date()
+      await application.databaseClient.database.transaction(
+        async (transaction) => {
+          await transaction
+            .update(skillSnapshots)
+            .set({ kind: "VERSION" })
+            .where(eq(skillSnapshots.id, latestSingleDraft.snapshot.id))
+          await transaction.insert(skillVersions).values({
+            id: simulatedVersionId,
+            workspaceId: singleBody.workspace.id,
+            snapshotId: latestSingleDraft.snapshot.id,
+            versionNumber: 1,
+            sourceType: "single_file",
+            sourceName: "SKILL.md",
+            createdAt: simulatedVersionPublishedAt,
+            publishedAt: simulatedVersionPublishedAt,
+          })
+          await transaction
+            .update(skillWorkspaces)
+            .set({
+              currentVersionId: simulatedVersionId,
+              defaultBaselineVersionId: simulatedVersionId,
+              updatedAt: simulatedVersionPublishedAt,
+            })
+            .where(eq(skillWorkspaces.id, singleBody.workspace.id))
+        },
+      )
+
+      const laterDraftResponse = await fetch(singleDraftUrl, {
+        method: "POST",
+      })
+      assert.equal(laterDraftResponse.status, 201)
+      const laterDraft = (await laterDraftResponse.json()) as {
+        id: string
+        baseVersionId: string
+        baseSnapshotId: string
+        contentRevision: number
+        snapshot: { id: string }
+      }
+      assert.equal(laterDraft.baseVersionId, simulatedVersionId)
+      assert.equal(
+        laterDraft.baseSnapshotId,
+        latestSingleDraft.snapshot.id,
+      )
+      assert.equal(laterDraft.snapshot.id, latestSingleDraft.snapshot.id)
+      assert.equal(laterDraft.contentRevision, 1)
+
+      const laterDraftEtag = laterDraftResponse.headers.get("etag")
+      assert.ok(laterDraftEtag)
+      const laterDraftSave = await fetch(`${singleDraftUrl}/files/text`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "If-Match": laterDraftEtag,
+          "Idempotency-Key": randomUUID(),
+        },
+        body: JSON.stringify({
+          path: "SKILL.md",
+          content: "# Later Draft\n",
+        }),
+      })
+      assert.equal(laterDraftSave.status, 200)
+
+      const laterDraftDiffResponse = await fetch(
+        `${singleDraftUrl}/diff`,
+      )
+      assert.equal(laterDraftDiffResponse.status, 200)
+      const laterDraftDiff = (await laterDraftDiffResponse.json()) as {
+        basis: {
+          kind: string
+          snapshotId: string
+          versionId: string
+        }
+        summary: {
+          modified: number
+        }
+      }
+      assert.deepEqual(laterDraftDiff.basis, {
+        kind: "FORMAL_VERSION",
+        snapshotId: latestSingleDraft.snapshot.id,
+        versionId: simulatedVersionId,
+      })
+      assert.equal(laterDraftDiff.summary.modified, 1)
+      const versionsAfterLaterDraftSave = await fetch(
+        `${address}/api/skill-workspaces/${singleBody.workspace.id}/versions`,
+      )
+      assert.equal(versionsAfterLaterDraftSave.status, 200)
+      const laterVersions =
+        (await versionsAfterLaterDraftSave.json()) as Array<{
+          id: string
+          versionNumber: number
+        }>
+      assert.deepEqual(
+        laterVersions.map((version) => [
+          version.id,
+          version.versionNumber,
+        ]),
+        [[simulatedVersionId, 1]],
+      )
+
       await application.close()
       application = await buildApplication({ config, logger: false })
       const restartedAddress = await application.listen({
@@ -1042,7 +1519,7 @@ test(
       assert.equal(persistedFolder.activeDraft.status, "OPEN")
       assert.equal(
         persistedFolder.activeDraft.snapshot.id,
-        folderBody.workspace.activeDraft.snapshot.id,
+        expectedFolderSnapshotId,
       )
     } finally {
       await application.close()

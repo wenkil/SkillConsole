@@ -229,6 +229,19 @@ export const skillDrafts = pgTable(
     contentRevision: integer("content_revision").default(1).notNull(),
     sourceType: skillSourceType("source_type").notNull(),
     sourceName: text("source_name").notNull(),
+    ignoreRules: jsonb("ignore_rules")
+      .$type<readonly string[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    currentIgnoredPaths: jsonb("current_ignored_paths")
+      .$type<
+        readonly {
+          readonly relativePath: string
+          readonly reason: "protected" | "skillconsoleignore" | "custom"
+        }[]
+      >()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     createdAt: timestamp("created_at", {
       mode: "date",
       withTimezone: true,
@@ -253,6 +266,87 @@ export const skillDrafts = pgTable(
     index("skill_drafts_workspace_updated_idx").on(
       table.workspaceId,
       table.updatedAt,
+    ),
+  ],
+)
+
+export const skillDraftRevisions = pgTable(
+  "skill_draft_revisions",
+  {
+    id: uuid("id").primaryKey().default(sql`uuidv7()`),
+    draftId: uuid("draft_id")
+      .notNull()
+      .references(() => skillDrafts.id, { onDelete: "cascade" }),
+    snapshotId: uuid("snapshot_id")
+      .notNull()
+      .references(() => skillSnapshots.id, { onDelete: "restrict" }),
+    sourceContentRevision: integer("source_content_revision").notNull(),
+    reason: text("reason").notNull(),
+    createdAt: timestamp("created_at", {
+      mode: "date",
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    check(
+      "skill_draft_revisions_source_revision_check",
+      sql`${table.sourceContentRevision} >= 1`,
+    ),
+    check(
+      "skill_draft_revisions_reason_check",
+      sql`${table.reason} in ('TRIAL', 'PRE_REGRESSION', 'RELEASE_GATE', 'FINALIZE')`,
+    ),
+    uniqueIndex("skill_draft_revisions_snapshot_unique").on(table.snapshotId),
+    index("skill_draft_revisions_draft_created_idx").on(
+      table.draftId,
+      table.createdAt,
+    ),
+  ],
+)
+
+export const skillDraftMutations = pgTable(
+  "skill_draft_mutations",
+  {
+    id: uuid("id").primaryKey().default(sql`uuidv7()`),
+    draftId: uuid("draft_id")
+      .notNull()
+      .references(() => skillDrafts.id, { onDelete: "cascade" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    requestHash: text("request_hash").notNull(),
+    baseContentRevision: integer("base_content_revision").notNull(),
+    resultContentRevision: integer("result_content_revision").notNull(),
+    resultSnapshotId: uuid("result_snapshot_id")
+      .notNull()
+      .references(() => skillSnapshots.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", {
+      mode: "date",
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    check(
+      "skill_draft_mutations_idempotency_key_check",
+      sql`char_length(${table.idempotencyKey}) between 1 and 200`,
+    ),
+    check(
+      "skill_draft_mutations_request_hash_check",
+      sql`${table.requestHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      "skill_draft_mutations_revision_check",
+      sql`${table.baseContentRevision} >= 1 and ${table.resultContentRevision} = ${table.baseContentRevision} + 1`,
+    ),
+    uniqueIndex("skill_draft_mutations_idempotency_unique").on(
+      table.draftId,
+      table.idempotencyKey,
+    ),
+    index("skill_draft_mutations_draft_created_idx").on(
+      table.draftId,
+      table.createdAt,
     ),
   ],
 )
@@ -374,6 +468,8 @@ export type SkillSnapshotRow = typeof skillSnapshots.$inferSelect
 export type SkillSnapshotFileRow = typeof skillSnapshotFiles.$inferSelect
 export type SkillVersionRow = typeof skillVersions.$inferSelect
 export type SkillDraftRow = typeof skillDrafts.$inferSelect
+export type SkillDraftRevisionRow = typeof skillDraftRevisions.$inferSelect
+export type SkillDraftMutationRow = typeof skillDraftMutations.$inferSelect
 export type SkillImprovementCycleRow =
   typeof skillImprovementCycles.$inferSelect
 export type UploadOperationRow = typeof uploadOperations.$inferSelect

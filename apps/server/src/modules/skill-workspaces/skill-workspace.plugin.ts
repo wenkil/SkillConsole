@@ -49,6 +49,19 @@ import {
   loadUploadFolderIgnorePolicy,
   UploadFolderIgnorePolicySchema,
 } from "./upload-folder-ignore-policy.js"
+import {
+  DraftConditionalHeadersSchema,
+  DraftDiffSchema,
+  DraftFolderCommitSchema,
+  DraftFolderReplacementPreviewSchema,
+  DraftMoveFileSchema,
+  DraftMutationResponseSchema,
+  DraftOperationParamsSchema,
+  DraftTextSaveSchema,
+  DraftWriteHeadersSchema,
+} from "./draft.contract.js"
+import { DraftService } from "./draft.service.js"
+import { createDraftEtag, getDraftBaseFileRecord } from "./draft.repository.js"
 
 function contentDispositionFilename(relativePath: string): string {
   const filename = relativePath.split("/").at(-1) ?? "download"
@@ -85,7 +98,7 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
       fileSize: limits.maxZipBytes,
       parts: limits.maxFiles + 3,
       fieldNameSize: 64,
-      fieldSize: 1_024,
+      fieldSize: 128 * 1_024,
       headerPairs: 64,
     },
   })
@@ -93,6 +106,12 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
   const storage = new LocalSnapshotStorage(application.appConfig.dataRoot)
   await storage.initialize()
   const createService = new CreateSkillWorkspaceService({
+    database: application.databaseClient.database,
+    storage,
+    limits,
+    folderIgnorePolicy,
+  })
+  const draftService = new DraftService({
     database: application.databaseClient.database,
     storage,
     limits,
@@ -166,11 +185,69 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
         },
       },
     },
-    async (request) =>
-      getActiveSkillDraft(
+    async (request, reply) => {
+      const draft = await getActiveSkillDraft(
         application.databaseClient.database,
         request.params.workspaceId,
-      ),
+      )
+      return reply
+        .header(
+          "ETag",
+          createDraftEtag(draft.id, draft.contentRevision),
+        )
+        .send(draft)
+    },
+  )
+
+  application.post(
+    "/api/skill-workspaces/:workspaceId/draft",
+    {
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "Create a unique Draft from the latest formal version",
+        params: WorkspaceIdParamsSchema,
+        response: {
+          201: SkillDraftBrowserSchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const draft = await draftService.createDraft(
+        request.params.workspaceId,
+      )
+      return reply
+        .code(201)
+        .header("ETag", draftService.getEtag(draft))
+        .send(draft)
+    },
+  )
+
+  application.delete(
+    "/api/skill-workspaces/:workspaceId/draft",
+    {
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "Abandon the active Draft without creating a version",
+        params: WorkspaceIdParamsSchema,
+        headers: DraftConditionalHeadersSchema,
+        response: {
+          204: Type.Null(),
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          412: ErrorResponseSchema,
+          428: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      await draftService.abandon(
+        request.params.workspaceId,
+        request.headers["if-match"],
+      )
+      return reply.code(204).send(null)
+    },
   )
 
   application.get(
@@ -192,6 +269,253 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
         request.params.workspaceId,
         classifySnapshotFile,
       ),
+  )
+
+  application.put(
+    "/api/skill-workspaces/:workspaceId/draft/files/text",
+    {
+      bodyLimit: limits.maxFileBytes + 64 * 1024,
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "Save one editable UTF-8 Draft file",
+        params: WorkspaceIdParamsSchema,
+        headers: DraftWriteHeadersSchema,
+        body: DraftTextSaveSchema,
+        response: {
+          200: DraftMutationResponseSchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          412: ErrorResponseSchema,
+          413: ErrorResponseSchema,
+          415: ErrorResponseSchema,
+          422: ErrorResponseSchema,
+          428: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const result = await draftService.saveText(
+        request.params.workspaceId,
+        request.body,
+        {
+          ifMatch: request.headers["if-match"],
+          idempotencyKey: request.headers["idempotency-key"],
+        },
+      )
+      return reply
+        .header("ETag", draftService.getEtag(result.draft))
+        .send(result)
+    },
+  )
+
+  application.post(
+    "/api/skill-workspaces/:workspaceId/draft/files",
+    {
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "Add or replace one Draft file without deleting siblings",
+        description:
+          "Accepts multipart/form-data with a path field before one file field.",
+        params: WorkspaceIdParamsSchema,
+        headers: DraftWriteHeadersSchema,
+        consumes: ["multipart/form-data"],
+        response: {
+          200: DraftMutationResponseSchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          412: ErrorResponseSchema,
+          413: ErrorResponseSchema,
+          422: ErrorResponseSchema,
+          428: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const result = await draftService.uploadSingleFile(
+        request.params.workspaceId,
+        request.parts(),
+        {
+          ifMatch: request.headers["if-match"],
+          idempotencyKey: request.headers["idempotency-key"],
+        },
+      )
+      return reply
+        .header("ETag", draftService.getEtag(result.draft))
+        .send(result)
+    },
+  )
+
+  application.delete(
+    "/api/skill-workspaces/:workspaceId/draft/files",
+    {
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "Delete one Draft file",
+        params: WorkspaceIdParamsSchema,
+        querystring: VersionFilePathQuerySchema,
+        headers: DraftWriteHeadersSchema,
+        response: {
+          200: DraftMutationResponseSchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          412: ErrorResponseSchema,
+          422: ErrorResponseSchema,
+          428: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const result = await draftService.deleteFile(
+        request.params.workspaceId,
+        request.query.path,
+        {
+          ifMatch: request.headers["if-match"],
+          idempotencyKey: request.headers["idempotency-key"],
+        },
+      )
+      return reply
+        .header("ETag", draftService.getEtag(result.draft))
+        .send(result)
+    },
+  )
+
+  application.post(
+    "/api/skill-workspaces/:workspaceId/draft/files/move",
+    {
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "Move or rename one Draft file",
+        params: WorkspaceIdParamsSchema,
+        headers: DraftWriteHeadersSchema,
+        body: DraftMoveFileSchema,
+        response: {
+          200: DraftMutationResponseSchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          412: ErrorResponseSchema,
+          422: ErrorResponseSchema,
+          428: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const result = await draftService.moveFile(
+        request.params.workspaceId,
+        request.body,
+        {
+          ifMatch: request.headers["if-match"],
+          idempotencyKey: request.headers["idempotency-key"],
+        },
+      )
+      return reply
+        .header("ETag", draftService.getEtag(result.draft))
+        .send(result)
+    },
+  )
+
+  application.get(
+    "/api/skill-workspaces/:workspaceId/draft/diff",
+    {
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "Compare the Draft with its fixed comparison basis",
+        params: WorkspaceIdParamsSchema,
+        response: {
+          200: DraftDiffSchema,
+          404: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request) =>
+      draftService.getDiff(request.params.workspaceId),
+  )
+
+  application.get(
+    "/api/skill-workspaces/:workspaceId/draft/diff/base-text",
+    {
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "Read one UTF-8 file from the fixed Draft comparison basis",
+        params: WorkspaceIdParamsSchema,
+        querystring: VersionFilePathQuerySchema,
+        response: {
+          200: TextFilePreviewSchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          415: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request) => {
+      const record = await getDraftBaseFileRecord(
+        application.databaseClient.database,
+        request.params.workspaceId,
+        request.query.path,
+      )
+      return readTextPreview(storage, record)
+    },
+  )
+
+  application.post(
+    "/api/skill-workspaces/:workspaceId/draft/folder-replacements",
+    {
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "Stage and preview a complete Draft folder replacement",
+        params: WorkspaceIdParamsSchema,
+        headers: DraftConditionalHeadersSchema,
+        consumes: ["multipart/form-data"],
+        response: {
+          200: DraftFolderReplacementPreviewSchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          412: ErrorResponseSchema,
+          413: ErrorResponseSchema,
+          422: ErrorResponseSchema,
+          428: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request) =>
+      draftService.previewFolderReplacement(
+        request.params.workspaceId,
+        request.parts(),
+        request.headers["if-match"],
+      ),
+  )
+
+  application.post(
+    "/api/skill-workspaces/:workspaceId/draft/folder-replacements/:operationId/commit",
+    {
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "Commit a staged Draft folder replacement",
+        params: DraftOperationParamsSchema,
+        headers: DraftWriteHeadersSchema,
+        body: DraftFolderCommitSchema,
+        response: {
+          200: DraftMutationResponseSchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          412: ErrorResponseSchema,
+          428: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const result = await draftService.commitFolderReplacement(
+        request.params.workspaceId,
+        request.params.operationId,
+        request.body.confirmDeletions,
+        {
+          ifMatch: request.headers["if-match"],
+          idempotencyKey: request.headers["idempotency-key"],
+        },
+      )
+      return reply
+        .header("ETag", draftService.getEtag(result.draft))
+        .send(result)
+    },
   )
 
   application.get(

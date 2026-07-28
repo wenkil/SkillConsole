@@ -3,6 +3,8 @@ export type DomainErrorKind =
   | "internal"
   | "not_found"
   | "payload_too_large"
+  | "precondition_failed"
+  | "precondition_required"
   | "unsupported_media_type"
   | "validation"
 
