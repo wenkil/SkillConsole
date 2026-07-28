@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next"
 
 import {
   abandonSkillDraft,
-  commitDraftFolderReplacement,
+  commitDraftFolderMerge,
   createSkillDraft,
   deleteDraftFile,
   getActiveSkillDraft,
@@ -13,7 +13,7 @@ import {
   listSkillVersions,
   listTargetFiles,
   moveDraftFile,
-  previewDraftFolderReplacement,
+  previewDraftFolderMerge,
   readDraftBaseTextFile,
   readDraftDiff,
   readTargetTextFilePreview,
@@ -26,7 +26,7 @@ import {
   type SkillBrowserTarget,
   type SkillVersionBrowser,
   type DraftDiff,
-  type DraftFolderReplacementPreview,
+  type DraftFolderMergePreview,
   type SnapshotFile,
   type TextFilePreview,
   type VersionPreviewIssue,
@@ -61,7 +61,7 @@ export interface VersionBrowserController {
   draftDiff: DraftDiff | null
   baseTextPreview: TextFilePreview | null
   conflictServerPreview: TextFilePreview | null
-  folderPreview: DraftFolderReplacementPreview | null
+  folderPreview: DraftFolderMergePreview | null
   mutationPending: boolean
   mutationError: SkillConsoleApiError | Error | null
   conflict: boolean
@@ -86,7 +86,7 @@ export interface VersionBrowserController {
       files: readonly File[],
       ignoreRules: readonly string[],
     ) => Promise<void>
-    commitFolder: (confirmDeletions: boolean) => Promise<void>
+    commitFolder: () => Promise<void>
     clearFolderPreview: () => void
     abandonDraft: () => Promise<void>
     clearMutationError: () => void
@@ -110,7 +110,7 @@ export function useVersionBrowserController({
     SkillConsoleApiError | Error | null
   >(null)
   const [folderPreview, setFolderPreview] =
-    useState<DraftFolderReplacementPreview | null>(null)
+    useState<DraftFolderMergePreview | null>(null)
   const [conflictServerPreview, setConflictServerPreview] =
     useState<TextFilePreview | null>(null)
   const copy = useMemo(() => getVersionBrowserCopy(t), [t])
@@ -456,7 +456,7 @@ export function useVersionBrowserController({
         setMutationError(null)
         try {
           setFolderPreview(
-            await previewDraftFolderReplacement(
+            await previewDraftFolderMerge(
               workspaceId,
               draftQuery.data.etag,
               files,
@@ -472,14 +472,13 @@ export function useVersionBrowserController({
           setMutationPending(false)
         }
       },
-      commitFolder: async (confirmDeletions) => {
+      commitFolder: async () => {
         if (!draftQuery.data || !folderPreview) return
         await runDraftMutation(() =>
-          commitDraftFolderReplacement(
+          commitDraftFolderMerge(
             workspaceId,
             draftQuery.data.etag,
             folderPreview.operationId,
-            confirmDeletions,
           ),
         )
         setFolderPreview(null)

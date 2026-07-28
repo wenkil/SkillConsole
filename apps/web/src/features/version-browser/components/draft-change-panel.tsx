@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next"
 import {
   formatBytes,
   type DraftDiff,
-  type DraftFolderReplacementPreview,
+  type DraftFolderMergePreview,
   type SkillDraftBrowser,
   type SnapshotFile,
 } from "@/features/version-browser/model/version-browser"
@@ -24,7 +24,7 @@ interface DraftChangePanelProps {
   draft: SkillDraftBrowser
   file: SnapshotFile | null
   diff: DraftDiff | null
-  folderPreview: DraftFolderReplacementPreview | null
+  folderPreview: DraftFolderMergePreview | null
   pending: boolean
   errorMessage: string | null
   onUploadFile: (file: File, relativePath: string) => Promise<void>
@@ -34,7 +34,7 @@ interface DraftChangePanelProps {
     files: readonly File[],
     ignoreRules: readonly string[],
   ) => Promise<void>
-  onCommitFolder: (confirmDeletions: boolean) => Promise<void>
+  onCommitFolder: () => Promise<void>
   onClearFolderPreview: () => void
   onAbandon: () => Promise<void>
   onSelectPath: (relativePath: string) => void
@@ -111,8 +111,6 @@ export function DraftChangePanel({
     filePath: file?.relativePath ?? "",
     confirmed: false,
   })
-  const [confirmFolderDeletions, setConfirmFolderDeletions] =
-    useState(false)
   const [confirmAbandon, setConfirmAbandon] = useState(false)
 
   const movePath =
@@ -391,8 +389,8 @@ export function DraftChangePanel({
                 value={folderPreview.summary.modified}
               />
               <SummaryMetric
-                label="Deleted"
-                value={folderPreview.summary.deleted}
+                label="Unchanged"
+                value={folderPreview.summary.unchanged}
               />
               <SummaryMetric
                 label="Ignored"
@@ -407,21 +405,6 @@ export function DraftChangePanel({
                 value={folderPreview.summary.unpreviewable}
               />
             </div>
-            {folderPreview.requiresDeletionConfirmation ? (
-              <label className="flex items-start gap-2 text-[10px] leading-relaxed">
-                <input
-                  checked={confirmFolderDeletions}
-                  className="mt-0.5"
-                  onChange={(event) =>
-                    setConfirmFolderDeletions(event.target.checked)
-                  }
-                  type="checkbox"
-                />
-                {t("draft.confirmFolderDeletions", {
-                  count: folderPreview.summary.deleted,
-                })}
-              </label>
-            ) : null}
             <div className="flex gap-2">
               <Button
                 className="flex-1 rounded-none"
@@ -436,15 +419,12 @@ export function DraftChangePanel({
                 className="flex-1 rounded-none"
                 disabled={
                   !folderPreview.committable ||
-                  pending ||
-                  (folderPreview.requiresDeletionConfirmation &&
-                    !confirmFolderDeletions)
+                  pending
                 }
                 onClick={() => {
-                  void onCommitFolder(confirmFolderDeletions)
+                  void onCommitFolder()
                     .then(() => {
                       setFolderFiles([])
-                      setConfirmFolderDeletions(false)
                       if (folderInputRef.current) {
                         folderInputRef.current.value = ""
                       }

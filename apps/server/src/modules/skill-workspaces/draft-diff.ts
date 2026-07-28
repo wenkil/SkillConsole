@@ -1,6 +1,6 @@
 import type {
   DraftDiffEntry,
-  DraftFolderReplacementPreview,
+  DraftFolderMergePreview,
 } from "./draft.contract.js"
 import type { DraftIgnoredPath } from "./draft-ignore.js"
 import { classifySnapshotFile } from "./version-browser.service.js"
@@ -112,7 +112,7 @@ export function buildFolderPreviewSummary(
   totalFiles: number,
   totalBytes: number,
   conflicts: readonly string[] = [],
-): DraftFolderReplacementPreview["summary"] {
+): DraftFolderMergePreview["summary"] {
   return {
     ...summarizeDraftDiff(entries),
     conflicts: conflicts.length,

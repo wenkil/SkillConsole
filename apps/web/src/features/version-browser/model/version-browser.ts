@@ -112,7 +112,7 @@ export interface DraftDiff {
   entries: DraftDiffEntry[]
 }
 
-export interface DraftFolderReplacementPreview {
+export interface DraftFolderMergePreview {
   operationId: string
   draftId: string
   baseContentRevision: number
@@ -124,7 +124,6 @@ export interface DraftFolderReplacementPreview {
     totalBytes: number
   }
   conflicts: string[]
-  requiresDeletionConfirmation: boolean
   committable: boolean
 }
 

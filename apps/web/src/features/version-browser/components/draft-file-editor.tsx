@@ -20,6 +20,7 @@ import type {
   SnapshotFile,
   TextFilePreview,
 } from "@/features/version-browser/model/version-browser"
+import { DraftFileDeleteButton } from "@/features/version-browser/components/draft-file-delete-button"
 import { Button } from "@/shared/components/ui/button"
 
 interface DraftFileEditorProps {
@@ -31,6 +32,7 @@ interface DraftFileEditorProps {
   saving: boolean
   conflict: boolean
   errorMessage: string | null
+  onDelete: () => Promise<void>
   onSave: (content: string) => Promise<void>
   onClearError: () => void
 }
@@ -146,6 +148,7 @@ export function DraftFileEditor({
   saving,
   conflict,
   errorMessage,
+  onDelete,
   onSave,
   onClearError,
 }: DraftFileEditorProps) {
@@ -216,6 +219,11 @@ export function DraftFileEditor({
             )}
             {t("draft.save")}
           </Button>
+          <DraftFileDeleteButton
+            file={file}
+            onDeleteFile={onDelete}
+            pending={saving}
+          />
         </div>
       </header>
 

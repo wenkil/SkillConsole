@@ -201,7 +201,7 @@ export function WorkspaceNavigation({
                         "border-primary bg-accent text-signal-dark shadow-[inset_3px_0_0_var(--primary)]",
                     )
                   }
-                  end={item.end}
+                  {...(item.end ? { end: true } : {})}
                   to={item.path}
                 >
                   <Icon

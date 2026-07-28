@@ -122,7 +122,7 @@ export const DraftDiffSchema = Type.Object(
   { additionalProperties: false },
 )
 
-export const DraftFolderReplacementPreviewSchema = Type.Object(
+export const DraftFolderMergePreviewSchema = Type.Object(
   {
     operationId: Type.String({ format: "uuid" }),
     draftId: Type.String({ format: "uuid" }),
@@ -141,16 +141,13 @@ export const DraftFolderReplacementPreviewSchema = Type.Object(
       ),
     ]),
     conflicts: Type.Array(Type.String({ minLength: 1 })),
-    requiresDeletionConfirmation: Type.Boolean(),
     committable: Type.Boolean(),
   },
   { additionalProperties: false },
 )
 
-export const DraftFolderCommitSchema = Type.Object(
-  {
-    confirmDeletions: Type.Boolean(),
-  },
+export const DraftFolderMergeCommitSchema = Type.Object(
+  {},
   { additionalProperties: false },
 )
 
@@ -169,6 +166,6 @@ export type DraftMutationResponse = Static<
 >
 export type DraftDiff = Static<typeof DraftDiffSchema>
 export type DraftDiffEntry = Static<typeof DraftDiffEntrySchema>
-export type DraftFolderReplacementPreview = Static<
-  typeof DraftFolderReplacementPreviewSchema
+export type DraftFolderMergePreview = Static<
+  typeof DraftFolderMergePreviewSchema
 >

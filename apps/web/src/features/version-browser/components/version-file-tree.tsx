@@ -16,7 +16,10 @@ import {
 } from "react-arborist"
 import { useResizeDetector } from "react-resize-detector"
 
-import type { VersionFileTreeNode } from "@/features/version-browser/model/version-browser"
+import type {
+  DraftDiffStatus,
+  VersionFileTreeNode,
+} from "@/features/version-browser/model/version-browser"
 import type { VersionBrowserCopy } from "@/features/version-browser/model/version-browser-copy"
 import { Input } from "@/shared/components/ui/input"
 import { cn } from "@/shared/lib/utils"
@@ -27,6 +30,8 @@ interface VersionFileTreeProps {
   selectedPath: string | null
   searchTerm: string
   copy: VersionBrowserCopy
+  actions?: React.ReactNode
+  statusByPath?: Partial<Record<string, DraftDiffStatus>> | undefined
   onSearchTermChange: (value: string) => void
   onFileSelect: (relativePath: string) => void
 }
@@ -65,11 +70,19 @@ function FileTypeIcon({
 function TreeNode({
   node,
   style,
-}: NodeRendererProps<VersionFileTreeNode>) {
+  statusByPath,
+}: NodeRendererProps<VersionFileTreeNode> & {
+  statusByPath?: Partial<Record<string, DraftDiffStatus>> | undefined
+}) {
+  const status =
+    node.data.kind === "file" ? statusByPath?.[node.data.path] : undefined
+  const visibleStatus =
+    status && status !== "UNCHANGED" ? status : undefined
+
   return (
     <div
       className={cn(
-        "group flex h-full min-w-0 items-center gap-1.5 border-l-2 border-transparent pr-2 text-xs",
+        "group flex h-full min-w-0 cursor-default items-center gap-1.5 border-l-2 border-transparent pr-2 text-xs",
         node.isSelected &&
           "border-primary bg-accent text-accent-foreground",
       )}
@@ -91,6 +104,14 @@ function TreeNode({
       </span>
       <FileTypeIcon isOpen={node.isOpen} node={node.data} />
       <span className="min-w-0 truncate font-mono">{node.data.name}</span>
+      {visibleStatus ? (
+        <span
+          className="ml-auto shrink-0 font-mono text-[9px] font-bold text-technical-foreground"
+          title={visibleStatus}
+        >
+          {visibleStatus.slice(0, 1)}
+        </span>
+      ) : null}
     </div>
   )
 }
@@ -101,6 +122,8 @@ export function VersionFileTree({
   selectedPath,
   searchTerm,
   copy,
+  actions,
+  statusByPath,
   onSearchTermChange,
   onFileSelect,
 }: VersionFileTreeProps) {
@@ -122,12 +145,19 @@ export function VersionFileTree({
     <section className="flex min-h-0 flex-col border-r border-foreground bg-paper-raised">
       <header className="border-b border-rule px-4 py-3">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="technical-heading text-[11px]">{copy.files}</h2>
+          <h2 className="technical-heading truncate text-[11px]">
+            {copy.files}
+          </h2>
           <span className="font-mono text-[10px] text-muted-foreground">
             {String(fileCount).padStart(3, "0")}
           </span>
         </div>
-        <div className="relative mt-3">
+        {actions ? (
+          <div className="mt-2 flex items-center justify-end gap-1.5">
+            {actions}
+          </div>
+        ) : null}
+        <div className="relative mt-2">
           <Search
             aria-hidden="true"
             className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
@@ -172,7 +202,9 @@ export function VersionFileTree({
             selectionFollowsFocus
             width={Math.max(width ?? 260, 220)}
           >
-            {TreeNode}
+            {(props) => (
+              <TreeNode {...props} statusByPath={statusByPath} />
+            )}
           </Tree>
         ) : (
           <div className="flex h-full min-h-60 items-center justify-center px-6 text-center text-xs text-muted-foreground">

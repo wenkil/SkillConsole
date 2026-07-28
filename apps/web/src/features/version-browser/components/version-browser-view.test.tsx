@@ -274,6 +274,17 @@ describe("VersionBrowserView", () => {
     expect(
       await screen.findByRole("button", { name: "Save draft" }),
     ).toBeInTheDocument()
+    const saveButton = screen.getByRole("button", { name: "Save draft" })
+    const deleteButton = screen.getByRole("button", {
+      name: "Delete current file",
+    })
+    expect(
+      saveButton.compareDocumentPosition(deleteButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      screen.queryByRole("button", { name: "Current file actions" }),
+    ).not.toBeInTheDocument()
     expect(screen.getAllByText("Initial candidate").length).toBeGreaterThan(0)
     expect(screen.getByText("Awaiting test and confirmation")).toBeInTheDocument()
     expect(screen.queryByText("V1")).not.toBeInTheDocument()
@@ -294,13 +305,25 @@ describe("VersionBrowserView", () => {
     const singleFileClick = vi.spyOn(singleFileInput!, "click")
     const folderClick = vi.spyOn(folderInput!, "click")
     await user.click(
-      screen.getByRole("button", { name: "Choose one file" }),
+      screen.getByRole("button", { name: "Add / update" }),
     )
     await user.click(
-      screen.getByRole("button", { name: "Choose complete folder" }),
+      screen.getByRole("menuitem", { name: /Upload one file/ }),
     )
-    expect(singleFileClick).toHaveBeenCalledOnce()
-    expect(folderClick).toHaveBeenCalledOnce()
+    await waitFor(() => expect(singleFileClick).toHaveBeenCalledOnce())
+
+    await user.click(
+      screen.getByRole("button", { name: "Add / update" }),
+    )
+    await user.click(
+      screen.getByRole("menuitem", {
+        name: /Upload a folder/,
+      }),
+    )
+    await waitFor(() => expect(folderClick).toHaveBeenCalledOnce())
+    expect(
+      screen.queryByText("Single-file actions"),
+    ).not.toBeInTheDocument()
   })
 
   it("synchronizes preview and metadata when switching to a historical version", async () => {
@@ -331,9 +354,15 @@ describe("VersionBrowserView", () => {
       await screen.findByRole("heading", { name: "V1 content" }),
     ).toBeInTheDocument()
     expect(screen.getByText("Viewing a historical version")).toBeInTheDocument()
+    await user.click(
+      screen.getByRole("button", {
+        name: "View version information",
+      }),
+    )
     await waitFor(() => {
       expect(screen.getByText("first-source")).toBeInTheDocument()
     })
+    await user.click(screen.getByRole("button", { name: "Close" }))
     expect(
       screen.getByRole("combobox", {
         name: "Select candidate or version",

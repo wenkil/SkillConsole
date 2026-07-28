@@ -126,6 +126,7 @@ function ConflictHarness() {
         setConflict(false)
         setErrorMessage(null)
       }}
+      onDelete={vi.fn()}
       onSave={async () => {
         setConflict(true)
         setErrorMessage("Precondition failed")
@@ -170,5 +171,48 @@ describe("DraftFileEditor", () => {
         .getAllByRole("textbox")
         .map((element) => (element as HTMLTextAreaElement).value),
     ).toEqual(["# Server latest\n", "# Local unsaved"])
+  })
+
+  it("places file deletion after save and requires confirmation", async () => {
+    const user = userEvent.setup()
+    const onDelete = vi.fn().mockResolvedValue(undefined)
+
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <DraftFileEditor
+          basePreview={preview}
+          conflict={false}
+          conflictServerPreview={null}
+          diffEntry={null}
+          errorMessage={null}
+          file={file}
+          onClearError={vi.fn()}
+          onDelete={onDelete}
+          onSave={vi.fn().mockResolvedValue(undefined)}
+          preview={preview}
+          saving={false}
+        />
+      </I18nextProvider>,
+    )
+
+    const saveButton = screen.getByRole("button", { name: "保存草稿" })
+    const deleteButton = screen.getByRole("button", {
+      name: "删除当前文件",
+    })
+    expect(
+      saveButton.compareDocumentPosition(deleteButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+
+    await user.click(deleteButton)
+    expect(
+      screen.getByRole("heading", { name: "删除当前文件" }),
+    ).toBeInTheDocument()
+    expect(onDelete).not.toHaveBeenCalled()
+
+    await user.click(
+      screen.getByRole("button", { name: "删除当前文件" }),
+    )
+    expect(onDelete).toHaveBeenCalledOnce()
   })
 })

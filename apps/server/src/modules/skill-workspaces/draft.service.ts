@@ -12,7 +12,7 @@ import type {
 
 import type {
   DraftDiff,
-  DraftFolderReplacementPreview,
+  DraftFolderMergePreview,
   DraftMoveFile,
   DraftMutationResponse,
   DraftTextSave,
@@ -40,6 +40,7 @@ import {
   buildSnapshotManifest,
   type CandidateFile,
   type SnapshotManifest,
+  type SnapshotManifestFile,
 } from "./snapshot-manifest.js"
 import { LocalSnapshotStorage } from "./snapshot-storage.js"
 import {
@@ -54,18 +55,21 @@ import { getActiveSkillDraft } from "./version-browser.repository.js"
 
 const editableExtensions = new Set([".md", ".txt", ".json", ".yaml", ".yml"])
 
-interface FolderOperationMetadata {
+interface FolderMergeOperationMetadata {
   readonly schemaVersion: 1
-  readonly kind: "DRAFT_FOLDER_REPLACEMENT"
+  readonly kind: "DRAFT_FOLDER_MERGE"
   readonly workspaceId: string
   readonly draftId: string
   readonly baseContentRevision: number
   readonly sourceName: string
   readonly ignoreRules: readonly string[]
   readonly ignoredPaths: readonly DraftIgnoredPath[]
-  readonly manifest: SnapshotManifest
-  readonly summary: DraftFolderReplacementPreview["summary"]
-  readonly requiresDeletionConfirmation: boolean
+  readonly uploadedManifest: SnapshotManifest
+  readonly files: readonly {
+    readonly incomingIndex: number
+    readonly relativePath: string
+  }[]
+  readonly summary: DraftFolderMergePreview["summary"]
 }
 
 function hashRequest(value: unknown): string {
@@ -219,25 +223,80 @@ function mapMultipartField(part: Extract<Multipart, { type: "field" }>) {
   return part.value
 }
 
-function isFolderOperationMetadata(
+function isFolderMergeOperationMetadata(
   value: unknown,
-): value is FolderOperationMetadata {
+): value is FolderMergeOperationMetadata {
   if (!value || typeof value !== "object") return false
   const record = value as Record<string, unknown>
-  const manifest = record.manifest
+  const uploadedManifest = record.uploadedManifest
   return (
     record.schemaVersion === 1 &&
-    record.kind === "DRAFT_FOLDER_REPLACEMENT" &&
+    record.kind === "DRAFT_FOLDER_MERGE" &&
     typeof record.workspaceId === "string" &&
     typeof record.draftId === "string" &&
     Number.isInteger(record.baseContentRevision) &&
     typeof record.sourceName === "string" &&
     Array.isArray(record.ignoreRules) &&
     Array.isArray(record.ignoredPaths) &&
-    Boolean(manifest) &&
-    typeof manifest === "object" &&
-    typeof (manifest as Record<string, unknown>).manifestHash === "string"
+    Array.isArray(record.files) &&
+    record.files.every(
+      (file) =>
+        Boolean(file) &&
+        typeof file === "object" &&
+        Number.isInteger(
+          (file as Record<string, unknown>).incomingIndex,
+        ) &&
+        ((file as Record<string, unknown>).incomingIndex as number) >= 0 &&
+        typeof (file as Record<string, unknown>).relativePath === "string",
+    ) &&
+    Boolean(uploadedManifest) &&
+    typeof uploadedManifest === "object" &&
+    typeof (uploadedManifest as Record<string, unknown>).manifestHash ===
+      "string"
   )
+}
+
+function mergeSnapshotFiles(
+  currentFiles: readonly SkillSnapshotFileRow[],
+  uploadedFiles: readonly SnapshotManifestFile[],
+): SnapshotManifestFile[] {
+  const uploadedByPath = new Map(
+    uploadedFiles.map((file) => [file.relativePath, file]),
+  )
+  return [
+    ...currentFiles
+      .filter((file) => !uploadedByPath.has(file.relativePath))
+      .map((file) => ({
+        relativePath: file.relativePath,
+        sha256: file.sha256,
+        byteSize: file.byteSize,
+        mediaTypeHint: file.mediaTypeHint,
+        contentKind: file.contentKind as "text" | "binary",
+      })),
+    ...uploadedFiles,
+  ].sort((left, right) =>
+    left.relativePath.localeCompare(right.relativePath, "en"),
+  )
+}
+
+function findFolderMergeCaseConflicts(
+  currentFiles: readonly SkillSnapshotFileRow[],
+  uploadedFiles: readonly SnapshotManifestFile[],
+): string[] {
+  const currentByCasefoldPath = new Map(
+    currentFiles.map((file) => [
+      file.relativePath.toLowerCase(),
+      file.relativePath,
+    ]),
+  )
+  return uploadedFiles.flatMap((file) => {
+    const currentPath = currentByCasefoldPath.get(
+      file.relativePath.toLowerCase(),
+    )
+    return currentPath && currentPath !== file.relativePath
+      ? [currentPath, file.relativePath]
+      : []
+  })
 }
 
 export interface DraftServiceOptions {
@@ -694,11 +753,11 @@ export class DraftService {
     }
   }
 
-  async previewFolderReplacement(
+  async previewFolderMerge(
     workspaceId: string,
     parts: AsyncIterableIterator<Multipart>,
     ifMatch: string | string[] | undefined,
-  ): Promise<DraftFolderReplacementPreview> {
+  ): Promise<DraftFolderMergePreview> {
     const draft = await getActiveDraftContext(this.database, workspaceId)
     assertDraftOpen(draft.status)
     assertMatchingEtag(ifMatch, draft.id, draft.contentRevision)
@@ -723,7 +782,7 @@ export class DraftService {
           ) {
             throw uploadValidationError(
               "DRAFT_UPLOAD_FIELD_INVALID",
-              "Folder replacement fields must be unique and precede files.",
+              "Folder merge fields must be unique and precede files.",
             )
           }
           fields.set(part.fieldname, mapMultipartField(part))
@@ -749,8 +808,8 @@ export class DraftService {
                   : "DRAFT_FOLDER_OPERATION_CREATE_FAILED",
               message:
                 code === "EEXIST"
-                  ? "This folder replacement operation identifier is already in use."
-                  : "The folder replacement staging area could not be created.",
+                  ? "This folder merge operation identifier is already in use."
+                  : "The folder merge staging area could not be created.",
               kind: code === "EEXIST" ? "conflict" : "internal",
               cause: error,
             })
@@ -760,7 +819,7 @@ export class DraftService {
           part.file.resume()
           throw uploadValidationError(
             "DRAFT_UPLOAD_FILE_INVALID",
-            "Folder replacement only accepts files fields.",
+            "Folder merge only accepts files fields.",
           )
         }
         if (incomingFiles.length >= this.limits.maxFiles) {
@@ -860,7 +919,6 @@ export class DraftService {
               conflicts,
             ),
             conflicts,
-            requiresDeletionConfirmation: false,
             committable: false,
           }
         }
@@ -925,34 +983,90 @@ export class DraftService {
         }
         return { incomingPath: incoming.incomingPath, relativePath }
       })
-      const manifest = await buildSnapshotManifest(candidates, this.limits)
-      await this.storage.materializeFiles(operationId, candidates)
+      const uploadedManifest = await buildSnapshotManifest(
+        candidates,
+        this.limits,
+      )
+      const conflicts = findFolderMergeCaseConflicts(
+        draft.currentFiles,
+        uploadedManifest.files,
+      )
+      if (conflicts.length > 0) {
+        await this.storage.cleanupOperation(operationId)
+        return {
+          operationId,
+          draftId: draft.id,
+          baseContentRevision: draft.contentRevision,
+          sourceName:
+            fields.get("sourceName")?.trim() ||
+            prepared.strippedRoot ||
+            "Skill folder",
+          ignoreRules: [...customRules],
+          summary: buildFolderPreviewSummary(
+            [],
+            draft.currentSnapshot.fileCount,
+            draft.currentSnapshot.totalBytes,
+            conflicts,
+          ),
+          conflicts,
+          committable: false,
+        }
+      }
+      const mergedFiles = mergeSnapshotFiles(
+        draft.currentFiles,
+        uploadedManifest.files,
+      )
+      if (mergedFiles.length > this.limits.maxFiles) {
+        throw uploadValidationError(
+          "UPLOAD_FILE_COUNT_EXCEEDED",
+          "The merged Draft contains too many files.",
+          { limit: this.limits.maxFiles },
+        )
+      }
+      const mergedTotalBytes = mergedFiles.reduce(
+        (total, file) => total + file.byteSize,
+        0,
+      )
+      if (mergedTotalBytes > this.limits.maxTotalBytes) {
+        throw uploadValidationError(
+          "UPLOAD_TOTAL_SIZE_EXCEEDED",
+          "The merged Draft exceeds the maximum total size.",
+          { limit: this.limits.maxTotalBytes },
+        )
+      }
+      assertNoFileDirectoryConflicts(
+        mergedFiles.map((file) => file.relativePath),
+      )
       const entries = buildDraftDiffEntries(
         draft.currentFiles,
-        manifest.files,
+        mergedFiles,
         ignored.ignoredPaths,
       )
       const summary = buildFolderPreviewSummary(
         entries,
-        manifest.fileCount,
-        manifest.totalBytes,
+        mergedFiles.length,
+        mergedTotalBytes,
       )
-      const requiresDeletionConfirmation = summary.deleted > 0
       const sourceName = validateDraftSourceName(
         fields.get("sourceName") || prepared.strippedRoot || undefined,
       )
-      const metadata: FolderOperationMetadata = {
+      const metadata: FolderMergeOperationMetadata = {
         schemaVersion: 1,
-        kind: "DRAFT_FOLDER_REPLACEMENT",
+        kind: "DRAFT_FOLDER_MERGE",
         workspaceId,
         draftId: draft.id,
         baseContentRevision: draft.contentRevision,
         sourceName,
         ignoreRules: [...customRules],
         ignoredPaths: ignored.ignoredPaths,
-        manifest,
+        uploadedManifest,
+        files: candidates.map((candidate) => ({
+          incomingIndex: incomingFiles.findIndex(
+            (file) => file.incomingPath === candidate.incomingPath,
+          ),
+          relativePath: candidate.relativePath,
+        })),
         summary,
-        requiresDeletionConfirmation,
       }
       await this.storage.writeOperationMetadata(operationId, metadata)
       return {
@@ -963,7 +1077,6 @@ export class DraftService {
         ignoreRules: [...customRules],
         summary,
         conflicts: [],
-        requiresDeletionConfirmation,
         committable: true,
       }
     } catch (error) {
@@ -974,10 +1087,9 @@ export class DraftService {
     }
   }
 
-  async commitFolderReplacement(
+  async commitFolderMerge(
     workspaceId: string,
     operationIdInput: string,
-    confirmDeletions: boolean,
     headers: {
       readonly ifMatch: string | string[] | undefined
       readonly idempotencyKey: string | string[] | undefined
@@ -991,15 +1103,15 @@ export class DraftService {
       throw new DomainError({
         code: "DRAFT_FOLDER_OPERATION_NOT_FOUND",
         message:
-          "The staged folder replacement was not found or is no longer available.",
+          "The staged folder merge was not found or is no longer available.",
         kind: "not_found",
         cause: error,
       })
     }
-    if (!isFolderOperationMetadata(metadataValue)) {
+    if (!isFolderMergeOperationMetadata(metadataValue)) {
       throw new DomainError({
         code: "DRAFT_FOLDER_OPERATION_INVALID",
-        message: "The staged folder replacement is invalid.",
+        message: "The staged folder merge is invalid.",
         kind: "conflict",
       })
     }
@@ -1007,7 +1119,7 @@ export class DraftService {
     if (metadata.workspaceId !== workspaceId) {
       throw new DomainError({
         code: "DRAFT_FOLDER_OPERATION_NOT_FOUND",
-        message: "The staged folder replacement was not found.",
+        message: "The staged folder merge was not found.",
         kind: "not_found",
       })
     }
@@ -1015,9 +1127,9 @@ export class DraftService {
     assertDraftOpen(draft.status)
     const idempotencyKey = requireIdempotencyKey(headers.idempotencyKey)
     const requestHash = hashRequest({
-      kind: "REPLACE_FOLDER",
+      kind: "MERGE_FOLDER",
       operationId,
-      manifestHash: metadata.manifest.manifestHash,
+      manifestHash: metadata.uploadedManifest.manifestHash,
       ignoreRules: metadata.ignoreRules,
     })
     const replay = await getDraftMutationReplay(this.database, {
@@ -1039,38 +1151,70 @@ export class DraftService {
       throw new DomainError({
         code: "DRAFT_FOLDER_PREVIEW_STALE",
         message:
-          "The Draft changed after this folder replacement was previewed.",
+          "The Draft changed after this folder merge was previewed.",
         kind: "precondition_failed",
         details: {
           currentEtag: createDraftEtag(draft.id, draft.contentRevision),
         },
       })
     }
-    if (
-      metadata.requiresDeletionConfirmation &&
-      !confirmDeletions
-    ) {
-      throw new DomainError({
-        code: "DRAFT_FOLDER_DELETION_CONFIRMATION_REQUIRED",
-        message:
-          "Confirm the listed deletions before replacing the Draft folder.",
-        kind: "conflict",
-        details: { deleted: metadata.summary.deleted },
-      })
-    }
-
     try {
+      await this.assertCurrentSnapshotIntegrity(draft)
+      const currentPaths = draft.currentFiles.map(
+        (file) => file.relativePath,
+      )
+      await this.storage.cloneSnapshotFiles(
+        operationId,
+        draft.currentSnapshotId,
+        currentPaths,
+      )
+      for (const file of metadata.files) {
+        await this.storage.moveIncomingToContent(
+          operationId,
+          file.incomingIndex,
+          file.relativePath,
+        )
+      }
+      const uploadedPaths = new Set(
+        metadata.files.map((file) => file.relativePath),
+      )
+      const relativePaths = [
+        ...currentPaths.filter((path) => !uploadedPaths.has(path)),
+        ...uploadedPaths,
+      ]
+      if (relativePaths.length > this.limits.maxFiles) {
+        throw uploadValidationError(
+          "UPLOAD_FILE_COUNT_EXCEEDED",
+          "The Draft contains too many files.",
+          { limit: this.limits.maxFiles },
+        )
+      }
+      assertNoFileDirectoryConflicts(relativePaths)
+      const manifest = await buildSnapshotManifest(
+        manifestCandidates(this.storage, operationId, relativePaths),
+        this.limits,
+      )
+      const ignoreRules = [
+        ...new Set([...draft.ignoreRules, ...metadata.ignoreRules]),
+      ]
+      const ignoredPaths = [
+        ...new Map(
+          [
+            ...draft.ignoredPaths.filter(
+              (path) => !uploadedPaths.has(path.relativePath),
+            ),
+            ...metadata.ignoredPaths,
+          ].map((path) => [path.relativePath, path]),
+        ).values(),
+      ]
       return await this.promoteAndCommit({
         draft,
         operationId,
         idempotencyKey,
         requestHash,
-        manifest: metadata.manifest,
-        ignoreRules: metadata.ignoreRules,
-        ignoredPaths: metadata.ignoredPaths,
-        sourceType: "folder",
-        sourceName: metadata.sourceName,
-        cleanupOperationOnSuccess: false,
+        manifest,
+        ignoreRules,
+        ignoredPaths,
       })
     } catch (error) {
       await this.storage.cleanupOperation(operationId).catch(() => undefined)

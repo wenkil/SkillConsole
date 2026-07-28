@@ -52,8 +52,8 @@ import {
 import {
   DraftConditionalHeadersSchema,
   DraftDiffSchema,
-  DraftFolderCommitSchema,
-  DraftFolderReplacementPreviewSchema,
+  DraftFolderMergeCommitSchema,
+  DraftFolderMergePreviewSchema,
   DraftMoveFileSchema,
   DraftMutationResponseSchema,
   DraftOperationParamsSchema,
@@ -457,16 +457,16 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
   )
 
   application.post(
-    "/api/skill-workspaces/:workspaceId/draft/folder-replacements",
+    "/api/skill-workspaces/:workspaceId/draft/folder-merges",
     {
       schema: {
         tags: ["skill-workspaces"],
-        summary: "Stage and preview a complete Draft folder replacement",
+        summary: "Stage and preview a folder merge into the current Draft",
         params: WorkspaceIdParamsSchema,
         headers: DraftConditionalHeadersSchema,
         consumes: ["multipart/form-data"],
         response: {
-          200: DraftFolderReplacementPreviewSchema,
+          200: DraftFolderMergePreviewSchema,
           404: ErrorResponseSchema,
           409: ErrorResponseSchema,
           412: ErrorResponseSchema,
@@ -477,7 +477,7 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
       },
     },
     async (request) =>
-      draftService.previewFolderReplacement(
+      draftService.previewFolderMerge(
         request.params.workspaceId,
         request.parts(),
         request.headers["if-match"],
@@ -485,14 +485,14 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
   )
 
   application.post(
-    "/api/skill-workspaces/:workspaceId/draft/folder-replacements/:operationId/commit",
+    "/api/skill-workspaces/:workspaceId/draft/folder-merges/:operationId/commit",
     {
       schema: {
         tags: ["skill-workspaces"],
-        summary: "Commit a staged Draft folder replacement",
+        summary: "Commit a staged folder merge into the current Draft",
         params: DraftOperationParamsSchema,
         headers: DraftWriteHeadersSchema,
-        body: DraftFolderCommitSchema,
+        body: DraftFolderMergeCommitSchema,
         response: {
           200: DraftMutationResponseSchema,
           404: ErrorResponseSchema,
@@ -503,10 +503,9 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
       },
     },
     async (request, reply) => {
-      const result = await draftService.commitFolderReplacement(
+      const result = await draftService.commitFolderMerge(
         request.params.workspaceId,
         request.params.operationId,
-        request.body.confirmDeletions,
         {
           ifMatch: request.headers["if-match"],
           idempotencyKey: request.headers["idempotency-key"],

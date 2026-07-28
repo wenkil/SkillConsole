@@ -1080,117 +1080,110 @@ test(
         "SNAPSHOT_FILE_CORRUPTED",
       )
 
-      const folderReplacementId = randomUUID()
-      const replacementForm = new FormData()
-      replacementForm.append("operationId", folderReplacementId)
-      replacementForm.append("sourceName", "replacement")
-      replacementForm.append(
+      await writeFile(
+        path.join(
+          dataRoot,
+          "snapshots",
+          expectedFolderSnapshotId,
+          "files",
+          "config",
+          "settings.json",
+        ),
+        '{"名称":"发票审核","enabled":true}\n',
+        "utf8",
+      )
+
+      const folderMergeId = randomUUID()
+      const mergeForm = new FormData()
+      mergeForm.append("operationId", folderMergeId)
+      mergeForm.append("sourceName", "supplement")
+      mergeForm.append(
         "ignoreRules",
         JSON.stringify(["*.tmp", "!keep.tmp"]),
       )
-      for (const replacement of [
+      for (const addition of [
         {
-          name: "replacement/SKILL.md",
-          content: "# Replacement\n",
+          name: "supplement/SKILL.md",
+          content: "# Merged update\n",
         },
         {
-          name: "replacement/keep.tmp",
+          name: "supplement/keep.tmp",
           content: "kept by negation\n",
         },
         {
-          name: "replacement/drop.tmp",
+          name: "supplement/drop.tmp",
           content: "ignored\n",
         },
         {
-          name: "replacement/new.json",
-          content: '{"replacement":true}\n',
+          name: "supplement/new.json",
+          content: '{"merged":true}\n',
         },
       ]) {
-        replacementForm.append(
+        mergeForm.append(
           "files",
-          new File([replacement.content], path.basename(replacement.name)),
-          replacement.name,
+          new File([addition.content], path.basename(addition.name)),
+          addition.name,
         )
       }
-      const replacementPreviewResponse = await fetch(
-        `${address}/api/skill-workspaces/${folderBody.workspace.id}/draft/folder-replacements`,
+      const mergePreviewResponse = await fetch(
+        `${address}/api/skill-workspaces/${folderBody.workspace.id}/draft/folder-merges`,
         {
           method: "POST",
           headers: { "If-Match": editableDraftEtag },
-          body: replacementForm,
+          body: mergeForm,
         },
       )
-      assert.equal(replacementPreviewResponse.status, 200)
-      const replacementPreview =
-        (await replacementPreviewResponse.json()) as {
+      assert.equal(mergePreviewResponse.status, 200)
+      const mergePreview =
+        (await mergePreviewResponse.json()) as {
           operationId: string
           committable: boolean
-          requiresDeletionConfirmation: boolean
           summary: {
             added: number
             modified: number
             deleted: number
+            unchanged: number
             ignored: number
             conflicts: number
             unpreviewable: number
+            totalFiles: number
           }
         }
-      assert.equal(replacementPreview.operationId, folderReplacementId)
-      assert.equal(replacementPreview.committable, true)
-      assert.equal(
-        replacementPreview.requiresDeletionConfirmation,
-        true,
-      )
-      assert.deepEqual(replacementPreview.summary, {
-        added: 2,
-        modified: 1,
-        deleted: 6,
-        unchanged: 0,
-        ignored: 1,
-        unpreviewable: 1,
-        conflicts: 0,
-        totalFiles: 3,
-        totalBytes:
-          Buffer.byteLength("# Replacement\n") +
-          Buffer.byteLength("kept by negation\n") +
-          Buffer.byteLength('{"replacement":true}\n'),
-      })
+      assert.equal(mergePreview.operationId, folderMergeId)
+      assert.equal(mergePreview.committable, true)
+      assert.equal(mergePreview.summary.added, 2)
+      assert.equal(mergePreview.summary.modified, 1)
+      assert.equal(mergePreview.summary.deleted, 0)
+      assert.equal(mergePreview.summary.unchanged, 6)
+      assert.equal(mergePreview.summary.ignored, 1)
+      assert.equal(mergePreview.summary.unpreviewable, 1)
+      assert.equal(mergePreview.summary.conflicts, 0)
+      assert.equal(mergePreview.summary.totalFiles, 9)
 
-      const replacementCommitUrl =
+      const mergeCommitUrl =
         `${address}/api/skill-workspaces/${folderBody.workspace.id}` +
-        `/draft/folder-replacements/${folderReplacementId}/commit`
-      const folderCommitKey = `folder-replacement-${folderReplacementId}`
-      const unconfirmedReplacement = await fetch(replacementCommitUrl, {
+        `/draft/folder-merges/${folderMergeId}/commit`
+      const folderCommitKey = `folder-merge-${folderMergeId}`
+      const committedMerge = await fetch(mergeCommitUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "If-Match": editableDraftEtag,
           "Idempotency-Key": folderCommitKey,
         },
-        body: JSON.stringify({ confirmDeletions: false }),
+        body: JSON.stringify({}),
       })
-      assert.equal(unconfirmedReplacement.status, 409)
-
-      const confirmedReplacement = await fetch(replacementCommitUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "If-Match": editableDraftEtag,
-          "Idempotency-Key": folderCommitKey,
-        },
-        body: JSON.stringify({ confirmDeletions: true }),
-      })
-      assert.equal(confirmedReplacement.status, 200)
-      const confirmedReplacementBody =
-        (await confirmedReplacement.json()) as {
-          draft: {
-            contentRevision: number
-            snapshot: { id: string }
-          }
+      assert.equal(committedMerge.status, 200)
+      const committedMergeBody = (await committedMerge.json()) as {
+        draft: {
+          contentRevision: number
+          sourceName: string
+          snapshot: { id: string }
         }
-      assert.equal(confirmedReplacementBody.draft.contentRevision, 3)
-      expectedFolderSnapshotId =
-        confirmedReplacementBody.draft.snapshot.id
+      }
+      assert.equal(committedMergeBody.draft.contentRevision, 3)
+      assert.equal(committedMergeBody.draft.sourceName, "folder-skill")
+      expectedFolderSnapshotId = committedMergeBody.draft.snapshot.id
 
       const draftDiffResponse = await fetch(
         `${address}/api/skill-workspaces/${folderBody.workspace.id}/draft/diff`,
@@ -1216,10 +1209,10 @@ test(
         snapshotId: draft.baseSnapshotId,
         versionId: null,
       })
-      assert.equal(draftDiff.summary.added, 2)
+      assert.equal(draftDiff.summary.added, 3)
       assert.equal(draftDiff.summary.modified, 1)
-      assert.equal(draftDiff.summary.deleted, 5)
-      assert.equal(draftDiff.summary.ignored, 1)
+      assert.equal(draftDiff.summary.deleted, 0)
+      assert.equal(draftDiff.summary.ignored, 3)
       assert.equal(draftDiff.summary.unpreviewable, 1)
       assert.ok(
         draftDiff.entries.some(
@@ -1232,9 +1225,30 @@ test(
         draftDiff.entries.some(
           (entry) =>
             entry.relativePath === "assets/data.bin" &&
-            entry.status === "DELETED" &&
+            entry.status === "UNCHANGED" &&
             !entry.previewable,
         ),
+      )
+
+      const afterFolderMergeResponse = await fetch(filesBase)
+      assert.equal(afterFolderMergeResponse.status, 200)
+      const afterFolderMerge =
+        (await afterFolderMergeResponse.json()) as {
+          files: Array<{ relativePath: string }>
+        }
+      assert.deepEqual(
+        afterFolderMerge.files.map((file) => file.relativePath),
+        [
+          "SKILL.md",
+          "assets/data.bin",
+          "assets/pixel.png",
+          "config/settings.json",
+          "config/settings.yaml",
+          "keep.tmp",
+          "new.json",
+          "references/new.txt",
+          "scripts/check.py",
+        ],
       )
 
       const versionsAfterDraftChanges = await fetch(

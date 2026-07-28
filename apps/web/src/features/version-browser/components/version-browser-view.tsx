@@ -1,6 +1,8 @@
 import {
+  AlertTriangle,
   Baseline,
   CheckCircle2,
+  CircleDashed,
   History,
   LoaderCircle,
   LockKeyhole,
@@ -8,12 +10,14 @@ import {
   PencilLine,
   RotateCcw,
 } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { VersionFilePreview } from "@/features/version-browser/components/version-file-preview"
 import { DraftFileEditor } from "@/features/version-browser/components/draft-file-editor"
-import { DraftChangePanel } from "@/features/version-browser/components/draft-change-panel"
+import { DraftLifecycleMenu } from "@/features/version-browser/components/draft-lifecycle-menu"
+import { DraftUploadMenu } from "@/features/version-browser/components/draft-upload-menu"
+import { VersionContextBar } from "@/features/version-browser/components/version-context-bar"
 import { VersionFileTree } from "@/features/version-browser/components/version-file-tree"
-import { VersionMetadataPanel } from "@/features/version-browser/components/version-metadata-panel"
 import { useVersionBrowserController } from "@/features/version-browser/hooks/use-version-browser-controller"
 import type { SkillBrowserTarget } from "@/features/version-browser/model/version-browser"
 import type { SkillWorkspace } from "@/features/workbench-home/model/workbench"
@@ -38,6 +42,7 @@ export function VersionBrowserView({
   onTargetSelect,
   onFileSelect,
 }: VersionBrowserViewProps) {
+  const { t } = useTranslation("versionBrowser")
   const controller = useVersionBrowserController({
     workspaceId: workspace.id,
     activeDraftId: workspace.activeDraft?.id ?? null,
@@ -83,9 +88,31 @@ export function VersionBrowserView({
     )
   }
 
+  const baseVersionTarget =
+    selectedTarget.kind === "draft" && selectedTarget.baseVersionId
+      ? controller.targets.find(
+          (target) =>
+            target.kind === "version" &&
+            target.id === selectedTarget.baseVersionId,
+        )
+      : null
+  const baseVersionNumber =
+    baseVersionTarget?.kind === "version"
+      ? baseVersionTarget.versionNumber
+      : null
+  const statusByPath =
+    selectedTarget.kind === "draft" && controller.draftDiff
+      ? Object.fromEntries(
+          controller.draftDiff.entries.map((entry) => [
+            entry.relativePath,
+            entry.status,
+          ]),
+        )
+      : undefined
+
   return (
     <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-foreground bg-background px-7 pt-5 pb-4">
+      <header className="shrink-0 border-b border-foreground bg-background px-7 pt-4 pb-3">
         <div className="flex items-start justify-between gap-6">
           <div className="min-w-0">
             <div className="mb-1.5 flex items-center gap-2 font-mono text-[10px] font-bold tracking-[0.08em] text-signal-dark uppercase">
@@ -106,7 +133,7 @@ export function VersionBrowserView({
             </h1>
           </div>
 
-          <div className="flex shrink-0 items-end gap-3">
+          <div className="flex shrink-0 items-end gap-2">
             <label className="grid gap-1 font-mono text-[9px] tracking-[0.04em] text-muted-foreground uppercase">
               {copy.versionPicker}
               <select
@@ -161,6 +188,31 @@ export function VersionBrowserView({
             <div className="flex h-9 items-center border border-rule bg-paper-muted px-3 font-mono text-[10px] text-muted-foreground">
               {copy.notTested}
             </div>
+            {selectedTarget.kind === "draft" ? (
+              <>
+                <Button
+                  className="h-9 rounded-none"
+                  disabled
+                  title={t("lifecycle.publishTodoDescription")}
+                  type="button"
+                >
+                  <CircleDashed
+                    aria-hidden="true"
+                    data-icon="inline-start"
+                  />
+                  {t("lifecycle.publishTodo")}
+                </Button>
+                <DraftLifecycleMenu
+                  diff={controller.draftDiff}
+                  draft={selectedTarget}
+                  onAbandon={async () => {
+                    await controller.actions.abandonDraft()
+                    onDraftAbandoned()
+                  }}
+                  pending={controller.mutationPending}
+                />
+              </>
+            ) : null}
             {selectedTarget.kind === "version" &&
             selectedTarget.isCurrent &&
             !controller.targets.some((target) => target.kind === "draft") ? (
@@ -186,7 +238,7 @@ export function VersionBrowserView({
           </div>
         </div>
 
-        <div className="mt-4 flex items-center gap-3 border border-technical/55 bg-technical/5 px-3.5 py-2 text-xs text-technical-foreground">
+        <div className="mt-3 flex items-center gap-3 border border-technical/55 bg-technical/5 px-3.5 py-2 text-xs text-technical-foreground">
           {selectedTarget.kind === "draft" ? (
             <PencilLine aria-hidden="true" className="size-4 shrink-0" />
           ) : (
@@ -205,14 +257,66 @@ export function VersionBrowserView({
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(14rem,17rem)_minmax(24rem,1fr)_minmax(14rem,17rem)] overflow-hidden">
+      <VersionContextBar
+        baseVersionNumber={baseVersionNumber}
+        copy={copy}
+        diff={
+          selectedTarget.kind === "draft" ? controller.draftDiff : null
+        }
+        locale={locale}
+        onSelectPath={onFileSelect}
+        target={selectedTarget}
+      />
+
+      {controller.mutationError ? (
+        <div
+          className="flex shrink-0 items-center justify-between gap-4 border-b border-destructive/60 bg-destructive/5 px-4 py-2 text-xs"
+          role="alert"
+        >
+          <span className="flex items-center gap-2">
+            <AlertTriangle
+              aria-hidden="true"
+              className="size-4 shrink-0 text-destructive"
+            />
+            {controller.mutationError.message}
+          </span>
+          <button
+            className="shrink-0 font-mono text-[10px] underline"
+            onClick={controller.actions.clearMutationError}
+            type="button"
+          >
+            {t("draft.close")}
+          </button>
+        </div>
+      ) : null}
+
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(15rem,18rem)_minmax(0,1fr)] overflow-hidden">
         <VersionFileTree
+          actions={
+            selectedTarget.kind === "draft" ? (
+              <DraftUploadMenu
+                draft={selectedTarget}
+                folderPreview={controller.folderPreview}
+                onClearFolderPreview={
+                  controller.actions.clearFolderPreview
+                }
+                onCommitFolder={controller.actions.commitFolder}
+                onPreviewFolder={controller.actions.previewFolder}
+                onUploadFile={async (file, relativePath) => {
+                  await controller.actions.uploadFile(file, relativePath)
+                  onFileSelect(relativePath)
+                }}
+                pending={controller.mutationPending}
+              />
+            ) : null
+          }
           copy={copy}
           fileCount={controller.files.length}
           onFileSelect={onFileSelect}
           onSearchTermChange={controller.actions.setSearchTerm}
           searchTerm={controller.searchTerm}
           selectedPath={controller.selectedFilePath}
+          statusByPath={statusByPath}
           tree={controller.tree}
         />
         {selectedTarget.kind === "draft" &&
@@ -234,6 +338,18 @@ export function VersionBrowserView({
             file={controller.selectedFile}
             key={controller.selectedFile.relativePath}
             onClearError={controller.actions.clearMutationError}
+            onDelete={async () => {
+              const relativePath =
+                controller.selectedFile?.relativePath
+              if (!relativePath) return
+
+              await controller.actions.deleteFile(relativePath)
+              const fallback = controller.files.find(
+                (candidate) =>
+                  candidate.relativePath !== relativePath,
+              )
+              if (fallback) onFileSelect(fallback.relativePath)
+            }}
             onSave={controller.actions.saveText}
             preview={controller.textPreview}
             saving={controller.mutationPending}
@@ -251,46 +367,6 @@ export function VersionBrowserView({
             onRetry={controller.actions.retryPreview}
             previewIssue={controller.previewIssue}
             textPreview={controller.textPreview}
-          />
-        )}
-        {selectedTarget.kind === "draft" ? (
-          <DraftChangePanel
-            diff={controller.draftDiff}
-            draft={selectedTarget}
-            errorMessage={controller.mutationError?.message ?? null}
-            file={controller.selectedFile}
-            folderPreview={controller.folderPreview}
-            onAbandon={async () => {
-              await controller.actions.abandonDraft()
-              onDraftAbandoned()
-            }}
-            onClearFolderPreview={controller.actions.clearFolderPreview}
-            onCommitFolder={controller.actions.commitFolder}
-            onDeleteFile={async (relativePath) => {
-              await controller.actions.deleteFile(relativePath)
-              const fallback = controller.files.find(
-                (candidate) => candidate.relativePath !== relativePath,
-              )
-              if (fallback) onFileSelect(fallback.relativePath)
-            }}
-            onMoveFile={async (fromPath, toPath) => {
-              await controller.actions.moveFile(fromPath, toPath)
-              onFileSelect(toPath)
-            }}
-            onPreviewFolder={controller.actions.previewFolder}
-            onSelectPath={onFileSelect}
-            onUploadFile={async (file, relativePath) => {
-              await controller.actions.uploadFile(file, relativePath)
-              onFileSelect(relativePath)
-            }}
-            pending={controller.mutationPending}
-          />
-        ) : (
-          <VersionMetadataPanel
-            copy={copy}
-            file={controller.selectedFile}
-            locale={locale}
-            target={selectedTarget}
           />
         )}
       </div>

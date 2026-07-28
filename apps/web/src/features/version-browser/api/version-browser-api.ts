@@ -1,6 +1,6 @@
 import type {
   DraftDiff,
-  DraftFolderReplacementPreview,
+  DraftFolderMergePreview,
   DraftResource,
   SkillBrowserTarget,
   SkillDraftBrowser,
@@ -150,12 +150,12 @@ export function readDraftBaseTextFile(
   return readJson(`${draftBaseUrl(workspaceId)}/diff/base-text?${query}`)
 }
 
-export async function previewDraftFolderReplacement(
+export async function previewDraftFolderMerge(
   workspaceId: string,
   etag: string,
   files: readonly File[],
   ignoreRules: readonly string[],
-): Promise<DraftFolderReplacementPreview> {
+): Promise<DraftFolderMergePreview> {
   const body = new FormData()
   body.append("operationId", crypto.randomUUID())
   body.append(
@@ -167,7 +167,7 @@ export async function previewDraftFolderReplacement(
     body.append("files", file, file.webkitRelativePath || file.name)
   }
   const response = await fetch(
-    `${draftBaseUrl(workspaceId)}/folder-replacements`,
+    `${draftBaseUrl(workspaceId)}/folder-merges`,
     {
       method: "POST",
       headers: { Accept: "application/json", "If-Match": etag },
@@ -175,25 +175,24 @@ export async function previewDraftFolderReplacement(
     },
   )
   if (!response.ok) throw await readApiError(response)
-  return (await response.json()) as DraftFolderReplacementPreview
+  return (await response.json()) as DraftFolderMergePreview
 }
 
-export function commitDraftFolderReplacement(
+export function commitDraftFolderMerge(
   workspaceId: string,
   etag: string,
   operationId: string,
-  confirmDeletions: boolean,
 ): Promise<DraftResource> {
   return readDraftResource(
-    `${draftBaseUrl(workspaceId)}/folder-replacements/${encodeURIComponent(operationId)}/commit`,
+    `${draftBaseUrl(workspaceId)}/folder-merges/${encodeURIComponent(operationId)}/commit`,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "If-Match": etag,
-        "Idempotency-Key": `folder-replacement-${operationId}`,
+        "Idempotency-Key": `folder-merge-${operationId}`,
       },
-      body: JSON.stringify({ confirmDeletions }),
+      body: JSON.stringify({}),
     },
   )
 }
