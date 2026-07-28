@@ -1,0 +1,224 @@
+import { render, screen, waitFor, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
+import { I18nextProvider } from "react-i18next"
+import { MemoryRouter } from "react-router-dom"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+
+import { AppRoutes } from "@/app/App"
+import { i18n } from "@/shared/i18n/i18n"
+
+const workspace = vi.hoisted(() => ({
+  id: "01900000-0000-7000-8000-000000000001",
+  name: "发票审核 Skill",
+  createdAt: "2026-07-24T10:00:00.000Z",
+  updatedAt: "2026-07-24T10:00:00.000Z",
+  activeDraft: {
+    id: "01900000-0000-7000-8000-000000000004",
+    improvementCycleId: "01900000-0000-7000-8000-000000000005",
+    baseVersionId: "01900000-0000-7000-8000-000000000002",
+    baseSnapshotId: "01900000-0000-7000-8000-000000000003",
+    contentRevision: 2,
+    status: "OPEN" as const,
+    sourceType: "folder" as const,
+    sourceName: "invoice-skill",
+    createdAt: "2026-07-24T11:00:00.000Z",
+    updatedAt: "2026-07-24T11:30:00.000Z",
+    snapshot: {
+      id: "01900000-0000-7000-8000-000000000006",
+      manifestHash: "b".repeat(64),
+      fileCount: 13,
+      totalBytes: 5120,
+    },
+  },
+  currentVersion: {
+    id: "01900000-0000-7000-8000-000000000002",
+    versionNumber: 1,
+    sourceType: "folder" as const,
+    sourceName: "invoice-skill",
+    publishedAt: "2026-07-24T10:00:00.000Z",
+    isDefaultBaseline: true,
+    snapshot: {
+      id: "01900000-0000-7000-8000-000000000003",
+      manifestHash: "a".repeat(64),
+      fileCount: 12,
+      totalBytes: 4096,
+    },
+  },
+}))
+
+vi.mock(
+  "@/features/workbench-home/hooks/use-workbench-home-controller",
+  async () => {
+    const {
+      createEmptyRuntimeDefaults,
+      createEmptyWorkbenchDraft,
+    } = await import("@/features/workbench-home/model/workbench")
+    const { getWorkbenchHomeCopy } = await import(
+      "@/features/workbench-home/model/workbench-home-copy"
+    )
+    const { i18n: testI18n } = await import("@/shared/i18n/i18n")
+    const copy = getWorkbenchHomeCopy(
+      testI18n.getFixedT("zh-CN", "common"),
+      testI18n.getFixedT("zh-CN", "workbenchHome"),
+    )
+
+    return {
+      useWorkbenchHomeController: () => ({
+        locale: "zh-CN",
+        copy,
+        workspaces: [workspace],
+        activeWorkspace: null,
+        workspaceList: {
+          loading: false,
+          error: false,
+        },
+        createDialog: {
+          open: false,
+          draft: createEmptyWorkbenchDraft(),
+          errors: {},
+          submitting: false,
+          folderPolicyStatus: "ready",
+        },
+        settingsDialog: {
+          open: false,
+          values: createEmptyRuntimeDefaults(),
+        },
+        actions: {
+          changeLocale: vi.fn(),
+          openCreateDialog: vi.fn(),
+          closeCreateDialog: vi.fn(),
+          updateWorkbenchName: vi.fn(),
+          updateSourceKind: vi.fn(),
+          selectSource: vi.fn(),
+          createWorkspace: vi.fn(async () => null),
+          retryWorkspaceList: vi.fn(),
+          openSettingsDialog: vi.fn(),
+          closeSettingsDialog: vi.fn(),
+          updateRuntimeDefaults: vi.fn(),
+          saveRuntimeDefaults: vi.fn(),
+        },
+      }),
+    }
+  },
+)
+
+vi.mock(
+  "@/features/version-browser/components/version-browser-view",
+  () => ({
+    VersionBrowserView: ({
+      selectedVersionId,
+    }: {
+      selectedVersionId: string | null
+    }) => (
+      <main>
+        版本浏览器
+        <span>
+          {selectedVersionId ? `指定版本 ${selectedVersionId}` : "活动草稿"}
+        </span>
+      </main>
+    ),
+  }),
+)
+
+function renderRoute(path: string) {
+  return render(
+    <I18nextProvider i18n={i18n}>
+      <MemoryRouter initialEntries={[path]}>
+        <AppRoutes />
+      </MemoryRouter>
+    </I18nextProvider>,
+  )
+}
+
+beforeEach(async () => {
+  localStorage.clear()
+  await i18n.changeLanguage("zh-CN")
+})
+
+describe("workspace routes", () => {
+  it("opens the workspace overview at the workspace root", () => {
+    renderRoute(`/workbenches/${workspace.id}`)
+
+    expect(
+      screen.getByRole("heading", { name: workspace.name }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("link", { name: "工作台概览" }),
+    ).toHaveAttribute("aria-current", "page")
+    expect(screen.queryByText("版本浏览器")).not.toBeInTheDocument()
+  })
+
+  it.each([
+    [`/workbenches/${workspace.id}/versions`, "活动草稿"],
+    [
+      `/workbenches/${workspace.id}/versions/${workspace.currentVersion.id}`,
+      `指定版本 ${workspace.currentVersion.id}`,
+    ],
+  ])("opens the versions module directly at %s", (path, targetLabel) => {
+    renderRoute(path)
+
+    expect(screen.getByText("版本浏览器")).toBeInTheDocument()
+    expect(screen.getByText(targetLabel)).toBeInTheDocument()
+    expect(
+      screen.getByRole("link", { name: "Skill 版本" }),
+    ).toHaveAttribute("aria-current", "page")
+  })
+
+  it.each([
+    ["test-cases", "测试用例"],
+    ["datasets", "数据集"],
+    ["runs", "测试任务"],
+  ])("renders the %s placeholder without fake actions", (path, title) => {
+    renderRoute(`/workbenches/${workspace.id}/${path}`)
+
+    const main = screen.getByRole("main")
+    expect(
+      within(main).getByRole("heading", { name: title }),
+    ).toBeInTheDocument()
+    expect(
+      within(main).getByText("将在后续迭代实现"),
+    ).toBeInTheDocument()
+    expect(within(main).queryByRole("button")).not.toBeInTheDocument()
+  })
+
+  it.each(["runtime", "unknown-module"])(
+    "redirects %s to the workspace overview",
+    async (path) => {
+      renderRoute(`/workbenches/${workspace.id}/${path}`)
+
+      expect(
+        await screen.findByRole("heading", { name: workspace.name }),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole("link", { name: "工作台概览" }),
+      ).toHaveAttribute("aria-current", "page")
+    },
+  )
+
+  it("persists the collapsed sidebar and keeps accessible navigation", async () => {
+    const user = userEvent.setup()
+    renderRoute(`/workbenches/${workspace.id}`)
+
+    const collapseButton = screen.getByRole("button", {
+      name: "收起工作台侧栏",
+    })
+    expect(collapseButton).toHaveAttribute("aria-expanded", "true")
+
+    await user.click(collapseButton)
+
+    const expandButton = screen.getByRole("button", {
+      name: "展开工作台侧栏",
+    })
+    expect(expandButton).toHaveAttribute("aria-expanded", "false")
+    expect(
+      screen.getByRole("link", { name: "Skill 版本" }),
+    ).toBeInTheDocument()
+    await waitFor(() => {
+      expect(
+        localStorage.getItem(
+          "skillconsole:workspace-navigation-collapsed",
+        ),
+      ).toBe("true")
+    })
+  })
+})

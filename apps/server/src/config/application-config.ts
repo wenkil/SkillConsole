@@ -200,7 +200,7 @@ export function parseApplicationConfig(
     uploadLimits: {
       maxFiles: parsePositiveInteger(
         environment.SKILLCONSOLE_UPLOAD_MAX_FILES,
-        2_000,
+        20_000,
         "SKILLCONSOLE_UPLOAD_MAX_FILES",
         issues,
       ),

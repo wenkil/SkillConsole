@@ -38,6 +38,7 @@ interface DraftFileEditorProps {
 const editorTheme = EditorView.theme({
   "&": {
     height: "100%",
+    minHeight: "0",
     backgroundColor: "var(--paper-raised)",
     color: "var(--foreground)",
     fontSize: "12px",
@@ -45,6 +46,7 @@ const editorTheme = EditorView.theme({
   ".cm-scroller": {
     fontFamily: "var(--font-mono)",
     lineHeight: "1.65",
+    overflow: "auto",
   },
   ".cm-gutters": {
     backgroundColor: "var(--paper-muted)",
@@ -118,7 +120,7 @@ function MergeComparison({
   ])
 
   return (
-    <section className="flex h-full min-h-0 flex-col">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="grid grid-cols-2 divide-x divide-rule border-b border-rule bg-paper-muted">
         <h3 className="px-3 py-2 font-mono text-[10px] font-bold tracking-[0.04em] uppercase">
           {comparisonLabel}
@@ -173,8 +175,8 @@ export function DraftFileEditor({
   )
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-col bg-background">
-      <header className="flex min-h-12 items-center justify-between gap-3 border-b border-foreground bg-paper-raised px-4">
+    <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background">
+      <header className="flex min-h-12 shrink-0 items-center justify-between gap-3 border-b border-foreground bg-paper-raised px-4">
         <div className="min-w-0">
           <strong className="block truncate font-mono text-xs">
             {file.relativePath}
@@ -219,7 +221,7 @@ export function DraftFileEditor({
 
       {errorMessage ? (
         <div
-          className="flex items-center justify-between gap-4 border-b border-destructive/60 bg-destructive/5 px-4 py-2 text-xs"
+          className="flex shrink-0 items-center justify-between gap-4 border-b border-destructive/60 bg-destructive/5 px-4 py-2 text-xs"
           role="alert"
         >
           <span className="flex items-center gap-2">
@@ -241,7 +243,7 @@ export function DraftFileEditor({
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 flex-1 overflow-hidden">
         {mode === "diff" ? (
           <MergeComparison
             comparisonLabel={comparisonLabel}
@@ -262,6 +264,7 @@ export function DraftFileEditor({
               highlightActiveLineGutter: true,
               lineNumbers: true,
             }}
+            className="h-full overflow-hidden"
             extensions={extensions}
             height="100%"
             onChange={setContent}
@@ -271,7 +274,7 @@ export function DraftFileEditor({
       </div>
 
       {unsaved ? (
-        <footer className="flex items-center justify-between border-t border-rule bg-paper-muted px-4 py-2 font-mono text-[10px]">
+        <footer className="flex shrink-0 items-center justify-between border-t border-rule bg-paper-muted px-4 py-2 font-mono text-[10px]">
           <span>{t("draft.saveNotice")}</span>
           <button
             className="inline-flex items-center gap-1 underline"

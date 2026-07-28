@@ -149,6 +149,11 @@ describe("DraftFileEditor", () => {
     const editor = screen.getByRole("textbox", {
       name: "草稿文件编辑器",
     })
+    expect(editor.closest("section")).toHaveClass(
+      "h-full",
+      "overflow-hidden",
+    )
+    expect(editor.parentElement).toHaveClass("overflow-hidden")
     await user.clear(editor)
     await user.type(editor, "# Local unsaved")
     await user.click(screen.getByRole("button", { name: "保存草稿" }))

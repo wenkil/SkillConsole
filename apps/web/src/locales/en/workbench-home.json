@@ -70,6 +70,10 @@
       }
     },
     "dropHint": "Click to browse or drop the source here.",
+    "preparingSource": "Reading and organizing files",
+    "preparingSourceDescription": "Large folders may take a moment. Please wait.",
+    "uploadingSource": "Uploading and creating the workbench",
+    "uploadingSourceDescription": "Transferring files, building the Manifest, and saving the initial candidate. Keep this window open.",
     "loadingUploadPolicy": "Loading the folder upload policy…",
     "uploadPolicyUnavailable": "The folder upload policy is unavailable. Close the dialog and try again.",
     "importSummary": "Import summary",
@@ -92,6 +96,7 @@
       "zipRequired": "Choose one valid .zip archive."
     },
     "createFailed": "Initial candidate creation failed",
+    "fileCountExceeded": "The selected Skill source exceeds the server file-count limit. Reduce the file count or adjust the server upload configuration, then try again.",
     "unknownCreateError": "Creation could not be completed. Check the local service and try again."
   },
   "settingsDialog": {
@@ -105,6 +110,44 @@
   "notifications": {
     "workspaceCreated": "Workbench and initial candidate created",
     "settingsSaved": "Settings saved"
+  },
+  "workspaceShell": {
+    "navigation": {
+      "label": "Workbench navigation",
+      "overview": "Workbench overview",
+      "versions": "Skill versions",
+      "testCases": "Test cases",
+      "datasets": "Datasets",
+      "runs": "Test runs"
+    },
+    "backToList": "Back to workbench list",
+    "collapseSidebar": "Collapse workbench sidebar",
+    "expandSidebar": "Expand workbench sidebar",
+    "initialCandidate": "Initial candidate",
+    "draftBasedOn": "Draft · based on V{{version}}",
+    "noFormalVersion": "No formal version",
+    "localFirst": "LOCAL-FIRST · data stays on this machine",
+    "loading": "Loading workbench",
+    "loadError": "Workbench unavailable",
+    "loadErrorDescription": "Make sure the local service and database are running, then retry.",
+    "retry": "Reload",
+    "moduleEyebrow": "Workbench module",
+    "placeholders": {
+      "status": "Planned for a future iteration",
+      "plannedLabel": "Planned delivery",
+      "testCases": {
+        "description": "Manage Skill test inputs, expected results, and reusable test scenarios.",
+        "plannedStage": "Iteration 4 · test asset development"
+      },
+      "datasets": {
+        "description": "Organize data files, sample collections, and data versions referenced by test cases.",
+        "plannedStage": "Iteration 4 · test asset development"
+      },
+      "runs": {
+        "description": "Start test runs, track execution status, and inspect run evidence.",
+        "plannedStage": "Future iteration · test execution capabilities"
+      }
+    }
   },
   "overview": {
     "backToHome": "Back to workbench home",

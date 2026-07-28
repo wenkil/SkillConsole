@@ -12,6 +12,7 @@ import type {
   DragEvent,
   InputHTMLAttributes,
 } from "react"
+import { useState } from "react"
 
 import type {
   CreateSkillSourceKind,
@@ -48,7 +49,7 @@ interface CreateWorkbenchDialogProps {
   onOpenChange: (open: boolean) => void
   onNameChange: (name: string) => void
   onSourceKindChange: (kind: CreateSkillSourceKind) => void
-  onSourceSelect: (files: readonly File[]) => void
+  onSourceSelect: (files: readonly File[]) => void | Promise<void>
   onSubmit: () => void
 }
 
@@ -71,6 +72,19 @@ const sourceIcons = {
   zip: FileArchive,
 } satisfies Record<CreateSkillSourceKind, typeof FolderOpen>
 
+function waitForBusyStatePaint(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame !== "function") {
+      setTimeout(resolve, 0)
+      return
+    }
+
+    requestAnimationFrame(() => {
+      setTimeout(resolve, 0)
+    })
+  })
+}
+
 export function CreateWorkbenchDialog({
   open,
   draft,
@@ -84,9 +98,11 @@ export function CreateWorkbenchDialog({
   onSourceSelect,
   onSubmit,
 }: CreateWorkbenchDialogProps) {
+  const [isPreparingSource, setPreparingSource] = useState(false)
   const sourceInputId = `workbench-${draft.sourceKind}-source`
   const SelectedSourceIcon = sourceIcons[draft.sourceKind]
   const sourceError = sourceErrorMessage(errors.source, copy)
+  const interactionLocked = submitting || isPreparingSource
   const folderPolicyBlocked =
     draft.sourceKind === "folder" && folderPolicyStatus !== "ready"
   let dropHint = copy.dropHint
@@ -97,21 +113,38 @@ export function CreateWorkbenchDialog({
         : copy.loadingUploadPolicy
   }
 
+  async function prepareSource(files: readonly File[]) {
+    setPreparingSource(true)
+    try {
+      await waitForBusyStatePaint()
+      await onSourceSelect(files)
+    } finally {
+      setPreparingSource(false)
+    }
+  }
+
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    onSourceSelect(Array.from(event.target.files ?? []))
+    void prepareSource(Array.from(event.target.files ?? []))
   }
 
   function handleDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault()
-    if (folderPolicyBlocked) return
-    onSourceSelect(Array.from(event.dataTransfer.files))
+    if (folderPolicyBlocked || interactionLocked) return
+    void prepareSource(Array.from(event.dataTransfer.files))
   }
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
+    <Dialog
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && isPreparingSource) return
+        onOpenChange(nextOpen)
+      }}
+      open={open}
+    >
       <DialogContent
-        aria-busy={submitting}
+        aria-busy={interactionLocked}
         className="gap-0 rounded-none border-foreground bg-paper-raised p-0 shadow-[12px_12px_0_rgb(16_24_32/18%)] sm:max-w-3xl"
+        showCloseButton={!interactionLocked}
       >
         <DialogHeader className="border-b border-foreground px-6 py-5">
           <div className="mb-2 flex items-center gap-2 font-mono text-[10px] font-bold tracking-[0.08em] text-signal-dark uppercase">
@@ -134,7 +167,7 @@ export function CreateWorkbenchDialog({
             <Input
               aria-invalid={Boolean(errors.name)}
               className="h-10 rounded-none bg-white/45 shadow-none"
-              disabled={submitting}
+              disabled={interactionLocked}
               id="workbench-name"
               maxLength={120}
               onChange={(event) => onNameChange(event.target.value)}
@@ -158,7 +191,7 @@ export function CreateWorkbenchDialog({
             </div>
             <ToggleGroup
               className="grid w-full grid-cols-2 gap-2"
-              disabled={submitting}
+              disabled={interactionLocked}
               onValueChange={(value) => {
                 if (value === "folder" || value === "zip") {
                   onSourceKindChange(value)
@@ -201,7 +234,7 @@ export function CreateWorkbenchDialog({
                 : undefined
             }
             className="sr-only"
-            disabled={submitting || folderPolicyBlocked}
+            disabled={interactionLocked || folderPolicyBlocked}
             id={sourceInputId}
             key={draft.sourceKind}
             multiple={draft.sourceKind === "folder"}
@@ -218,21 +251,44 @@ export function CreateWorkbenchDialog({
             className={cn(
               buttonVariants({ variant: "outline" }),
               "flex h-28 w-full flex-col gap-1.5 rounded-none border-dashed border-rule bg-background text-muted-foreground shadow-none hover:border-primary hover:bg-accent hover:text-signal-dark",
-              (submitting || folderPolicyBlocked) &&
+              (interactionLocked || folderPolicyBlocked) &&
                 "pointer-events-none opacity-60",
             )}
+            aria-busy={isPreparingSource}
+            aria-live="polite"
             htmlFor={sourceInputId}
             onDragOver={(event) => event.preventDefault()}
             onDrop={handleDrop}
           >
-            <Upload aria-hidden="true" className="size-7" />
-            <strong className="text-foreground">
-              {copy.sourceKinds[draft.sourceKind].choose}
-            </strong>
-            <span className="text-xs">{dropHint}</span>
+            {isPreparingSource || submitting ? (
+              <>
+                <LoaderCircle
+                  aria-hidden="true"
+                  className="size-7 animate-spin text-primary"
+                />
+                <strong className="text-foreground">
+                  {isPreparingSource
+                    ? copy.preparingSource
+                    : copy.uploadingSource}
+                </strong>
+                <span className="text-xs">
+                  {isPreparingSource
+                    ? copy.preparingSourceDescription
+                    : copy.uploadingSourceDescription}
+                </span>
+              </>
+            ) : (
+              <>
+                <Upload aria-hidden="true" className="size-7" />
+                <strong className="text-foreground">
+                  {copy.sourceKinds[draft.sourceKind].choose}
+                </strong>
+                <span className="text-xs">{dropHint}</span>
+              </>
+            )}
           </Label>
 
-          {draft.source && (
+          {draft.source && !interactionLocked && (
             <section
               aria-label={copy.importSummary}
               className="border border-technical bg-white/35"
@@ -306,11 +362,11 @@ export function CreateWorkbenchDialog({
             </section>
           )}
 
-          {sourceError && (
+          {sourceError && !interactionLocked && (
             <p className="text-xs text-destructive">{sourceError}</p>
           )}
 
-          {errors.upload && (
+          {errors.upload && !interactionLocked && (
             <div className="border-l-4 border-destructive bg-destructive/8 px-4 py-3 text-sm text-destructive">
               <strong className="block">{copy.createFailed}</strong>
               <span className="mt-1 block text-xs">{errors.upload}</span>
@@ -322,7 +378,7 @@ export function CreateWorkbenchDialog({
           <DialogClose asChild>
             <Button
               className="rounded-none border-foreground shadow-none"
-              disabled={submitting}
+              disabled={interactionLocked}
               type="button"
               variant="outline"
             >
@@ -331,7 +387,7 @@ export function CreateWorkbenchDialog({
           </DialogClose>
           <Button
             className="min-w-44 rounded-none font-bold shadow-none"
-            disabled={submitting}
+            disabled={interactionLocked}
             onClick={onSubmit}
             type="button"
           >

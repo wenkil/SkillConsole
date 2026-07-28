@@ -17,6 +17,7 @@ import {
 } from "../../infrastructure/database/index.js"
 
 import type { DraftIgnoredPath } from "./draft-ignore.js"
+import { createSnapshotFileInsertBatches } from "./snapshot-file-insert-batches.js"
 import type { SnapshotManifest } from "./snapshot-manifest.js"
 import {
   getActiveSkillDraft,
@@ -230,16 +231,12 @@ export async function commitDraftSnapshot(
         totalBytes: input.manifest.totalBytes,
         createdAt: now,
       })
-      await transaction.insert(skillSnapshotFiles).values(
-        input.manifest.files.map((file) => ({
-          snapshotId: input.snapshotId,
-          relativePath: file.relativePath,
-          sha256: file.sha256,
-          byteSize: file.byteSize,
-          mediaTypeHint: file.mediaTypeHint,
-          contentKind: file.contentKind,
-        })),
-      )
+      for (const batch of createSnapshotFileInsertBatches(
+        input.snapshotId,
+        input.manifest.files,
+      )) {
+        await transaction.insert(skillSnapshotFiles).values(batch)
+      }
 
       const [updatedDraft] = await transaction
         .update(skillDrafts)

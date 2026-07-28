@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   Baseline,
   CheckCircle2,
   History,
@@ -25,7 +24,7 @@ interface VersionBrowserViewProps {
   locale: string
   selectedVersionId: string | null
   selectedFilePath: string | null
-  onBack: () => void
+  onDraftAbandoned: () => void
   onTargetSelect: (target: Pick<SkillBrowserTarget, "kind" | "id">) => void
   onFileSelect: (relativePath: string) => void
 }
@@ -35,7 +34,7 @@ export function VersionBrowserView({
   locale,
   selectedVersionId,
   selectedFilePath,
-  onBack,
+  onDraftAbandoned,
   onTargetSelect,
   onFileSelect,
 }: VersionBrowserViewProps) {
@@ -89,15 +88,6 @@ export function VersionBrowserView({
       <header className="shrink-0 border-b border-foreground bg-background px-7 pt-5 pb-4">
         <div className="flex items-start justify-between gap-6">
           <div className="min-w-0">
-            <Button
-              className="mb-2 h-auto rounded-none px-0 py-0 text-xs"
-              onClick={onBack}
-              type="button"
-              variant="link"
-            >
-              <ArrowLeft aria-hidden="true" data-icon="inline-start" />
-              {copy.backToHome}
-            </Button>
             <div className="mb-1.5 flex items-center gap-2 font-mono text-[10px] font-bold tracking-[0.08em] text-signal-dark uppercase">
               {selectedTarget.kind === "draft" ? (
                 <PencilLine aria-hidden="true" className="size-3.5" />
@@ -228,11 +218,7 @@ export function VersionBrowserView({
         {selectedTarget.kind === "draft" &&
         controller.selectedFile &&
         controller.textPreview &&
-        [".md", ".txt", ".json", ".yaml", ".yml"].some((extension) =>
-          controller.selectedFile!.relativePath
-            .toLowerCase()
-            .endsWith(extension),
-        ) ? (
+        controller.selectedFile.contentKind === "text" ? (
           <DraftFileEditor
             basePreview={controller.baseTextPreview}
             conflict={controller.conflict}
@@ -276,7 +262,7 @@ export function VersionBrowserView({
             folderPreview={controller.folderPreview}
             onAbandon={async () => {
               await controller.actions.abandonDraft()
-              onBack()
+              onDraftAbandoned()
             }}
             onClearFolderPreview={controller.actions.clearFolderPreview}
             onCommitFolder={controller.actions.commitFolder}

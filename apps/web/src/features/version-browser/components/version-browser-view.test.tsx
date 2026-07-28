@@ -151,16 +151,33 @@ vi.mock("@/features/version-browser/api/version-browser-api", () => ({
         previewKind: "markdown",
         previewable: true,
       },
+      {
+        relativePath: "scripts/assemble_ppt.py",
+        sha256: "d".repeat(64),
+        byteSize: 24,
+        mediaTypeHint: "text/x-python",
+        contentKind: "text",
+        previewKind: "text",
+        previewable: true,
+      },
     ],
   })),
   readTargetTextFilePreview: vi.fn(
-    async (_workspaceId: string, target: { id: string }) => ({
-      kind: "markdown",
-      relativePath: "SKILL.md",
-      mediaType: "text/markdown",
+    async (
+      _workspaceId: string,
+      target: { id: string },
+      relativePath: string,
+    ) => ({
+      kind: relativePath.endsWith(".md") ? "markdown" : "text",
+      relativePath,
+      mediaType: relativePath.endsWith(".md")
+        ? "text/markdown"
+        : "text/plain",
       encoding: "utf-8",
       content:
-        target.id === initialCandidate.id
+        relativePath.endsWith(".py")
+          ? "print('editable')\n"
+          : target.id === initialCandidate.id
           ? "# Candidate content"
           : target.id === versions[0]!.id
             ? "# V2 content"
@@ -185,7 +202,7 @@ function VersionSwitchHarness() {
   return (
     <VersionBrowserView
       locale="zh-CN"
-      onBack={vi.fn()}
+      onDraftAbandoned={vi.fn()}
       onFileSelect={vi.fn()}
       onTargetSelect={(target) => {
         if (target.kind === "version") setVersionId(target.id)
@@ -219,6 +236,7 @@ function VersionSwitchHarness() {
 
 describe("VersionBrowserView", () => {
   it("browses the initial candidate without presenting it as V1", async () => {
+    const user = userEvent.setup()
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     })
@@ -227,10 +245,10 @@ describe("VersionBrowserView", () => {
         <QueryClientProvider client={queryClient}>
           <VersionBrowserView
             locale="en"
-            onBack={vi.fn()}
+            onDraftAbandoned={vi.fn()}
             onFileSelect={vi.fn()}
             onTargetSelect={vi.fn()}
-            selectedFilePath={null}
+            selectedFilePath="scripts/assemble_ppt.py"
             selectedVersionId={null}
             workspace={{
               id: "01900000-0000-7000-8000-000000000999",
@@ -259,6 +277,30 @@ describe("VersionBrowserView", () => {
     expect(screen.getAllByText("Initial candidate").length).toBeGreaterThan(0)
     expect(screen.getByText("Awaiting test and confirmation")).toBeInTheDocument()
     expect(screen.queryByText("V1")).not.toBeInTheDocument()
+    const codeEditor = document.querySelector(
+      '.cm-content[contenteditable="true"]',
+    )
+    expect(codeEditor).toHaveTextContent("print('editable')")
+
+    const singleFileInput = document.querySelector<HTMLInputElement>(
+      'input[type="file"]:not([multiple])',
+    )
+    const folderInput = document.querySelector<HTMLInputElement>(
+      'input[type="file"][multiple]',
+    )
+    expect(singleFileInput).toHaveAttribute("hidden")
+    expect(folderInput).toHaveAttribute("hidden")
+
+    const singleFileClick = vi.spyOn(singleFileInput!, "click")
+    const folderClick = vi.spyOn(folderInput!, "click")
+    await user.click(
+      screen.getByRole("button", { name: "Choose one file" }),
+    )
+    await user.click(
+      screen.getByRole("button", { name: "Choose complete folder" }),
+    )
+    expect(singleFileClick).toHaveBeenCalledOnce()
+    expect(folderClick).toHaveBeenCalledOnce()
   })
 
   it("synchronizes preview and metadata when switching to a historical version", async () => {

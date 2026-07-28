@@ -161,6 +161,11 @@ export function useWorkbenchHomeController(
   }
 
   function selectSource(files: readonly File[]) {
+    setErrors((current) => ({
+      ...current,
+      source: undefined,
+      upload: undefined,
+    }))
     try {
       const source = createSelectedSkillSource(
         draft.sourceKind,
@@ -200,7 +205,9 @@ export function useWorkbenchHomeController(
     } catch (error) {
       const message =
         error instanceof SkillConsoleApiError
-          ? error.message
+          ? error.code === "UPLOAD_FILE_COUNT_EXCEEDED"
+            ? copy.fileCountExceeded
+            : error.message
           : copy.unknownCreateError
       setErrors((current) => ({ ...current, upload: message }))
       return null

@@ -70,6 +70,10 @@
       }
     },
     "dropHint": "点击浏览，也可以将来源拖放到这里。",
+    "preparingSource": "正在读取并整理文件",
+    "preparingSourceDescription": "文件较多时可能需要一些时间，请稍候。",
+    "uploadingSource": "正在上传并创建工作台",
+    "uploadingSourceDescription": "正在传输文件、生成 Manifest 并保存初始候选，请勿关闭窗口。",
     "loadingUploadPolicy": "正在加载文件夹过滤策略…",
     "uploadPolicyUnavailable": "无法读取文件夹过滤策略，请关闭弹框后重试。",
     "importSummary": "导入摘要",
@@ -92,6 +96,7 @@
       "zipRequired": "请选择一个有效的 .zip 压缩包。"
     },
     "createFailed": "初始候选创建失败",
+    "fileCountExceeded": "所选 Skill 来源的文件数量超过服务端上限。请减少文件数量或调整服务端上传配置后重试。",
     "unknownCreateError": "无法完成创建，请确认本地服务状态后重试。"
   },
   "settingsDialog": {
@@ -105,6 +110,44 @@
   "notifications": {
     "workspaceCreated": "工作台与初始候选已创建",
     "settingsSaved": "设置已保存"
+  },
+  "workspaceShell": {
+    "navigation": {
+      "label": "工作台导航",
+      "overview": "工作台概览",
+      "versions": "Skill 版本",
+      "testCases": "测试用例",
+      "datasets": "数据集",
+      "runs": "测试任务"
+    },
+    "backToList": "返回工作台列表",
+    "collapseSidebar": "收起工作台侧栏",
+    "expandSidebar": "展开工作台侧栏",
+    "initialCandidate": "初始候选",
+    "draftBasedOn": "草稿 · 基于 V{{version}}",
+    "noFormalVersion": "无正式版本",
+    "localFirst": "LOCAL-FIRST · 数据保留在本机",
+    "loading": "正在读取工作台",
+    "loadError": "无法读取工作台",
+    "loadErrorDescription": "请确认本地服务与数据库已启动，然后重试。",
+    "retry": "重新加载",
+    "moduleEyebrow": "工作台模块",
+    "placeholders": {
+      "status": "将在后续迭代实现",
+      "plannedLabel": "计划归属",
+      "testCases": {
+        "description": "用于管理 Skill 的测试输入、期望结果和可复用测试场景。",
+        "plannedStage": "迭代四 · 测试资产建设"
+      },
+      "datasets": {
+        "description": "用于组织测试用例引用的数据文件、样本集合和数据版本。",
+        "plannedStage": "迭代四 · 测试资产建设"
+      },
+      "runs": {
+        "description": "用于发起测试运行、跟踪执行状态并查看运行证据。",
+        "plannedStage": "后续迭代 · 测试运行能力"
+      }
+    }
   },
   "overview": {
     "backToHome": "返回工作台首页",

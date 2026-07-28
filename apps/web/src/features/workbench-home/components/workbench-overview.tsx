@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   Baseline,
   Box,
   CalendarClock,
@@ -12,13 +11,11 @@ import {
 
 import type { SkillWorkspace } from "@/features/workbench-home/model/workbench"
 import type { WorkbenchHomeCopy } from "@/features/workbench-home/model/workbench-home-copy"
-import { Button } from "@/shared/components/ui/button"
 
 interface WorkbenchOverviewProps {
   workspace: SkillWorkspace
   copy: WorkbenchHomeCopy
   locale: string
-  onBack: () => void
 }
 
 function formatBytes(bytes: number): string {
@@ -31,19 +28,14 @@ export function WorkbenchOverview({
   workspace,
   copy,
   locale,
-  onBack,
 }: WorkbenchOverviewProps) {
   const version = workspace.currentVersion
   const candidate = workspace.activeDraft
   const content = candidate ?? version
   if (!content) {
     return (
-      <main className="min-w-0 px-10 py-9">
-        <Button onClick={onBack} type="button" variant="link">
-          <ArrowLeft aria-hidden="true" data-icon="inline-start" />
-          {copy.backToHome}
-        </Button>
-        <p className="mt-6 text-sm text-muted-foreground">
+      <main className="h-full min-h-0 min-w-0 overflow-y-auto px-10 py-9">
+        <p className="text-sm text-muted-foreground">
           {copy.noFormalVersion}
         </p>
       </main>
@@ -64,17 +56,7 @@ export function WorkbenchOverview({
   )
 
   return (
-    <main className="min-w-0 px-10 py-9">
-      <Button
-        className="mb-5 rounded-none px-0"
-        onClick={onBack}
-        type="button"
-        variant="link"
-      >
-        <ArrowLeft aria-hidden="true" data-icon="inline-start" />
-        {copy.backToHome}
-      </Button>
-
+    <main className="h-full min-h-0 min-w-0 overflow-y-auto px-10 py-9">
       <header className="border-b border-foreground pb-7">
         <div className="mb-2.5 flex items-center gap-2 font-mono text-[11px] font-bold tracking-[0.08em] text-signal-dark uppercase">
           <PackageCheck aria-hidden="true" className="size-3.5" />

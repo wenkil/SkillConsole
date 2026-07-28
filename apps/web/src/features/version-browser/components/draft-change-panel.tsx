@@ -7,7 +7,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import {
@@ -95,6 +95,8 @@ export function DraftChangePanel({
   onSelectPath,
 }: DraftChangePanelProps) {
   const { t } = useTranslation("versionBrowser")
+  const singleFileInputRef = useRef<HTMLInputElement>(null)
+  const folderInputRef = useRef<HTMLInputElement>(null)
   const [singleFile, setSingleFile] = useState<File | null>(null)
   const [singlePath, setSinglePath] = useState("")
   const [movePathState, setMovePathState] = useState({
@@ -212,21 +214,26 @@ export function DraftChangePanel({
             value={singlePath}
           />
         </label>
-        <label className="flex cursor-pointer items-center justify-center gap-2 border border-rule px-3 py-2 font-mono text-[10px] hover:border-primary">
+        <button
+          className="flex items-center justify-center gap-2 border border-rule px-3 py-2 font-mono text-[10px] hover:border-primary"
+          onClick={() => singleFileInputRef.current?.click()}
+          type="button"
+        >
           <FileInput aria-hidden="true" className="size-3.5" />
           {singleFile
             ? t("draft.selectedFile", { name: singleFile.name })
             : t("draft.chooseFile")}
-          <input
-            className="sr-only"
-            onChange={(event) => {
-              const selected = event.target.files?.[0] ?? null
-              setSingleFile(selected)
-              if (selected && !singlePath) setSinglePath(selected.name)
-            }}
-            type="file"
-          />
-        </label>
+        </button>
+        <input
+          hidden
+          onChange={(event) => {
+            const selected = event.target.files?.[0] ?? null
+            setSingleFile(selected)
+            if (selected && !singlePath) setSinglePath(selected.name)
+          }}
+          ref={singleFileInputRef}
+          type="file"
+        />
         <Button
           className="rounded-none"
           disabled={!singleFile || !singlePath.trim() || pending}
@@ -236,6 +243,9 @@ export function DraftChangePanel({
                 .then(() => {
                   setSingleFile(null)
                   setSinglePath("")
+                  if (singleFileInputRef.current) {
+                    singleFileInputRef.current.value = ""
+                  }
                 })
                 .catch(() => undefined)
             }
@@ -316,21 +326,26 @@ export function DraftChangePanel({
       </PanelSection>
 
       <PanelSection number="03" title={t("draft.folderReplacement")}>
-        <label className="flex cursor-pointer items-center justify-center gap-2 border border-rule px-3 py-2 font-mono text-[10px] hover:border-primary">
+        <button
+          className="flex items-center justify-center gap-2 border border-rule px-3 py-2 font-mono text-[10px] hover:border-primary"
+          onClick={() => folderInputRef.current?.click()}
+          type="button"
+        >
           <FolderSync aria-hidden="true" className="size-3.5" />
           {folderFiles.length > 0
             ? t("draft.selectedFolderFiles", { count: folderFiles.length })
             : t("draft.chooseFolder")}
-          <input
-            {...({ webkitdirectory: "" } as React.InputHTMLAttributes<HTMLInputElement>)}
-            className="sr-only"
-            multiple
-            onChange={(event) =>
-              setFolderFiles(Array.from(event.target.files ?? []))
-            }
-            type="file"
-          />
-        </label>
+        </button>
+        <input
+          {...({ webkitdirectory: "" } as React.InputHTMLAttributes<HTMLInputElement>)}
+          hidden
+          multiple
+          onChange={(event) =>
+            setFolderFiles(Array.from(event.target.files ?? []))
+          }
+          ref={folderInputRef}
+          type="file"
+        />
         <label className="grid gap-1 font-mono text-[9px] uppercase">
           {t("draft.customIgnore")}
           <textarea
@@ -430,6 +445,9 @@ export function DraftChangePanel({
                     .then(() => {
                       setFolderFiles([])
                       setConfirmFolderDeletions(false)
+                      if (folderInputRef.current) {
+                        folderInputRef.current.value = ""
+                      }
                     })
                     .catch(() => undefined)
                 }}

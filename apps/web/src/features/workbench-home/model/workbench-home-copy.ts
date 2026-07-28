@@ -45,6 +45,10 @@ export interface WorkbenchHomeCopy {
   sourceScope: string
   sourceKinds: Record<SkillSourceKind, SourceKindCopy>
   dropHint: string
+  preparingSource: string
+  preparingSourceDescription: string
+  uploadingSource: string
+  uploadingSourceDescription: string
   loadingUploadPolicy: string
   uploadPolicyUnavailable: string
   importSummary: string
@@ -64,6 +68,7 @@ export interface WorkbenchHomeCopy {
     string
   >
   createFailed: string
+  fileCountExceeded: string
   unknownCreateError: string
   settingsDialogTitle: string
   settingsDescription: string
@@ -168,6 +173,14 @@ export function getWorkbenchHomeCopy(
       },
     },
     dropHint: translate("createDialog.dropHint"),
+    preparingSource: translate("createDialog.preparingSource"),
+    preparingSourceDescription: translate(
+      "createDialog.preparingSourceDescription",
+    ),
+    uploadingSource: translate("createDialog.uploadingSource"),
+    uploadingSourceDescription: translate(
+      "createDialog.uploadingSourceDescription",
+    ),
     loadingUploadPolicy: translate("createDialog.loadingUploadPolicy"),
     uploadPolicyUnavailable: translate(
       "createDialog.uploadPolicyUnavailable",
@@ -201,6 +214,7 @@ export function getWorkbenchHomeCopy(
       zipRequired: translate("createDialog.errors.zipRequired"),
     },
     createFailed: translate("createDialog.createFailed"),
+    fileCountExceeded: translate("createDialog.fileCountExceeded"),
     unknownCreateError: translate("createDialog.unknownCreateError"),
     settingsDialogTitle: translate("settingsDialog.title"),
     settingsDescription: translate("settingsDialog.description"),

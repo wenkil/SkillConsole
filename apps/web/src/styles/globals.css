@@ -48,6 +48,7 @@
   --status-cancelled: #64748b;
   --app-header-height: 4.5rem;
   --workbench-sidebar-width: 17.875rem;
+  --workspace-nav-collapsed-width: 4rem;
 }
 
 @theme inline {

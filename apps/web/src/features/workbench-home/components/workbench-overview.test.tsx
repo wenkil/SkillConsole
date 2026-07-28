@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react"
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import { WorkbenchOverview } from "@/features/workbench-home/components/workbench-overview"
 import { getWorkbenchHomeCopy } from "@/features/workbench-home/model/workbench-home-copy"
@@ -16,7 +16,6 @@ describe("WorkbenchOverview", () => {
       <WorkbenchOverview
         copy={copy}
         locale="zh-CN"
-        onBack={vi.fn()}
         workspace={{
           id: "01900000-0000-7000-8000-000000000001",
           name: "发票审核 Skill",
