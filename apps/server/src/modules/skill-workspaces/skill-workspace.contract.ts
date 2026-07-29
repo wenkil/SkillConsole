@@ -19,11 +19,13 @@ export const SnapshotSummarySchema = Type.Object(
 export const SkillVersionSummarySchema = Type.Object(
   {
     id: Type.String({ format: "uuid" }),
-    versionNumber: Type.Integer({ minimum: 1 }),
+    sequenceNumber: Type.Integer({ minimum: 1 }),
+    name: Type.String({ minLength: 1, maxLength: 120 }),
+    labels: Type.Array(Type.String({ minLength: 1, maxLength: 40 })),
     sourceType: SkillSourceTypeSchema,
     sourceName: Type.String({ minLength: 1 }),
-    publishedAt: Type.String({ format: "date-time" }),
-    isDefaultBaseline: Type.Boolean(),
+    frozenAt: Type.String({ format: "date-time" }),
+    isComparisonBaseline: Type.Boolean(),
     snapshot: SnapshotSummarySchema,
   },
   { additionalProperties: false },
@@ -32,22 +34,19 @@ export const SkillVersionSummarySchema = Type.Object(
 export const SkillDraftSummarySchema = Type.Object(
   {
     id: Type.String({ format: "uuid" }),
-    improvementCycleId: Type.String({ format: "uuid" }),
-    baseVersionId: Type.Union([
-      Type.String({ format: "uuid" }),
-      Type.Null(),
-    ]),
-    baseSnapshotId: Type.String({ format: "uuid" }),
     contentRevision: Type.Integer({ minimum: 1 }),
-    status: Type.Union([
-      Type.Literal("OPEN"),
-      Type.Literal("FINALIZING"),
-    ]),
+    status: Type.Literal("OPEN"),
     sourceType: SkillSourceTypeSchema,
     sourceName: Type.String({ minLength: 1 }),
     createdAt: Type.String({ format: "date-time" }),
     updatedAt: Type.String({ format: "date-time" }),
-    snapshot: SnapshotSummarySchema,
+    workingCopy: Type.Object(
+      {
+        fileCount: Type.Integer({ minimum: 1 }),
+        totalBytes: Type.Integer({ minimum: 0 }),
+      },
+      { additionalProperties: false },
+    ),
   },
   { additionalProperties: false },
 )
@@ -58,7 +57,8 @@ export const SkillWorkspaceSchema = Type.Object(
     name: Type.String({ minLength: 1, maxLength: 120 }),
     createdAt: Type.String({ format: "date-time" }),
     updatedAt: Type.String({ format: "date-time" }),
-    currentVersion: Type.Union([SkillVersionSummarySchema, Type.Null()]),
+    onlineVersion: Type.Union([SkillVersionSummarySchema, Type.Null()]),
+    versionCount: Type.Integer({ minimum: 0 }),
     activeDraft: Type.Union([SkillDraftSummarySchema, Type.Null()]),
   },
   { additionalProperties: false },

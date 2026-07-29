@@ -14,29 +14,27 @@ const workspace = vi.hoisted(() => ({
   updatedAt: "2026-07-24T10:00:00.000Z",
   activeDraft: {
     id: "01900000-0000-7000-8000-000000000004",
-    improvementCycleId: "01900000-0000-7000-8000-000000000005",
-    baseVersionId: "01900000-0000-7000-8000-000000000002",
-    baseSnapshotId: "01900000-0000-7000-8000-000000000003",
     contentRevision: 2,
     status: "OPEN" as const,
     sourceType: "folder" as const,
     sourceName: "invoice-skill",
     createdAt: "2026-07-24T11:00:00.000Z",
     updatedAt: "2026-07-24T11:30:00.000Z",
-    snapshot: {
-      id: "01900000-0000-7000-8000-000000000006",
-      manifestHash: "b".repeat(64),
+    workingCopy: {
       fileCount: 13,
       totalBytes: 5120,
     },
   },
-  currentVersion: {
+  versionCount: 1,
+  onlineVersion: {
     id: "01900000-0000-7000-8000-000000000002",
-    versionNumber: 1,
+    sequenceNumber: 1,
+    name: "V1",
+    labels: [],
     sourceType: "folder" as const,
     sourceName: "invoice-skill",
-    publishedAt: "2026-07-24T10:00:00.000Z",
-    isDefaultBaseline: true,
+    frozenAt: "2026-07-24T10:00:00.000Z",
+    isComparisonBaseline: true,
     snapshot: {
       id: "01900000-0000-7000-8000-000000000003",
       manifestHash: "a".repeat(64),
@@ -151,8 +149,8 @@ describe("workspace routes", () => {
   it.each([
     [`/workbenches/${workspace.id}/versions`, "活动草稿"],
     [
-      `/workbenches/${workspace.id}/versions/${workspace.currentVersion.id}`,
-      `指定版本 ${workspace.currentVersion.id}`,
+      `/workbenches/${workspace.id}/versions/${workspace.onlineVersion.id}`,
+      `指定版本 ${workspace.onlineVersion.id}`,
     ],
   ])("opens the versions module directly at %s", (path, targetLabel) => {
     renderRoute(path)

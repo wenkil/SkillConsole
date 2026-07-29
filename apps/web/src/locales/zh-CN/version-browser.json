@@ -5,38 +5,38 @@
   },
   "header": {
     "eyebrow": "Skill 内容浏览",
-    "formalVersion": "正式版本",
-    "versionPicker": "选择候选或版本",
-    "currentVersion": "当前正式版本",
-    "historicalVersion": "正在查看历史版本",
-    "initialCandidate": "初始候选",
-    "candidateState": "待测试与确认",
-    "defaultBaseline": "默认基线",
+    "formalVersion": "不可变版本",
+    "versionPicker": "选择工作副本或版本",
+    "currentVersion": "当前上线版本",
+    "historicalVersion": "正在查看其他版本",
+    "initialCandidate": "工作副本",
+    "candidateState": "可持续编辑",
+    "defaultBaseline": "对比基线",
     "notTested": "尚未测试"
   },
   "immutable": {
-    "title": "只读正式版本",
+    "title": "只读不可变版本",
     "description": "此页面展示不可变 Snapshot。文件内容、Manifest 和版本元数据不会在浏览过程中被修改。"
   },
   "candidate": {
-    "title": "可演进的初始候选",
-    "description": "该 Snapshot 是测试前的工作内容，不是 V1，也不是默认基线；测试通过后仍需由用户手动确认发布。"
+    "title": "可持续编辑的工作副本",
+    "description": "普通保存只更新变化文件；需要测试、留档或对比时，由用户主动保存为不可变版本。"
   },
   "draft": {
     "newVersion": "新建版本草稿",
     "editorLabel": "草稿文件编辑器",
     "unsaved": "有未保存修改",
-    "synced": "已与当前 Working Snapshot 同步",
+    "synced": "已与当前工作副本同步",
     "viewDiff": "查看 Diff",
     "backToEdit": "返回编辑",
     "save": "保存草稿",
-    "conflict": "服务端草稿已更新；你的本地文本仍保留在编辑器中，请先查看 Diff 再重新应用。",
+    "conflict": "服务端工作副本已更新；你的本地文本仍保留在编辑器中，请刷新后重新应用。",
     "close": "关闭",
     "latestServer": "服务端最新内容",
     "fixedBasis": "固定比较基准",
     "missingFromBasis": "固定比较基准（文件不存在）",
     "localContent": "本地编辑内容（尚未保存也会保留）",
-    "saveNotice": "保存只会生成新的 Working Snapshot，不会创建 V1/Vn。",
+    "saveNotice": "保存只写入当前变化文件；只有“保存为版本”才冻结完整目录。",
     "discardLocal": "放弃本地修改",
     "changeSummary": "草稿变更摘要",
     "revisionState": "Revision {{revision}} · 未通过发布门禁",
@@ -67,10 +67,10 @@
     "lifecycle": "草稿生命周期",
     "confirmAbandon": "我理解放弃草稿不会创建正式版本，且当前草稿将不再可编辑。",
     "abandon": "放弃草稿",
-    "updating": "正在更新 Working Snapshot"
+    "updating": "正在更新工作副本"
   },
   "tree": {
-    "files": "Snapshot 文件",
+    "files": "Skill 文件",
     "search": "搜索路径或文件名",
     "noResults": "没有匹配的文件",
     "keyboardHelp": "使用方向键浏览，空格键打开文件"
@@ -100,10 +100,10 @@
     "version": "版本信息",
     "candidate": "候选信息",
     "snapshot": "Snapshot 信息",
-    "versionNumber": "版本号",
+    "versionNumber": "版本名称",
     "sourceType": "来源类型",
     "sourceName": "来源名称",
-    "publishedAt": "发布时间",
+    "publishedAt": "冻结时间",
     "updatedAt": "候选更新时间",
     "contentRevision": "内容修订号",
     "createdAt": "创建时间",
@@ -155,7 +155,7 @@
     "folderDialogDescription": "文件夹内容会合并到当前 Skill 根目录，不会删除未上传的现有文件。",
     "selectedFile": "已选择文件",
     "selectedFolder": "已选择完整文件夹",
-    "replaceWarning": "目标路径已存在时会覆盖该草稿文件，但不会直接创建正式版本。",
+    "replaceWarning": "目标路径已存在时会覆盖工作副本中的同路径文件，但不会自动保存为版本。",
     "previewRequired": "请先预览新增和同路径替换内容。确认后，文件夹会合并到当前草稿。"
   },
   "fileActions": {
@@ -164,7 +164,7 @@
     "moveDescription": "修改当前文件在草稿中的相对路径。",
     "deleteTitle": "删除当前文件",
     "deleteDescription": "将从草稿删除 {{path}}。",
-    "deleteWarning": "删除会生成新的 Working Snapshot。正式版本不会受到影响，但当前草稿中的文件将不再存在。"
+    "deleteWarning": "删除只修改当前工作副本；已经保存的不可变版本不会受到影响。"
   },
   "lifecycle": {
     "more": "更多草稿操作",

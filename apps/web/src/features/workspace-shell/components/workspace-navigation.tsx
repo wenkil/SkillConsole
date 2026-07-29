@@ -2,6 +2,7 @@ import {
   Activity,
   ArrowLeft,
   Database,
+  FileChartColumn,
   FlaskConical,
   FolderOpen,
   Home,
@@ -24,6 +25,7 @@ export type WorkspaceModule =
   | "test-cases"
   | "datasets"
   | "runs"
+  | "reports"
 
 interface WorkspaceNavigationProps {
   workspace: SkillWorkspace
@@ -42,18 +44,15 @@ interface NavigationItem {
 
 function getWorkspaceState(
   workspace: SkillWorkspace,
-  initialCandidate: string,
-  draftBasedOn: (version: number) => string,
+  workingCopy: string,
   noFormalVersion: string,
 ): string {
   if (workspace.activeDraft) {
-    return workspace.currentVersion
-      ? draftBasedOn(workspace.currentVersion.versionNumber)
-      : initialCandidate
+    return workingCopy
   }
 
-  return workspace.currentVersion
-    ? `V${workspace.currentVersion.versionNumber}`
+  return workspace.onlineVersion
+    ? workspace.onlineVersion.name
     : noFormalVersion
 }
 
@@ -121,14 +120,20 @@ export function WorkspaceNavigation({
       path: `${basePath}/runs`,
       icon: Activity,
     },
+    {
+      module: "reports",
+      label: t("workspaceShell.navigation.reports", {
+        defaultValue: "对比报告",
+      }),
+      path: `${basePath}/reports`,
+      icon: FileChartColumn,
+    },
   ]
   const workspaceState = getWorkspaceState(
     workspace,
-    t("workspaceShell.initialCandidate"),
-    (version) =>
-      t("workspaceShell.draftBasedOn", {
-        version,
-      }),
+    t("workspaceShell.workingCopy", {
+      defaultValue: "工作副本 · 持续保存",
+    }),
     t("workspaceShell.noFormalVersion"),
   )
 

@@ -139,7 +139,7 @@ function ConflictHarness() {
 }
 
 describe("DraftFileEditor", () => {
-  it("preserves local text after a 412-style conflict and compares it with the latest server content", async () => {
+  it("preserves local text after a 412-style conflict without exposing draft diff", async () => {
     const user = userEvent.setup()
     render(
       <I18nextProvider i18n={testI18n}>
@@ -163,14 +163,9 @@ describe("DraftFileEditor", () => {
     expect(
       screen.getByText(/你的本地文本仍保留在编辑器中/),
     ).toBeInTheDocument()
-
-    await user.click(screen.getByRole("button", { name: "查看 Diff" }))
-    expect(screen.getByText("服务端最新内容")).toBeInTheDocument()
     expect(
-      screen
-        .getAllByRole("textbox")
-        .map((element) => (element as HTMLTextAreaElement).value),
-    ).toEqual(["# Server latest\n", "# Local unsaved"])
+      screen.queryByRole("button", { name: "查看 Diff" }),
+    ).not.toBeInTheDocument()
   })
 
   it("places file deletion after save and requires confirmation", async () => {

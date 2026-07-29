@@ -1,6 +1,7 @@
 import {
   Activity,
   Database,
+  FileChartColumn,
   FlaskConical,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
@@ -12,6 +13,7 @@ import {
 } from "react-router-dom"
 
 import { VersionBrowserView } from "@/features/version-browser/components/version-browser-view"
+import { VersionCompareView } from "@/features/version-browser/components/version-compare-view"
 import type { SkillBrowserTarget } from "@/features/version-browser/model/version-browser"
 import { WorkbenchOverview } from "@/features/workbench-home/components/workbench-overview"
 import { ModulePlaceholder } from "@/features/workspace-shell/components/module-placeholder"
@@ -46,17 +48,23 @@ function getVersionTargetPath(
     : basePath
 }
 
-export function VersionBrowserRoute() {
+export function VersionBrowserRoute({
+  comparison = false,
+}: {
+  comparison?: boolean
+}) {
   const navigate = useNavigate()
   const { versionId } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { workspace, locale } = useWorkspaceRouteContext()
+  const { workspace } = useWorkspaceRouteContext()
   const selectedFilePath = searchParams.get("path")
+
+  if (comparison) {
+    return <VersionCompareView workspace={workspace} />
+  }
 
   return (
     <VersionBrowserView
-      locale={locale}
-      onDraftAbandoned={() => navigate(`/workbenches/${workspace.id}`)}
       onFileSelect={(relativePath) => {
         setSearchParams({ path: relativePath }, { replace: true })
       }}
@@ -77,7 +85,10 @@ export function VersionBrowserRoute() {
 }
 
 interface ModulePlaceholderRouteProps {
-  module: Extract<WorkspaceModule, "test-cases" | "datasets" | "runs">
+  module: Extract<
+    WorkspaceModule,
+    "test-cases" | "datasets" | "runs" | "reports"
+  >
 }
 
 export function ModulePlaceholderRoute({
@@ -106,6 +117,23 @@ export function ModulePlaceholderRoute({
       title: t("workspaceShell.navigation.runs"),
       description: t("workspaceShell.placeholders.runs.description"),
       plannedStage: t("workspaceShell.placeholders.runs.plannedStage"),
+    },
+    reports: {
+      icon: FileChartColumn,
+      title: t("workspaceShell.navigation.reports", {
+        defaultValue: "对比报告",
+      }),
+      description: t(
+        "workspaceShell.placeholders.reports.description",
+        {
+          defaultValue:
+            "汇总版本目录差异、测试点、任务结果和用户标签。",
+        },
+      ),
+      plannedStage: t(
+        "workspaceShell.placeholders.reports.plannedStage",
+        { defaultValue: "后续迭代" },
+      ),
     },
   } as const
   const definition = definitions[module]

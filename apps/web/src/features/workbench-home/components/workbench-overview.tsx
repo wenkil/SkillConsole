@@ -1,17 +1,13 @@
 import {
-  ArrowRight,
-  Baseline,
-  CalendarClock,
-  CheckCircle2,
+  Activity,
   CircleDashed,
-  FileStack,
-  Fingerprint,
+  FileChartColumn,
+  Files,
   FlaskConical,
-  GitBranch,
-  PackageCheck,
+  GitCompareArrows,
   PencilLine,
+  Tags,
 } from "lucide-react"
-import { useTranslation } from "react-i18next"
 import { Link } from "react-router-dom"
 
 import type { SkillWorkspace } from "@/features/workbench-home/model/workbench"
@@ -24,345 +20,174 @@ interface WorkbenchOverviewProps {
   locale: string
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`
-}
-
-function StatusCell({
+function Metric({
   label,
   value,
-  muted = false,
+  hint,
 }: {
   label: string
   value: React.ReactNode
-  muted?: boolean
+  hint?: string
 }) {
   return (
-    <article className="min-w-0 border-r border-b border-rule-soft px-5 py-5 [container-type:inline-size] [&:nth-child(3n)]:border-r-0 [&:nth-child(n+4)]:border-b-0">
-      <span className="block font-mono text-[10px] tracking-[0.04em] text-muted-foreground uppercase">
+    <article className="min-w-0 border-r border-rule-soft px-5 py-5 last:border-r-0">
+      <span className="font-mono text-[10px] tracking-[0.05em] text-muted-foreground uppercase">
         {label}
       </span>
-      <strong
-        className={
-          muted
-            ? "mt-2 flex min-w-0 items-center gap-2 text-sm font-semibold text-muted-foreground"
-            : "mt-2 block min-w-0 truncate text-lg font-semibold"
-        }
-      >
-        {value}
-      </strong>
+      <strong className="mt-2 block truncate text-lg">{value}</strong>
+      {hint ? (
+        <span className="mt-1 block text-xs text-muted-foreground">{hint}</span>
+      ) : null}
     </article>
   )
 }
 
-function CycleStep({
-  number,
+function TodoPanel({
+  icon: Icon,
   title,
-  value,
-  todo = false,
+  description,
 }: {
-  number: string
+  icon: typeof Activity
   title: string
-  value: string
-  todo?: boolean
+  description: string
 }) {
   return (
-    <article className="relative min-w-0 flex-1 px-4 py-4">
-      <span className="block font-mono text-[9px] tracking-[0.06em] text-muted-foreground uppercase">
-        STEP {number} · {title}
-      </span>
-      <strong
-        className={
-          todo
-            ? "mt-1.5 flex items-center gap-2 text-sm text-muted-foreground"
-            : "mt-1.5 block truncate text-sm"
-        }
-      >
-        {todo ? <CircleDashed aria-hidden="true" className="size-3.5" /> : null}
-        {value}
-      </strong>
+    <article className="border border-rule bg-paper-raised p-5">
+      <div className="flex items-center justify-between gap-4">
+        <Icon className="size-5 text-technical" />
+        <span className="border border-rule bg-paper-muted px-2 py-1 font-mono text-[9px] text-muted-foreground uppercase">
+          TODO
+        </span>
+      </div>
+      <strong className="mt-4 block text-sm">{title}</strong>
+      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+        {description}
+      </p>
     </article>
   )
 }
 
 export function WorkbenchOverview({
   workspace,
-  copy,
   locale,
 }: WorkbenchOverviewProps) {
-  const { t } = useTranslation("workbenchHome")
-  const version = workspace.currentVersion
-  const candidate = workspace.activeDraft
-  const content = candidate ?? version
-  if (!content) {
-    return (
-      <main className="h-full min-h-0 min-w-0 overflow-y-auto px-10 py-9">
-        <p className="text-sm text-muted-foreground">
-          {copy.noFormalVersion}
-        </p>
-      </main>
-    )
-  }
-
-  const snapshot = content.snapshot
-  const currentVersionLabel = version
-    ? `V${version.versionNumber} · ${t("overview.dashboard.published")}`
-    : copy.noFormalVersion
-  const candidateLabel = candidate
-    ? t("overview.dashboard.draftRevision", {
-        revision: candidate.contentRevision,
-      })
-    : t("overview.dashboard.noActiveDraft")
-  const recordedAtSource =
-    candidate?.updatedAt ?? version?.publishedAt ?? workspace.createdAt
-  const recordedAt = new Intl.DateTimeFormat(locale, {
+  const draft = workspace.activeDraft
+  const online = workspace.onlineVersion
+  const updatedAt = new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
     timeStyle: "short",
-  }).format(new Date(recordedAtSource))
+  }).format(new Date(workspace.updatedAt))
 
   return (
     <main className="h-full min-h-0 min-w-0 overflow-y-auto px-8 py-7">
-      <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
-        <div className="min-w-0">
-          <div className="mb-2 flex items-center gap-2 font-mono text-[11px] font-bold tracking-[0.1em] text-signal-dark uppercase">
-            <PackageCheck aria-hidden="true" className="size-3.5" />
-            {copy.overviewEyebrow}
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="truncate text-[clamp(2rem,3vw,3rem)] leading-none font-[780] tracking-[-0.04em]">
-              {workspace.name}
-            </h1>
-            <span className="inline-flex h-7 items-center gap-2 border border-technical/50 bg-technical/8 px-3 font-mono text-[10px] font-bold text-technical-foreground uppercase">
-              <CircleDashed aria-hidden="true" className="size-3" />
-              {t("overview.dashboard.releaseGateTodo")}
-            </span>
-          </div>
-          <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            {copy.overviewDescription}
-          </p>
+      <header>
+        <div className="font-mono text-[11px] font-bold tracking-[0.1em] text-signal-dark uppercase">
+          Workbench overview · 工作台概览
         </div>
-        <span className="shrink-0 font-mono text-[10px] text-muted-foreground uppercase">
-          {candidate
-            ? t("overview.dashboard.viewingDraft")
-            : t("overview.dashboard.viewingFormal")}
-        </span>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <h1 className="text-[clamp(2rem,3vw,3rem)] leading-none font-[780] tracking-[-0.04em]">
+            {workspace.name}
+          </h1>
+          {online ? (
+            <span className="border border-technical/50 bg-technical/8 px-3 py-1.5 font-mono text-[10px] font-bold text-technical-foreground">
+              当前上线 · {online.name}
+            </span>
+          ) : (
+            <span className="border border-rule bg-paper-muted px-3 py-1.5 font-mono text-[10px] text-muted-foreground">
+              尚未标记上线版本
+            </span>
+          )}
+        </div>
+        <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+          管理 Skill 的工作副本、不可变版本、测试任务、版本对比与用户标签。系统提供证据，不替用户决定哪个版本验收通过。
+        </p>
       </header>
 
       <section className="mt-7 border border-foreground bg-paper-raised">
         <h2 className="border-b border-rule px-5 py-3 font-mono text-[11px] font-bold tracking-[0.08em] text-muted-foreground uppercase">
-          {t("overview.dashboard.statusTitle")}
+          Workbench status · 工作台状态
         </h2>
         <div className="grid grid-cols-3">
-          <StatusCell
-            label={t("overview.dashboard.currentFormal")}
-            value={currentVersionLabel}
+          <Metric
+            hint={online?.labels.join("、") || "由用户手动标记"}
+            label="当前上线版本"
+            value={online?.name ?? "未设置"}
           />
-          <StatusCell
-            label={t("overview.dashboard.defaultBaseline")}
-            value={
-              version?.isDefaultBaseline
-                ? `V${version.versionNumber} · ${t("overview.dashboard.baselineReady")}`
-                : t("overview.dashboard.notEstablished")
-            }
+          <Metric
+            hint="内容冻结，可参与目录与报告对比"
+            label="已保存版本"
+            value={workspace.versionCount}
           />
-          <StatusCell
-            label={t("overview.dashboard.activeDraft")}
-            value={candidateLabel}
-          />
-          <StatusCell
-            label={t("overview.dashboard.releaseGate")}
-            muted
-            value={
-              <>
-                <CircleDashed aria-hidden="true" className="size-3.5" />
-                {t("overview.dashboard.todo")}
-              </>
-            }
-          />
-          <StatusCell
-            label={t("overview.dashboard.latestRun")}
-            muted
-            value={
-              <>
-                <FlaskConical aria-hidden="true" className="size-3.5" />
-                {t("overview.dashboard.noRuns")}
-              </>
-            }
-          />
-          <StatusCell
-            label={t("overview.dashboard.currentContext")}
-            value={
-              candidate
-                ? t("overview.dashboard.draftContext")
-                : t("overview.dashboard.formalContext")
-            }
+          <Metric
+            hint={draft ? `最近更新 ${updatedAt}` : "可从上线版本创建"}
+            label="工作副本"
+            value={draft ? `Revision ${draft.contentRevision}` : "无"}
           />
         </div>
       </section>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2.5">
+      <div className="mt-4 flex flex-wrap gap-2.5">
         <Button asChild className="h-10 rounded-none">
           <Link to={`/workbenches/${workspace.id}/versions`}>
-            <PencilLine aria-hidden="true" data-icon="inline-start" />
-            {candidate
-              ? t("overview.dashboard.continueDraft")
-              : t("overview.dashboard.openVersions")}
+            <PencilLine data-icon="inline-start" />
+            {draft ? "继续编辑工作副本" : "查看 Skill 版本"}
           </Link>
         </Button>
-        <Button className="h-10 rounded-none" disabled type="button" variant="outline">
-          <FlaskConical aria-hidden="true" data-icon="inline-start" />
-          {t("overview.dashboard.draftTestTodo")}
-        </Button>
-        <Button className="h-10 rounded-none" disabled type="button" variant="outline">
-          <CheckCircle2 aria-hidden="true" data-icon="inline-start" />
-          {t("overview.dashboard.publishTodo")}
-        </Button>
-        <span className="ml-1 font-mono text-[10px] text-muted-foreground uppercase">
-          TODO · {t("overview.dashboard.todoHint")}
-        </span>
+        {workspace.versionCount >= 2 ? (
+          <Button asChild className="h-10 rounded-none" variant="outline">
+            <Link to={`/workbenches/${workspace.id}/versions/compare`}>
+              <GitCompareArrows data-icon="inline-start" />
+              对比两个版本
+            </Link>
+          </Button>
+        ) : null}
       </div>
 
-      <section className="mt-5 border border-foreground bg-paper-raised">
-        <div className="flex flex-wrap items-center gap-3 border-b border-rule px-5 py-3">
+      <section className="mt-6">
+        <div className="mb-3 flex items-center justify-between gap-4">
           <h2 className="font-mono text-[11px] font-bold tracking-[0.08em] text-muted-foreground uppercase">
-            {t("overview.dashboard.cycleTitle")}
+            Evidence workspace · 证据工作区
           </h2>
-          <span className="border border-rule bg-paper-muted px-2 py-1 font-mono text-[9px] font-bold text-muted-foreground uppercase">
-            {candidate
-              ? t("overview.dashboard.drafting")
-              : t("overview.dashboard.noDraft")}
+          <span className="font-mono text-[10px] text-muted-foreground">
+            后续迭代逐步填充
           </span>
         </div>
-        <div className="flex divide-x divide-rule-soft">
-          <CycleStep
-            number="01"
-            title={t("overview.dashboard.stepDraft")}
-            value={candidateLabel}
+        <div className="grid grid-cols-4 gap-3">
+          <TodoPanel
+            description="维护每个 Skill 的测试点、输入与预期评估维度。"
+            icon={FlaskConical}
+            title="测试用例"
           />
-          <ArrowRight
-            aria-hidden="true"
-            className="my-auto size-4 shrink-0 -translate-x-1/2 bg-paper-raised text-muted-foreground"
+          <TodoPanel
+            description="沉淀可复用的输入数据、附件和评估素材。"
+            icon={Files}
+            title="数据集"
           />
-          <CycleStep
-            number="02"
-            title={t("overview.dashboard.stepTest")}
-            todo
-            value={t("overview.dashboard.todo")}
+          <TodoPanel
+            description="选择版本和测试集，一键发起并跟踪运行任务。"
+            icon={Activity}
+            title="测试任务"
           />
-          <ArrowRight
-            aria-hidden="true"
-            className="my-auto size-4 shrink-0 -translate-x-1/2 bg-paper-raised text-muted-foreground"
-          />
-          <CycleStep
-            number="03"
-            title={t("overview.dashboard.stepRegression")}
-            todo
-            value={t("overview.dashboard.todo")}
-          />
-          <ArrowRight
-            aria-hidden="true"
-            className="my-auto size-4 shrink-0 -translate-x-1/2 bg-paper-raised text-muted-foreground"
-          />
-          <CycleStep
-            number="04"
-            title={t("overview.dashboard.stepGate")}
-            todo
-            value={t("overview.dashboard.todo")}
-          />
-          <ArrowRight
-            aria-hidden="true"
-            className="my-auto size-4 shrink-0 -translate-x-1/2 bg-paper-raised text-muted-foreground"
-          />
-          <CycleStep
-            number="05"
-            title={t("overview.dashboard.stepPublish")}
-            todo
-            value={t("overview.dashboard.todo")}
+          <TodoPanel
+            description="汇总版本差异、测试结果和用户标注，不输出强制得分。"
+            icon={FileChartColumn}
+            title="对比报告"
           />
         </div>
       </section>
 
-      <section className="mt-5 border border-foreground bg-paper-raised">
-        <h2 className="border-b border-rule px-5 py-3 font-mono text-[11px] font-bold tracking-[0.08em] text-muted-foreground uppercase">
-          {t("overview.dashboard.recentRuns")}
-        </h2>
-        <div className="flex min-h-28 items-center justify-center px-6 py-7 text-center">
+      <section className="mt-6 border border-rule bg-paper-muted p-5">
+        <div className="flex items-start gap-3">
+          <Tags className="mt-0.5 size-5 text-technical" />
           <div>
-            <CircleDashed
-              aria-hidden="true"
-              className="mx-auto size-6 text-muted-foreground"
-            />
-            <strong className="mt-3 block text-sm">
-              TODO · {t("overview.dashboard.recentRunsEmpty")}
-            </strong>
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              {t("overview.dashboard.recentRunsHint")}
+            <strong className="text-sm">版本标签由用户定义</strong>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              “候选”“实验”“当前上线”等均是可追溯的用户标注；测试点和评估结果作为决策证据展示，不自动生成“验收通过”结论。
             </p>
           </div>
+          <CircleDashed className="ml-auto size-5 text-muted-foreground" />
         </div>
       </section>
-
-      <details className="group mt-5 border border-rule bg-paper-muted">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-3 font-mono text-[11px] font-bold tracking-[0.04em] uppercase">
-          <span className="flex items-center gap-2">
-            <Fingerprint aria-hidden="true" className="size-4 text-technical" />
-            {t("overview.dashboard.technicalInfo")}
-          </span>
-          <span className="text-muted-foreground group-open:hidden">
-            {t("overview.dashboard.expand")}
-          </span>
-          <span className="hidden text-muted-foreground group-open:inline">
-            {t("overview.dashboard.collapse")}
-          </span>
-        </summary>
-        <div className="grid grid-cols-4 border-t border-rule bg-paper-raised">
-          <article className="border-r border-rule-soft p-4">
-            <FileStack aria-hidden="true" className="size-4 text-technical" />
-            <span className="mt-3 block font-mono text-[9px] text-muted-foreground uppercase">
-              {copy.fileCount}
-            </span>
-            <strong className="mt-1 block text-sm">{snapshot.fileCount}</strong>
-          </article>
-          <article className="border-r border-rule-soft p-4">
-            <GitBranch aria-hidden="true" className="size-4 text-technical" />
-            <span className="mt-3 block font-mono text-[9px] text-muted-foreground uppercase">
-              {copy.totalSize}
-            </span>
-            <strong className="mt-1 block text-sm">
-              {formatBytes(snapshot.totalBytes)}
-            </strong>
-          </article>
-          <article className="border-r border-rule-soft p-4">
-            <Baseline aria-hidden="true" className="size-4 text-technical" />
-            <span className="mt-3 block font-mono text-[9px] text-muted-foreground uppercase">
-              {copy.sourceName}
-            </span>
-            <strong className="mt-1 block truncate text-sm">
-              {content.sourceName}
-            </strong>
-          </article>
-          <article className="p-4">
-            <CalendarClock aria-hidden="true" className="size-4 text-technical" />
-            <span className="mt-3 block font-mono text-[9px] text-muted-foreground uppercase">
-              {copy.publishedAt}
-            </span>
-            <strong className="mt-1 block text-sm">{recordedAt}</strong>
-          </article>
-          <article className="col-span-4 border-t border-rule-soft px-4 py-3">
-            <span className="font-mono text-[9px] text-muted-foreground uppercase">
-              {copy.manifestHash}
-            </span>
-            <code
-              className="ml-3 text-[10px] [overflow-wrap:anywhere]"
-              title={snapshot.manifestHash}
-            >
-              sha256:{snapshot.manifestHash}
-            </code>
-          </article>
-        </div>
-      </details>
     </main>
   )
 }

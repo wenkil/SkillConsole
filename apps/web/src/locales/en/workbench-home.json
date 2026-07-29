@@ -8,8 +8,8 @@
     "retry": "Reload",
     "emptyTitle": "No workbenches yet",
     "emptyDescription": "Your first Skill testing workbench will appear here after it is created.",
-    "initialCandidate": "Initial candidate · no formal version",
-    "noFormalVersion": "No formal version"
+    "initialCandidate": "Working copy",
+    "noFormalVersion": "No saved version"
   },
   "hero": {
     "eyebrow": "Skill version and test evidence workbench",
@@ -118,14 +118,16 @@
       "versions": "Skill versions",
       "testCases": "Test cases",
       "datasets": "Datasets",
-      "runs": "Test runs"
+      "runs": "Test runs",
+      "reports": "Comparison reports"
     },
     "backToList": "Back to workbench list",
     "collapseSidebar": "Collapse workbench sidebar",
     "expandSidebar": "Expand workbench sidebar",
     "initialCandidate": "Initial candidate",
     "draftBasedOn": "Draft · based on V{{version}}",
-    "noFormalVersion": "No formal version",
+    "noFormalVersion": "No saved version",
+    "workingCopy": "Working copy · continuously saved",
     "localFirst": "LOCAL-FIRST · data stays on this machine",
     "loading": "Loading workbench",
     "loadError": "Workbench unavailable",
@@ -146,6 +148,10 @@
       "runs": {
         "description": "Start test runs, track execution status, and inspect run evidence.",
         "plannedStage": "Future iteration · test execution capabilities"
+      },
+      "reports": {
+        "description": "Combine version directory differences, test points, run results, and user labels.",
+        "plannedStage": "Future iteration · reports and comparison"
       }
     }
   },

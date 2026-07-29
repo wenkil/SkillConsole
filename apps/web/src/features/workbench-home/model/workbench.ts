@@ -13,26 +13,28 @@ export interface SkillSnapshotSummary {
 
 export interface SkillVersionSummary {
   id: string
-  versionNumber: number
+  sequenceNumber: number
+  name: string
+  labels: string[]
   sourceType: SkillSourceKind
   sourceName: string
-  publishedAt: string
-  isDefaultBaseline: boolean
+  frozenAt: string
+  isComparisonBaseline: boolean
   snapshot: SkillSnapshotSummary
 }
 
 export interface SkillDraftSummary {
   id: string
-  improvementCycleId: string
-  baseVersionId: string | null
-  baseSnapshotId: string
   contentRevision: number
-  status: "OPEN" | "FINALIZING"
+  status: "OPEN"
   sourceType: SkillSourceKind
   sourceName: string
   createdAt: string
   updatedAt: string
-  snapshot: SkillSnapshotSummary
+  workingCopy: {
+    fileCount: number
+    totalBytes: number
+  }
 }
 
 export interface SkillWorkspace {
@@ -40,7 +42,8 @@ export interface SkillWorkspace {
   name: string
   createdAt: string
   updatedAt: string
-  currentVersion: SkillVersionSummary | null
+  onlineVersion: SkillVersionSummary | null
+  versionCount: number
   activeDraft: SkillDraftSummary | null
 }
 

@@ -25,6 +25,35 @@ export interface SnapshotManifest {
   readonly files: readonly SnapshotManifestFile[]
 }
 
+export function createSnapshotManifest(
+  inputFiles: readonly SnapshotManifestFile[],
+): SnapshotManifest {
+  const files = [...inputFiles].sort((left, right) => {
+    if (left.relativePath < right.relativePath) return -1
+    if (left.relativePath > right.relativePath) return 1
+    return 0
+  })
+  const totalBytes = files.reduce((total, file) => total + file.byteSize, 0)
+  const stableManifest = files.map((file) => ({
+    path: file.relativePath,
+    sha256: file.sha256,
+    byteSize: file.byteSize,
+    mediaTypeHint: file.mediaTypeHint,
+    contentKind: file.contentKind,
+  }))
+  const manifestHash = createHash("sha256")
+    .update(JSON.stringify(stableManifest))
+    .digest("hex")
+
+  return {
+    schemaVersion: 1,
+    manifestHash,
+    fileCount: files.length,
+    totalBytes,
+    files,
+  }
+}
+
 const mediaTypesByExtension: Readonly<Record<string, string>> = {
   ".css": "text/css",
   ".csv": "text/csv",
@@ -123,28 +152,5 @@ export async function buildSnapshotManifest(
     files.push(file)
   }
 
-  files.sort((left, right) => {
-    if (left.relativePath < right.relativePath) return -1
-    if (left.relativePath > right.relativePath) return 1
-    return 0
-  })
-
-  const stableManifest = files.map((file) => ({
-    path: file.relativePath,
-    sha256: file.sha256,
-    byteSize: file.byteSize,
-    mediaTypeHint: file.mediaTypeHint,
-    contentKind: file.contentKind,
-  }))
-  const manifestHash = createHash("sha256")
-    .update(JSON.stringify(stableManifest))
-    .digest("hex")
-
-  return {
-    schemaVersion: 1,
-    manifestHash,
-    fileCount: files.length,
-    totalBytes,
-    files,
-  }
+  return createSnapshotManifest(files)
 }

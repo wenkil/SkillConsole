@@ -57,11 +57,11 @@ export const skillWorkspaces = pgTable(
   {
     id: uuid("id").primaryKey().default(sql`uuidv7()`),
     name: text("name").notNull(),
-    currentVersionId: uuid("current_version_id").references(
+    currentOnlineVersionId: uuid("current_version_id").references(
       (): AnyPgColumn => skillVersions.id,
       { onDelete: "restrict" },
     ),
-    defaultBaselineVersionId: uuid("default_baseline_version_id").references(
+    comparisonBaselineVersionId: uuid("default_baseline_version_id").references(
       (): AnyPgColumn => skillVersions.id,
       { onDelete: "restrict" },
     ),
@@ -175,7 +175,13 @@ export const skillVersions = pgTable(
     snapshotId: uuid("snapshot_id")
       .notNull()
       .references(() => skillSnapshots.id, { onDelete: "restrict" }),
-    versionNumber: integer("version_number").notNull(),
+    sequenceNumber: integer("version_number").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    labels: jsonb("labels")
+      .$type<readonly string[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     sourceType: skillSourceType("source_type").notNull(),
     sourceName: text("source_name").notNull(),
     createdAt: timestamp("created_at", {
@@ -184,7 +190,7 @@ export const skillVersions = pgTable(
     })
       .defaultNow()
       .notNull(),
-    publishedAt: timestamp("published_at", {
+    frozenAt: timestamp("published_at", {
       mode: "date",
       withTimezone: true,
     })
@@ -194,16 +200,20 @@ export const skillVersions = pgTable(
   (table) => [
     check(
       "skill_versions_version_number_check",
-      sql`${table.versionNumber} >= 1`,
+      sql`${table.sequenceNumber} >= 1`,
     ),
     uniqueIndex("skill_versions_workspace_number_unique").on(
       table.workspaceId,
-      table.versionNumber,
+      table.sequenceNumber,
+    ),
+    uniqueIndex("skill_versions_workspace_name_unique").on(
+      table.workspaceId,
+      sql`lower(${table.name})`,
     ),
     uniqueIndex("skill_versions_snapshot_unique").on(table.snapshotId),
     index("skill_versions_workspace_published_idx").on(
       table.workspaceId,
-      table.publishedAt,
+      table.frozenAt,
     ),
   ],
 )
@@ -220,11 +230,12 @@ export const skillDrafts = pgTable(
       { onDelete: "set null" },
     ),
     baseSnapshotId: uuid("base_snapshot_id")
-      .notNull()
       .references(() => skillSnapshots.id, { onDelete: "restrict" }),
     currentSnapshotId: uuid("current_snapshot_id")
-      .notNull()
       .references(() => skillSnapshots.id, { onDelete: "restrict" }),
+    workingStorageLocator: text("working_storage_locator").notNull(),
+    fileCount: integer("file_count").notNull(),
+    totalBytes: bigint("total_bytes", { mode: "number" }).notNull(),
     status: skillDraftStatus("status").notNull(),
     contentRevision: integer("content_revision").default(1).notNull(),
     sourceType: skillSourceType("source_type").notNull(),
@@ -260,12 +271,56 @@ export const skillDrafts = pgTable(
       "skill_drafts_content_revision_check",
       sql`${table.contentRevision} >= 1`,
     ),
+    check("skill_drafts_file_count_check", sql`${table.fileCount} >= 1`),
+    check("skill_drafts_total_bytes_check", sql`${table.totalBytes} >= 0`),
     uniqueIndex("skill_drafts_active_workspace_unique")
       .on(table.workspaceId)
       .where(sql`${table.status} in ('OPEN', 'FINALIZING')`),
     index("skill_drafts_workspace_updated_idx").on(
       table.workspaceId,
       table.updatedAt,
+    ),
+  ],
+)
+
+export const skillDraftFiles = pgTable(
+  "skill_draft_files",
+  {
+    id: uuid("id").primaryKey().default(sql`uuidv7()`),
+    draftId: uuid("draft_id")
+      .notNull()
+      .references(() => skillDrafts.id, { onDelete: "cascade" }),
+    relativePath: text("relative_path").notNull(),
+    sha256: text("sha256").notNull(),
+    byteSize: bigint("byte_size", { mode: "number" }).notNull(),
+    mediaTypeHint: text("media_type_hint").notNull(),
+    contentKind: text("content_kind").notNull(),
+  },
+  (table) => [
+    check(
+      "skill_draft_files_path_check",
+      sql`char_length(${table.relativePath}) between 1 and 512`,
+    ),
+    check(
+      "skill_draft_files_sha256_check",
+      sql`${table.sha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check("skill_draft_files_byte_size_check", sql`${table.byteSize} >= 0`),
+    check(
+      "skill_draft_files_content_kind_check",
+      sql`${table.contentKind} in ('text', 'binary')`,
+    ),
+    uniqueIndex("skill_draft_files_path_unique").on(
+      table.draftId,
+      table.relativePath,
+    ),
+    uniqueIndex("skill_draft_files_casefold_path_unique").on(
+      table.draftId,
+      sql`lower(${table.relativePath})`,
+    ),
+    index("skill_draft_files_draft_path_idx").on(
+      table.draftId,
+      table.relativePath,
     ),
   ],
 )
@@ -318,7 +373,6 @@ export const skillDraftMutations = pgTable(
     baseContentRevision: integer("base_content_revision").notNull(),
     resultContentRevision: integer("result_content_revision").notNull(),
     resultSnapshotId: uuid("result_snapshot_id")
-      .notNull()
       .references(() => skillSnapshots.id, { onDelete: "restrict" }),
     createdAt: timestamp("created_at", {
       mode: "date",
@@ -422,6 +476,7 @@ export const uploadOperations = pgTable(
     workspaceName: text("workspace_name").notNull(),
     sourceType: skillSourceType("source_type").notNull(),
     sourceName: text("source_name"),
+    manifestHash: text("manifest_hash"),
     ignoredFileCount: integer("ignored_file_count").default(0).notNull(),
     strippedRoot: text("stripped_root"),
     state: uploadOperationState("state").notNull(),
@@ -468,6 +523,7 @@ export type SkillSnapshotRow = typeof skillSnapshots.$inferSelect
 export type SkillSnapshotFileRow = typeof skillSnapshotFiles.$inferSelect
 export type SkillVersionRow = typeof skillVersions.$inferSelect
 export type SkillDraftRow = typeof skillDrafts.$inferSelect
+export type SkillDraftFileRow = typeof skillDraftFiles.$inferSelect
 export type SkillDraftRevisionRow = typeof skillDraftRevisions.$inferSelect
 export type SkillDraftMutationRow = typeof skillDraftMutations.$inferSelect
 export type SkillImprovementCycleRow =

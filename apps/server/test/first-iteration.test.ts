@@ -302,6 +302,7 @@ test("reads large text and returns explicit unsafe or corrupted Snapshot states"
     overrides: Partial<SnapshotFileRecord["file"]> = {},
   ): SnapshotFileRecord {
     return {
+      storageKind: "snapshot",
       snapshotId,
       snapshotState: "READY",
       file: {
@@ -549,18 +550,17 @@ test(
       const singleBody = (await single.response.json()) as {
         workspace: {
           id: string
-          currentVersion: null
+          onlineVersion: null
           activeDraft: {
             id: string
-            baseVersionId: null
-            snapshot: { id: string }
+            workingCopy: { fileCount: number }
           }
         }
         upload: { fileCount: number; manifestHash: string }
       }
       assert.equal(singleBody.upload.fileCount, 1)
-      assert.equal(singleBody.workspace.currentVersion, null)
-      assert.equal(singleBody.workspace.activeDraft.baseVersionId, null)
+      assert.equal(singleBody.workspace.onlineVersion, null)
+      assert.equal(singleBody.workspace.activeDraft.workingCopy.fileCount, 1)
 
       const replayedSingle = await createWorkspace(
         "Single file Skill",
@@ -747,10 +747,10 @@ test(
       const folderBody = (await folder.response.json()) as {
         workspace: {
           id: string
-          currentVersion: null
+          onlineVersion: null
           activeDraft: {
             id: string
-            snapshot: { id: string }
+            workingCopy: { fileCount: number }
           }
         }
         upload: {
@@ -762,9 +762,7 @@ test(
       assert.equal(folderBody.upload.fileCount, 6)
       assert.equal(folderBody.upload.ignoredFileCount, 2)
       assert.equal(folderBody.upload.strippedRoot, "folder-skill")
-      assert.equal(folderBody.workspace.currentVersion, null)
-      let expectedFolderSnapshotId =
-        folderBody.workspace.activeDraft.snapshot.id
+      assert.equal(folderBody.workspace.onlineVersion, null)
 
       const versionsResponse = await fetch(
         `${address}/api/skill-workspaces/${folderBody.workspace.id}/versions`,
@@ -779,20 +777,14 @@ test(
       assert.equal(draftResponse.status, 200)
       const draft = (await draftResponse.json()) as {
         id: string
-        improvementCycleId: string
-        baseVersionId: null
-        baseSnapshotId: string
         contentRevision: number
         status: string
-        snapshot: { id: string; state: string; fileCount: number }
+        workingCopy: { fileCount: number; totalBytes: number }
       }
       assert.equal(draft.id, folderBody.workspace.activeDraft.id)
-      assert.equal(draft.baseVersionId, null)
-      assert.equal(draft.baseSnapshotId, draft.snapshot.id)
       assert.equal(draft.contentRevision, 1)
       assert.equal(draft.status, "OPEN")
-      assert.equal(draft.snapshot.state, "READY")
-      assert.equal(draft.snapshot.fileCount, 6)
+      assert.equal(draft.workingCopy.fileCount, 6)
 
       const database = application.databaseClient.database
       const [workspaceRow] = await database
@@ -800,8 +792,8 @@ test(
         .from(skillWorkspaces)
         .where(eq(skillWorkspaces.id, folderBody.workspace.id))
       assert.ok(workspaceRow)
-      assert.equal(workspaceRow.currentVersionId, null)
-      assert.equal(workspaceRow.defaultBaselineVersionId, null)
+      assert.equal(workspaceRow.currentOnlineVersionId, null)
+      assert.equal(workspaceRow.comparisonBaselineVersionId, null)
 
       const [draftRow] = await database
         .select()
@@ -809,29 +801,22 @@ test(
         .where(eq(skillDrafts.id, folderBody.workspace.activeDraft.id))
       assert.ok(draftRow)
       assert.equal(draftRow.baseVersionId, null)
-      assert.equal(draftRow.baseSnapshotId, draftRow.currentSnapshotId)
+      assert.equal(draftRow.baseSnapshotId, null)
+      assert.equal(draftRow.currentSnapshotId, null)
       assert.equal(draftRow.status, "OPEN")
       assert.equal(draftRow.contentRevision, 1)
+      assert.equal(draftRow.fileCount, 6)
 
       const [cycleRow] = await database
         .select()
         .from(skillImprovementCycles)
         .where(eq(skillImprovementCycles.draftId, draftRow.id))
       assert.ok(cycleRow)
-      assert.equal(cycleRow.id, draft.improvementCycleId)
       assert.equal(cycleRow.baseVersionId, null)
       assert.equal(cycleRow.status, "DRAFTING")
 
-      const [snapshotRow] = await database
-        .select()
-        .from(skillSnapshots)
-        .where(eq(skillSnapshots.id, draftRow.currentSnapshotId))
-      assert.ok(snapshotRow)
-      assert.equal(snapshotRow.kind, "DRAFT_WORKING")
-      assert.equal(snapshotRow.state, "READY")
-
-      const formalVersions = await database.select().from(skillVersions)
-      assert.equal(formalVersions.length, 0)
+      const versionsBeforeFreeze = await database.select().from(skillVersions)
+      assert.equal(versionsBeforeFreeze.length, 0)
       const [uploadOperation] = await database
         .select()
         .from(uploadOperations)
@@ -848,7 +833,7 @@ test(
       const completedOperation =
         (await completedOperationResponse.json()) as {
           workspaceId: string
-          snapshotId: string
+          snapshotId: null
           draftId: string
           improvementCycleId: string
         }
@@ -856,11 +841,11 @@ test(
         completedOperation.workspaceId,
         folderBody.workspace.id,
       )
-      assert.equal(completedOperation.snapshotId, draft.snapshot.id)
+      assert.equal(completedOperation.snapshotId, null)
       assert.equal(completedOperation.draftId, draft.id)
       assert.equal(
         completedOperation.improvementCycleId,
-        draft.improvementCycleId,
+        cycleRow.id,
       )
 
       const filesBase =
@@ -869,7 +854,7 @@ test(
       const filesResponse = await fetch(filesBase)
       assert.equal(filesResponse.status, 200)
       const fileList = (await filesResponse.json()) as {
-        snapshotId: string
+        targetId: string
         files: Array<{
           relativePath: string
           previewKind: string
@@ -877,8 +862,8 @@ test(
         }>
       }
       assert.equal(
-        fileList.snapshotId,
-        folderBody.workspace.activeDraft.snapshot.id,
+        fileList.targetId,
+        folderBody.workspace.activeDraft.id,
       )
       assert.equal(fileList.files.length, 6)
       assert.deepEqual(
@@ -1003,12 +988,11 @@ test(
         (await singleFileMutation.json()) as {
           draft: {
             contentRevision: number
-            snapshot: { id: string }
+            workingCopy: { fileCount: number }
           }
         }
       assert.equal(singleFileMutationBody.draft.contentRevision, 2)
-      expectedFolderSnapshotId =
-        singleFileMutationBody.draft.snapshot.id
+      assert.equal(singleFileMutationBody.draft.workingCopy.fileCount, 7)
       editableDraftEtag = singleFileMutation.headers.get("etag")
       assert.ok(editableDraftEtag)
 
@@ -1033,8 +1017,8 @@ test(
       await writeFile(
         path.join(
           dataRoot,
-          "snapshots",
-          expectedFolderSnapshotId,
+          "drafts",
+          folderBody.workspace.activeDraft.id,
           "files",
           "config",
           "settings.json",
@@ -1055,7 +1039,7 @@ test(
         "SNAPSHOT_FILE_CORRUPTED",
       )
 
-      const integrityProtectedSave = await fetch(
+      const incrementalSave = await fetch(
         `${filesBase}/text`,
         {
           method: "PUT",
@@ -1070,21 +1054,15 @@ test(
           }),
         },
       )
-      assert.equal(integrityProtectedSave.status, 409)
-      assert.equal(
-        (
-          (await integrityProtectedSave.json()) as {
-            error: { code: string }
-          }
-        ).error.code,
-        "SNAPSHOT_FILE_CORRUPTED",
-      )
+      assert.equal(incrementalSave.status, 200)
+      editableDraftEtag = incrementalSave.headers.get("etag")
+      assert.ok(editableDraftEtag)
 
       await writeFile(
         path.join(
           dataRoot,
-          "snapshots",
-          expectedFolderSnapshotId,
+          "drafts",
+          folderBody.workspace.activeDraft.id,
           "files",
           "config",
           "settings.json",
@@ -1178,57 +1156,12 @@ test(
         draft: {
           contentRevision: number
           sourceName: string
-          snapshot: { id: string }
+          workingCopy: { fileCount: number }
         }
       }
-      assert.equal(committedMergeBody.draft.contentRevision, 3)
+      assert.equal(committedMergeBody.draft.contentRevision, 4)
       assert.equal(committedMergeBody.draft.sourceName, "folder-skill")
-      expectedFolderSnapshotId = committedMergeBody.draft.snapshot.id
-
-      const draftDiffResponse = await fetch(
-        `${address}/api/skill-workspaces/${folderBody.workspace.id}/draft/diff`,
-      )
-      assert.equal(draftDiffResponse.status, 200)
-      const draftDiff = (await draftDiffResponse.json()) as {
-        basis: { kind: string; snapshotId: string; versionId: null }
-        summary: {
-          added: number
-          modified: number
-          deleted: number
-          ignored: number
-          unpreviewable: number
-        }
-        entries: Array<{
-          relativePath: string
-          status: string
-          previewable: boolean
-        }>
-      }
-      assert.deepEqual(draftDiff.basis, {
-        kind: "INITIAL_IMPORT",
-        snapshotId: draft.baseSnapshotId,
-        versionId: null,
-      })
-      assert.equal(draftDiff.summary.added, 3)
-      assert.equal(draftDiff.summary.modified, 1)
-      assert.equal(draftDiff.summary.deleted, 0)
-      assert.equal(draftDiff.summary.ignored, 3)
-      assert.equal(draftDiff.summary.unpreviewable, 1)
-      assert.ok(
-        draftDiff.entries.some(
-          (entry) =>
-            entry.relativePath === "drop.tmp" &&
-            entry.status === "IGNORED",
-        ),
-      )
-      assert.ok(
-        draftDiff.entries.some(
-          (entry) =>
-            entry.relativePath === "assets/data.bin" &&
-            entry.status === "UNCHANGED" &&
-            !entry.previewable,
-        ),
-      )
+      assert.equal(committedMergeBody.draft.workingCopy.fileCount, 9)
 
       const afterFolderMergeResponse = await fetch(filesBase)
       assert.equal(afterFolderMergeResponse.status, 200)
@@ -1372,89 +1305,59 @@ test(
       const workspaces = (await listResponse.json()) as unknown[]
       assert.equal(workspaces.length, 4)
 
+      const latestSingleDraftResponse = await fetch(singleDraftUrl)
+      assert.equal(latestSingleDraftResponse.status, 200)
+      const latestSingleDraft = (await latestSingleDraftResponse.json()) as {
+        id: string
+        contentRevision: number
+        workingCopy: { fileCount: number }
+      }
+      const latestSingleEtag =
+        latestSingleDraftResponse.headers.get("etag")
+      assert.ok(latestSingleEtag)
+
+      const firstVersionResponse = await fetch(
+        `${address}/api/skill-workspaces/${singleBody.workspace.id}/versions`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: "V1",
+            labels: ["候选"],
+            setOnline: true,
+          }),
+        },
+      )
+      assert.equal(firstVersionResponse.status, 201)
+      const firstVersion = (await firstVersionResponse.json()) as {
+        id: string
+        name: string
+        isOnline: boolean
+        snapshot: { id: string; manifestHash: string }
+      }
+      assert.equal(firstVersion.name, "V1")
+      assert.equal(firstVersion.isOnline, true)
       const snapshotManifest = JSON.parse(
         await readFile(
           path.join(
             dataRoot,
             "snapshots",
-            singleBody.workspace.activeDraft.snapshot.id,
+            firstVersion.snapshot.id,
             "manifest.json",
           ),
           "utf8",
         ),
       ) as { manifestHash: string }
-      assert.equal(snapshotManifest.manifestHash, singleBody.upload.manifestHash)
-
-      const latestSingleDraftResponse = await fetch(singleDraftUrl)
-      assert.equal(latestSingleDraftResponse.status, 200)
-      const latestSingleDraft = (await latestSingleDraftResponse.json()) as {
-        id: string
-        snapshot: { id: string }
-      }
-      const latestSingleEtag =
-        latestSingleDraftResponse.headers.get("etag")
-      assert.ok(latestSingleEtag)
-      const abandonSingleDraft = await fetch(singleDraftUrl, {
-        method: "DELETE",
-        headers: { "If-Match": latestSingleEtag },
-      })
-      assert.equal(abandonSingleDraft.status, 204)
-
-      const simulatedVersionId = randomUUID()
-      const simulatedVersionPublishedAt = new Date()
-      await application.databaseClient.database.transaction(
-        async (transaction) => {
-          await transaction
-            .update(skillSnapshots)
-            .set({ kind: "VERSION" })
-            .where(eq(skillSnapshots.id, latestSingleDraft.snapshot.id))
-          await transaction.insert(skillVersions).values({
-            id: simulatedVersionId,
-            workspaceId: singleBody.workspace.id,
-            snapshotId: latestSingleDraft.snapshot.id,
-            versionNumber: 1,
-            sourceType: "single_file",
-            sourceName: "SKILL.md",
-            createdAt: simulatedVersionPublishedAt,
-            publishedAt: simulatedVersionPublishedAt,
-          })
-          await transaction
-            .update(skillWorkspaces)
-            .set({
-              currentVersionId: simulatedVersionId,
-              defaultBaselineVersionId: simulatedVersionId,
-              updatedAt: simulatedVersionPublishedAt,
-            })
-            .where(eq(skillWorkspaces.id, singleBody.workspace.id))
-        },
-      )
-
-      const laterDraftResponse = await fetch(singleDraftUrl, {
-        method: "POST",
-      })
-      assert.equal(laterDraftResponse.status, 201)
-      const laterDraft = (await laterDraftResponse.json()) as {
-        id: string
-        baseVersionId: string
-        baseSnapshotId: string
-        contentRevision: number
-        snapshot: { id: string }
-      }
-      assert.equal(laterDraft.baseVersionId, simulatedVersionId)
       assert.equal(
-        laterDraft.baseSnapshotId,
-        latestSingleDraft.snapshot.id,
+        snapshotManifest.manifestHash,
+        firstVersion.snapshot.manifestHash,
       )
-      assert.equal(laterDraft.snapshot.id, latestSingleDraft.snapshot.id)
-      assert.equal(laterDraft.contentRevision, 1)
 
-      const laterDraftEtag = laterDraftResponse.headers.get("etag")
-      assert.ok(laterDraftEtag)
       const laterDraftSave = await fetch(`${singleDraftUrl}/files/text`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "If-Match": laterDraftEtag,
+          "If-Match": latestSingleEtag,
           "Idempotency-Key": randomUUID(),
         },
         body: JSON.stringify({
@@ -1464,42 +1367,51 @@ test(
       })
       assert.equal(laterDraftSave.status, 200)
 
-      const laterDraftDiffResponse = await fetch(
-        `${singleDraftUrl}/diff`,
-      )
-      assert.equal(laterDraftDiffResponse.status, 200)
-      const laterDraftDiff = (await laterDraftDiffResponse.json()) as {
-        basis: {
-          kind: string
-          snapshotId: string
-          versionId: string
-        }
-        summary: {
-          modified: number
-        }
-      }
-      assert.deepEqual(laterDraftDiff.basis, {
-        kind: "FORMAL_VERSION",
-        snapshotId: latestSingleDraft.snapshot.id,
-        versionId: simulatedVersionId,
-      })
-      assert.equal(laterDraftDiff.summary.modified, 1)
-      const versionsAfterLaterDraftSave = await fetch(
+      const secondVersionResponse = await fetch(
         `${address}/api/skill-workspaces/${singleBody.workspace.id}/versions`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: "Experiment B",
+            description: "Alternative implementation",
+            labels: ["实验"],
+          }),
+        },
       )
-      assert.equal(versionsAfterLaterDraftSave.status, 200)
-      const laterVersions =
-        (await versionsAfterLaterDraftSave.json()) as Array<{
-          id: string
-          versionNumber: number
-        }>
-      assert.deepEqual(
-        laterVersions.map((version) => [
-          version.id,
-          version.versionNumber,
-        ]),
-        [[simulatedVersionId, 1]],
+      assert.equal(secondVersionResponse.status, 201)
+      const secondVersion = (await secondVersionResponse.json()) as {
+        id: string
+        name: string
+        isOnline: boolean
+      }
+      assert.equal(secondVersion.name, "Experiment B")
+      assert.equal(secondVersion.isOnline, false)
+
+      const compareResponse = await fetch(
+        `${address}/api/skill-workspaces/${singleBody.workspace.id}` +
+          `/versions/compare?leftVersionId=${firstVersion.id}` +
+          `&rightVersionId=${secondVersion.id}`,
       )
+      assert.equal(compareResponse.status, 200)
+      const comparison = (await compareResponse.json()) as {
+        summary: { modified: number }
+        entries: Array<{ relativePath: string; status: string }>
+      }
+      assert.equal(comparison.summary.modified, 1)
+      assert.equal(comparison.entries.length, 1)
+      assert.equal(comparison.entries[0]?.relativePath, "SKILL.md")
+      assert.equal(comparison.entries[0]?.status, "MODIFIED")
+
+      const duplicateName = await fetch(
+        `${address}/api/skill-workspaces/${singleBody.workspace.id}/versions`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "v1" }),
+        },
+      )
+      assert.equal(duplicateName.status, 409)
 
       await application.close()
       application = await buildApplication({ config, logger: false })
@@ -1513,11 +1425,12 @@ test(
       assert.equal(persistedResponse.status, 200)
       const persistedWorkspaces = (await persistedResponse.json()) as Array<{
         id: string
-        currentVersion: null
+        onlineVersion: { id: string } | null
+        versionCount: number
         activeDraft: {
           id: string
           status: string
-          snapshot: { id: string }
+          workingCopy: { fileCount: number }
         }
       }>
       assert.equal(persistedWorkspaces.length, 4)
@@ -1525,16 +1438,14 @@ test(
         (workspace) => workspace.id === folderBody.workspace.id,
       )
       assert.ok(persistedFolder)
-      assert.equal(persistedFolder.currentVersion, null)
+      assert.equal(persistedFolder.onlineVersion, null)
+      assert.equal(persistedFolder.versionCount, 0)
       assert.equal(
         persistedFolder.activeDraft.id,
         folderBody.workspace.activeDraft.id,
       )
       assert.equal(persistedFolder.activeDraft.status, "OPEN")
-      assert.equal(
-        persistedFolder.activeDraft.snapshot.id,
-        expectedFolderSnapshotId,
-      )
+      assert.equal(persistedFolder.activeDraft.workingCopy.fileCount, 9)
     } finally {
       await application.close()
       await rm(dataRoot, { recursive: true, force: true })

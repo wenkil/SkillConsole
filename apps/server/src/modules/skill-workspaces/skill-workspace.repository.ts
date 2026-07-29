@@ -1,9 +1,9 @@
-import { and, desc, eq, inArray } from "drizzle-orm"
-import { alias } from "drizzle-orm/pg-core"
+import { and, count, desc, eq, inArray } from "drizzle-orm"
 
 import { DomainError } from "../../core/errors/domain-error.js"
 import {
   skillDrafts,
+  skillDraftFiles,
   skillImprovementCycles,
   skillSnapshotFiles,
   skillSnapshots,
@@ -18,205 +18,118 @@ import type {
   SkillWorkspace,
   UploadOperation,
 } from "./skill-workspace.contract.js"
-import { createSnapshotFileInsertBatches } from "./snapshot-file-insert-batches.js"
 import type { SnapshotManifest } from "./snapshot-manifest.js"
 
-interface WorkspaceQueryRow {
-  readonly workspaceId: string
-  readonly workspaceName: string
-  readonly workspaceCreatedAt: Date
-  readonly workspaceUpdatedAt: Date
-  readonly defaultBaselineVersionId: string | null
-  readonly versionId: string | null
-  readonly versionNumber: number | null
-  readonly versionSourceType: SkillSourceType | null
-  readonly versionSourceName: string | null
-  readonly publishedAt: Date | null
-  readonly versionSnapshotId: string | null
-  readonly versionManifestHash: string | null
-  readonly versionFileCount: number | null
-  readonly versionTotalBytes: number | null
-  readonly draftId: string | null
-  readonly improvementCycleId: string | null
-  readonly draftBaseVersionId: string | null
-  readonly draftBaseSnapshotId: string | null
-  readonly draftContentRevision: number | null
-  readonly draftStatus: "OPEN" | "FINALIZING" | "CLOSED" | "ABANDONED" | null
-  readonly draftSourceType: SkillSourceType | null
-  readonly draftSourceName: string | null
-  readonly draftCreatedAt: Date | null
-  readonly draftUpdatedAt: Date | null
-  readonly draftSnapshotId: string | null
-  readonly draftManifestHash: string | null
-  readonly draftFileCount: number | null
-  readonly draftTotalBytes: number | null
-}
-
-const versionSnapshots = alias(skillSnapshots, "current_version_snapshots")
-const draftSnapshots = alias(skillSnapshots, "active_draft_snapshots")
-
-function workspaceSelection() {
-  return {
-    workspaceId: skillWorkspaces.id,
-    workspaceName: skillWorkspaces.name,
-    workspaceCreatedAt: skillWorkspaces.createdAt,
-    workspaceUpdatedAt: skillWorkspaces.updatedAt,
-    defaultBaselineVersionId: skillWorkspaces.defaultBaselineVersionId,
-    versionId: skillVersions.id,
-    versionNumber: skillVersions.versionNumber,
-    versionSourceType: skillVersions.sourceType,
-    versionSourceName: skillVersions.sourceName,
-    publishedAt: skillVersions.publishedAt,
-    versionSnapshotId: versionSnapshots.id,
-    versionManifestHash: versionSnapshots.manifestHash,
-    versionFileCount: versionSnapshots.fileCount,
-    versionTotalBytes: versionSnapshots.totalBytes,
-    draftId: skillDrafts.id,
-    improvementCycleId: skillImprovementCycles.id,
-    draftBaseVersionId: skillDrafts.baseVersionId,
-    draftBaseSnapshotId: skillDrafts.baseSnapshotId,
-    draftContentRevision: skillDrafts.contentRevision,
-    draftStatus: skillDrafts.status,
-    draftSourceType: skillDrafts.sourceType,
-    draftSourceName: skillDrafts.sourceName,
-    draftCreatedAt: skillDrafts.createdAt,
-    draftUpdatedAt: skillDrafts.updatedAt,
-    draftSnapshotId: draftSnapshots.id,
-    draftManifestHash: draftSnapshots.manifestHash,
-    draftFileCount: draftSnapshots.fileCount,
-    draftTotalBytes: draftSnapshots.totalBytes,
-  }
-}
-
-function mapWorkspaceRow(row: WorkspaceQueryRow): SkillWorkspace {
-  let currentVersion: SkillWorkspace["currentVersion"] = null
-  if (row.versionId) {
-    if (
-      row.versionNumber === null ||
-      !row.versionSourceType ||
-      !row.versionSourceName ||
-      !row.publishedAt ||
-      !row.versionSnapshotId ||
-      !row.versionManifestHash ||
-      row.versionFileCount === null ||
-      row.versionTotalBytes === null
-    ) {
-      throw new Error(
-        `Skill workspace ${row.workspaceId} has an incomplete current version.`,
+async function mapWorkspace(
+  database: Database,
+  row: typeof skillWorkspaces.$inferSelect,
+): Promise<SkillWorkspace> {
+  const [onlineRow, draftRow, versionCountRow] = await Promise.all([
+    row.currentOnlineVersionId
+      ? database
+          .select({
+            id: skillVersions.id,
+            sequenceNumber: skillVersions.sequenceNumber,
+            name: skillVersions.name,
+            labels: skillVersions.labels,
+            sourceType: skillVersions.sourceType,
+            sourceName: skillVersions.sourceName,
+            frozenAt: skillVersions.frozenAt,
+            snapshotId: skillSnapshots.id,
+            manifestHash: skillSnapshots.manifestHash,
+            fileCount: skillSnapshots.fileCount,
+            totalBytes: skillSnapshots.totalBytes,
+          })
+          .from(skillVersions)
+          .innerJoin(
+            skillSnapshots,
+            eq(skillSnapshots.id, skillVersions.snapshotId),
+          )
+          .where(eq(skillVersions.id, row.currentOnlineVersionId))
+          .limit(1)
+      : Promise.resolve([]),
+    database
+      .select()
+      .from(skillDrafts)
+      .where(
+        and(
+          eq(skillDrafts.workspaceId, row.id),
+          inArray(skillDrafts.status, ["OPEN", "FINALIZING"]),
+        ),
       )
-    }
-    currentVersion = {
-      id: row.versionId,
-      versionNumber: row.versionNumber,
-      sourceType: row.versionSourceType,
-      sourceName: row.versionSourceName,
-      publishedAt: row.publishedAt.toISOString(),
-      isDefaultBaseline: row.defaultBaselineVersionId === row.versionId,
-      snapshot: {
-        id: row.versionSnapshotId,
-        manifestHash: row.versionManifestHash,
-        fileCount: row.versionFileCount,
-        totalBytes: row.versionTotalBytes,
-      },
-    }
-  }
-
-  let activeDraft: SkillWorkspace["activeDraft"] = null
-  if (row.draftId) {
-    if (
-      !row.improvementCycleId ||
-      !row.draftBaseSnapshotId ||
-      row.draftContentRevision === null ||
-      (row.draftStatus !== "OPEN" && row.draftStatus !== "FINALIZING") ||
-      !row.draftSourceType ||
-      !row.draftSourceName ||
-      !row.draftCreatedAt ||
-      !row.draftUpdatedAt ||
-      !row.draftSnapshotId ||
-      !row.draftManifestHash ||
-      row.draftFileCount === null ||
-      row.draftTotalBytes === null
-    ) {
-      throw new Error(
-        `Skill workspace ${row.workspaceId} has an incomplete active draft.`,
-      )
-    }
-    activeDraft = {
-      id: row.draftId,
-      improvementCycleId: row.improvementCycleId,
-      baseVersionId: row.draftBaseVersionId,
-      baseSnapshotId: row.draftBaseSnapshotId,
-      contentRevision: row.draftContentRevision,
-      status: row.draftStatus,
-      sourceType: row.draftSourceType,
-      sourceName: row.draftSourceName,
-      createdAt: row.draftCreatedAt.toISOString(),
-      updatedAt: row.draftUpdatedAt.toISOString(),
-      snapshot: {
-        id: row.draftSnapshotId,
-        manifestHash: row.draftManifestHash,
-        fileCount: row.draftFileCount,
-        totalBytes: row.draftTotalBytes,
-      },
-    }
-  }
+      .limit(1),
+    database
+      .select({ value: count() })
+      .from(skillVersions)
+      .where(eq(skillVersions.workspaceId, row.id)),
+  ])
+  const online = onlineRow[0]
+  const draft = draftRow[0]
 
   return {
-    id: row.workspaceId,
-    name: row.workspaceName,
-    createdAt: row.workspaceCreatedAt.toISOString(),
-    updatedAt: row.workspaceUpdatedAt.toISOString(),
-    currentVersion,
-    activeDraft,
+    id: row.id,
+    name: row.name,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    versionCount: Number(versionCountRow[0]?.value ?? 0),
+    onlineVersion: online
+      ? {
+          id: online.id,
+          sequenceNumber: online.sequenceNumber,
+          name: online.name,
+          labels: [...online.labels],
+          sourceType: online.sourceType,
+          sourceName: online.sourceName,
+          frozenAt: online.frozenAt.toISOString(),
+          isComparisonBaseline:
+            row.comparisonBaselineVersionId === online.id,
+          snapshot: {
+            id: online.snapshotId,
+            manifestHash: online.manifestHash,
+            fileCount: online.fileCount,
+            totalBytes: online.totalBytes,
+          },
+        }
+      : null,
+    activeDraft:
+      draft && draft.status === "OPEN"
+        ? {
+            id: draft.id,
+            contentRevision: draft.contentRevision,
+            status: "OPEN",
+            sourceType: draft.sourceType,
+            sourceName: draft.sourceName,
+            createdAt: draft.createdAt.toISOString(),
+            updatedAt: draft.updatedAt.toISOString(),
+            workingCopy: {
+              fileCount: draft.fileCount,
+              totalBytes: draft.totalBytes,
+            },
+          }
+        : null,
   }
-}
-
-function baseWorkspaceQuery(database: Database) {
-  return database
-    .select(workspaceSelection())
-    .from(skillWorkspaces)
-    .leftJoin(
-      skillVersions,
-      eq(skillVersions.id, skillWorkspaces.currentVersionId),
-    )
-    .leftJoin(
-      versionSnapshots,
-      eq(versionSnapshots.id, skillVersions.snapshotId),
-    )
-    .leftJoin(
-      skillDrafts,
-      and(
-        eq(skillDrafts.workspaceId, skillWorkspaces.id),
-        inArray(skillDrafts.status, ["OPEN", "FINALIZING"]),
-      ),
-    )
-    .leftJoin(
-      draftSnapshots,
-      eq(draftSnapshots.id, skillDrafts.currentSnapshotId),
-    )
-    .leftJoin(
-      skillImprovementCycles,
-      eq(skillImprovementCycles.draftId, skillDrafts.id),
-    )
 }
 
 export async function listSkillWorkspaces(
   database: Database,
 ): Promise<SkillWorkspace[]> {
-  const rows = await baseWorkspaceQuery(database).orderBy(
-    desc(skillWorkspaces.createdAt),
-  )
-  return rows.map(mapWorkspaceRow)
+  const rows = await database
+    .select()
+    .from(skillWorkspaces)
+    .orderBy(desc(skillWorkspaces.createdAt))
+  return Promise.all(rows.map((row) => mapWorkspace(database, row)))
 }
 
 export async function findSkillWorkspace(
   database: Database,
   workspaceId: string,
 ): Promise<SkillWorkspace | null> {
-  const [row] = await baseWorkspaceQuery(database)
+  const [row] = await database
+    .select()
+    .from(skillWorkspaces)
     .where(eq(skillWorkspaces.id, workspaceId))
     .limit(1)
-  return row ? mapWorkspaceRow(row) : null
+  return row ? mapWorkspace(database, row) : null
 }
 
 export async function getSkillWorkspace(
@@ -294,29 +207,29 @@ export async function prepareUploadOperation(
   if (
     existing.state === "SUCCEEDED" &&
     existing.workspaceId &&
-    existing.snapshotId
+    existing.draftId &&
+    existing.manifestHash
   ) {
-    const [snapshot] = await database
+    const [draft] = await database
       .select({
-        fileCount: skillSnapshots.fileCount,
-        totalBytes: skillSnapshots.totalBytes,
-        manifestHash: skillSnapshots.manifestHash,
+        fileCount: skillDrafts.fileCount,
+        totalBytes: skillDrafts.totalBytes,
       })
-      .from(skillSnapshots)
-      .where(eq(skillSnapshots.id, existing.snapshotId))
+      .from(skillDrafts)
+      .where(eq(skillDrafts.id, existing.draftId))
       .limit(1)
-    if (!snapshot) {
+    if (!draft) {
       throw new Error(
-        `Succeeded upload operation ${existing.id} has no persisted Snapshot.`,
+        `Succeeded upload operation ${existing.id} has no persisted working copy.`,
       )
     }
 
     return {
       kind: "replayed",
       workspaceId: existing.workspaceId,
-      fileCount: snapshot.fileCount,
-      totalBytes: snapshot.totalBytes,
-      manifestHash: snapshot.manifestHash,
+      fileCount: draft.fileCount,
+      totalBytes: draft.totalBytes,
+      manifestHash: existing.manifestHash,
       ignoredFileCount: existing.ignoredFileCount,
       strippedRoot: existing.strippedRoot,
     }
@@ -402,14 +315,13 @@ export interface CreateInitialCandidateInput {
   readonly operationId: string
   readonly workspaceId: string
   readonly workspaceName: string
-  readonly snapshotId: string
   readonly draftId: string
   readonly improvementCycleId: string
   readonly sourceType: SkillSourceType
   readonly sourceName: string
   readonly ignoredFileCount: number
   readonly strippedRoot: string | null
-  readonly storageLocator: string
+  readonly workingStorageLocator: string
   readonly manifest: SnapshotManifest
 }
 
@@ -427,31 +339,15 @@ export async function createInitialCandidate(
       updatedAt: now,
     })
 
-    await transaction.insert(skillSnapshots).values({
-      id: input.snapshotId,
-      workspaceId: input.workspaceId,
-      kind: "DRAFT_WORKING",
-      state: "READY",
-      manifestHash: input.manifest.manifestHash,
-      storageLocator: input.storageLocator,
-      fileCount: input.manifest.fileCount,
-      totalBytes: input.manifest.totalBytes,
-      createdAt: now,
-    })
-
-    for (const batch of createSnapshotFileInsertBatches(
-      input.snapshotId,
-      input.manifest.files,
-    )) {
-      await transaction.insert(skillSnapshotFiles).values(batch)
-    }
-
     await transaction.insert(skillDrafts).values({
       id: input.draftId,
       workspaceId: input.workspaceId,
       baseVersionId: null,
-      baseSnapshotId: input.snapshotId,
-      currentSnapshotId: input.snapshotId,
+      baseSnapshotId: null,
+      currentSnapshotId: null,
+      workingStorageLocator: input.workingStorageLocator,
+      fileCount: input.manifest.fileCount,
+      totalBytes: input.manifest.totalBytes,
       status: "OPEN",
       contentRevision: 1,
       sourceType: input.sourceType,
@@ -459,6 +355,19 @@ export async function createInitialCandidate(
       createdAt: now,
       updatedAt: now,
     })
+
+    for (let index = 0; index < input.manifest.files.length; index += 1_000) {
+      await transaction.insert(skillDraftFiles).values(
+        input.manifest.files.slice(index, index + 1_000).map((file) => ({
+          draftId: input.draftId,
+          relativePath: file.relativePath,
+          sha256: file.sha256,
+          byteSize: file.byteSize,
+          mediaTypeHint: file.mediaTypeHint,
+          contentKind: file.contentKind,
+        })),
+      )
+    }
 
     await transaction.insert(skillImprovementCycles).values({
       id: input.improvementCycleId,
@@ -475,10 +384,11 @@ export async function createInitialCandidate(
       .update(uploadOperations)
       .set({
         workspaceId: input.workspaceId,
-        snapshotId: input.snapshotId,
+        snapshotId: null,
         draftId: input.draftId,
         improvementCycleId: input.improvementCycleId,
         sourceName: input.sourceName,
+        manifestHash: input.manifest.manifestHash,
         ignoredFileCount: input.ignoredFileCount,
         strippedRoot: input.strippedRoot,
         state: "SUCCEEDED",

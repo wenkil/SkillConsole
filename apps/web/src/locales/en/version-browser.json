@@ -5,28 +5,28 @@
   },
   "header": {
     "eyebrow": "Skill content browser",
-    "formalVersion": "Formal version",
-    "versionPicker": "Select candidate or version",
-    "currentVersion": "Current formal version",
-    "historicalVersion": "Viewing a historical version",
-    "initialCandidate": "Initial candidate",
-    "candidateState": "Awaiting test and confirmation",
-    "defaultBaseline": "Default baseline",
+    "formalVersion": "Immutable version",
+    "versionPicker": "Select working copy or version",
+    "currentVersion": "Current online version",
+    "historicalVersion": "Viewing another version",
+    "initialCandidate": "Working copy",
+    "candidateState": "Continuously editable",
+    "defaultBaseline": "Comparison baseline",
     "notTested": "Not tested"
   },
   "immutable": {
-    "title": "Read-only formal version",
+    "title": "Read-only immutable version",
     "description": "This page displays an immutable Snapshot. Browsing never changes file content, the Manifest, or version metadata."
   },
   "candidate": {
-    "title": "Evolvable initial candidate",
-    "description": "This Snapshot is working content before testing, not V1 or a default baseline. Publishing still requires passing tests and explicit user confirmation."
+    "title": "Continuously editable working copy",
+    "description": "Normal saves only write changed files. Freeze an immutable version when you need a test target, checkpoint, or comparison."
   },
   "draft": {
     "newVersion": "Create version draft",
     "editorLabel": "Draft file editor",
     "unsaved": "Unsaved changes",
-    "synced": "Synced with the current Working Snapshot",
+    "synced": "Synced with the current working copy",
     "viewDiff": "View diff",
     "backToEdit": "Back to edit",
     "save": "Save draft",
@@ -36,7 +36,7 @@
     "fixedBasis": "Fixed comparison basis",
     "missingFromBasis": "Fixed basis (file does not exist)",
     "localContent": "Local editor content (including unsaved changes)",
-    "saveNotice": "Saving creates a new Working Snapshot only; it does not create V1/Vn.",
+    "saveNotice": "Saving writes changed files only. Save as a version to freeze the complete directory.",
     "discardLocal": "Discard local changes",
     "changeSummary": "Draft change summary",
     "revisionState": "Revision {{revision}} · release gate not passed",
@@ -67,10 +67,10 @@
     "lifecycle": "Draft lifecycle",
     "confirmAbandon": "I understand abandoning this Draft creates no formal version and makes the Draft no longer editable.",
     "abandon": "Abandon Draft",
-    "updating": "Updating Working Snapshot"
+    "updating": "Updating working copy"
   },
   "tree": {
-    "files": "Snapshot files",
+    "files": "Skill files",
     "search": "Search path or file name",
     "noResults": "No matching files",
     "keyboardHelp": "Use arrow keys to browse and Space to open a file"
@@ -100,10 +100,10 @@
     "version": "Version information",
     "candidate": "Candidate information",
     "snapshot": "Snapshot information",
-    "versionNumber": "Version number",
+    "versionNumber": "Version name",
     "sourceType": "Source type",
     "sourceName": "Source name",
-    "publishedAt": "Published at",
+    "publishedAt": "Frozen at",
     "updatedAt": "Candidate updated at",
     "contentRevision": "Content revision",
     "createdAt": "Created at",
@@ -155,7 +155,7 @@
     "folderDialogDescription": "The folder is merged into the current Skill root. Existing files not included in the upload are never deleted.",
     "selectedFile": "Selected file",
     "selectedFolder": "Selected complete folder",
-    "replaceWarning": "An existing destination path will be replaced in the Draft. This does not create a formal version.",
+    "replaceWarning": "An existing path is replaced in the working copy. This does not automatically save a version.",
     "previewRequired": "Preview additions and same-path replacements first. After confirmation, the folder is merged into the current Draft."
   },
   "fileActions": {
@@ -164,7 +164,7 @@
     "moveDescription": "Change the current file's relative path inside the Draft.",
     "deleteTitle": "Delete current file",
     "deleteDescription": "Remove {{path}} from the Draft.",
-    "deleteWarning": "Deletion creates a new Working Snapshot. Formal versions are not affected, but this file will no longer exist in the current Draft."
+    "deleteWarning": "Deletion changes only the working copy. Existing immutable versions are not affected."
   },
   "lifecycle": {
     "more": "More Draft actions",

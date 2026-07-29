@@ -3,34 +3,32 @@ import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import {
-  abandonSkillDraft,
   commitDraftFolderMerge,
-  createSkillDraft,
+  createSkillVersion,
   deleteDraftFile,
   getActiveSkillDraft,
   getTargetFileDownloadUrl,
   getTargetImagePreviewUrl,
   listSkillVersions,
   listTargetFiles,
-  moveDraftFile,
   previewDraftFolderMerge,
-  readDraftBaseTextFile,
-  readDraftDiff,
   readTargetTextFilePreview,
   saveDraftTextFile,
+  setOnlineSkillVersion,
+  updateSkillVersion,
   uploadDraftFile,
 } from "@/features/version-browser/api/version-browser-api"
 import {
   buildVersionFileTree,
   getDefaultFilePath,
+  type CreateSkillVersionInput,
+  type DraftFolderMergePreview,
   type SkillBrowserTarget,
   type SkillVersionBrowser,
-  type DraftDiff,
-  type DraftFolderMergePreview,
   type SnapshotFile,
   type TextFilePreview,
-  type VersionPreviewIssue,
   type VersionFileTreeNode,
+  type VersionPreviewIssue,
 } from "@/features/version-browser/model/version-browser"
 import {
   getVersionBrowserCopy,
@@ -57,13 +55,9 @@ export interface VersionBrowserController {
   textPreview: TextFilePreview | null
   imagePreviewUrl: string | null
   downloadUrl: string | null
-  draftEtag: string | null
-  draftDiff: DraftDiff | null
-  baseTextPreview: TextFilePreview | null
-  conflictServerPreview: TextFilePreview | null
   folderPreview: DraftFolderMergePreview | null
   mutationPending: boolean
-  mutationError: SkillConsoleApiError | Error | null
+  mutationError: Error | null
   conflict: boolean
   searchTerm: string
   markdownView: "rendered" | "source"
@@ -77,18 +71,26 @@ export interface VersionBrowserController {
     retryPreview: () => void
     setSearchTerm: (value: string) => void
     setMarkdownView: (value: "rendered" | "source") => void
-    createDraft: () => Promise<string | null>
     saveText: (content: string) => Promise<void>
     uploadFile: (file: File, relativePath: string) => Promise<void>
     deleteFile: (relativePath: string) => Promise<void>
-    moveFile: (fromPath: string, toPath: string) => Promise<void>
     previewFolder: (
       files: readonly File[],
       ignoreRules: readonly string[],
     ) => Promise<void>
     commitFolder: () => Promise<void>
     clearFolderPreview: () => void
-    abandonDraft: () => Promise<void>
+    createVersion: (
+      input: CreateSkillVersionInput,
+    ) => Promise<SkillVersionBrowser>
+    setOnline: (versionId: string) => Promise<void>
+    updateVersion: (
+      versionId: string,
+      input: Pick<
+        CreateSkillVersionInput,
+        "name" | "description" | "labels"
+      >,
+    ) => Promise<SkillVersionBrowser>
     clearMutationError: () => void
   }
 }
@@ -102,18 +104,15 @@ export function useVersionBrowserController({
   const { t } = useTranslation("versionBrowser")
   const queryClient = useQueryClient()
   const [searchTerm, setSearchTerm] = useState("")
-  const [markdownView, setMarkdownView] = useState<
-    "rendered" | "source"
-  >("rendered")
+  const [markdownView, setMarkdownView] = useState<"rendered" | "source">(
+    "rendered",
+  )
   const [mutationPending, setMutationPending] = useState(false)
-  const [mutationError, setMutationError] = useState<
-    SkillConsoleApiError | Error | null
-  >(null)
+  const [mutationError, setMutationError] = useState<Error | null>(null)
   const [folderPreview, setFolderPreview] =
     useState<DraftFolderMergePreview | null>(null)
-  const [conflictServerPreview, setConflictServerPreview] =
-    useState<TextFilePreview | null>(null)
   const copy = useMemo(() => getVersionBrowserCopy(t), [t])
+
   const versionsQuery = useQuery({
     queryKey: ["skill-workspaces", workspaceId, "versions"],
     queryFn: () => listSkillVersions(workspaceId),
@@ -147,7 +146,7 @@ export function useVersionBrowserController({
       ? null
       : (targets.find((target) => target.kind === "draft") ??
         targets.find(
-          (target) => target.kind === "version" && target.isCurrent,
+          (target) => target.kind === "version" && target.isOnline,
         ) ??
         targets[0] ??
         null))
@@ -161,9 +160,7 @@ export function useVersionBrowserController({
       "files",
     ],
     queryFn: () => {
-      if (!selectedTarget) {
-        throw new Error("A browser target is required to list files.")
-      }
+      if (!selectedTarget) throw new Error("A file target is required.")
       return listTargetFiles(workspaceId, selectedTarget)
     },
     enabled: Boolean(selectedTarget),
@@ -172,8 +169,7 @@ export function useVersionBrowserController({
     () => filesQuery.data?.files ?? [],
     [filesQuery.data?.files],
   )
-  const effectiveFilePath =
-    selectedFilePath ?? getDefaultFilePath(files)
+  const effectiveFilePath = selectedFilePath ?? getDefaultFilePath(files)
   const selectedFile =
     files.find((file) => file.relativePath === effectiveFilePath) ?? null
   const tree = useMemo(() => buildVersionFileTree(files), [files])
@@ -181,7 +177,6 @@ export function useVersionBrowserController({
     selectedFile?.previewable === true &&
     selectedFile.previewKind !== "image" &&
     selectedFile.previewKind !== "binary"
-
   const textPreviewQuery = useQuery({
     queryKey: [
       "skill-workspaces",
@@ -193,7 +188,7 @@ export function useVersionBrowserController({
     ],
     queryFn: () => {
       if (!selectedTarget || !selectedFile) {
-        throw new Error("A browser target and file are required for preview.")
+        throw new Error("A file target and selected file are required.")
       }
       return readTargetTextFilePreview(
         workspaceId,
@@ -203,34 +198,6 @@ export function useVersionBrowserController({
     },
     enabled: Boolean(selectedTarget && selectedFile && canReadText),
   })
-  const draftDiffQuery = useQuery({
-    queryKey: ["skill-workspaces", workspaceId, "draft", "diff"],
-    queryFn: () => readDraftDiff(workspaceId),
-    enabled: selectedTarget?.kind === "draft",
-  })
-  const selectedDiffEntry =
-    draftDiffQuery.data?.entries.find(
-      (entry) => entry.relativePath === selectedFile?.relativePath,
-    ) ?? null
-  const baseTextPreviewQuery = useQuery({
-    queryKey: [
-      "skill-workspaces",
-      workspaceId,
-      "draft",
-      "diff",
-      "base-text",
-      selectedFile?.relativePath,
-    ],
-    queryFn: () => {
-      if (!selectedFile) {
-        throw new Error("A Draft file is required for comparison.")
-      }
-      return readDraftBaseTextFile(workspaceId, selectedFile.relativePath)
-    },
-    enabled:
-      selectedTarget?.kind === "draft" &&
-      Boolean(selectedFile && canReadText && selectedDiffEntry?.base),
-  })
 
   async function refreshAfterMutation(
     resource: Awaited<ReturnType<typeof saveDraftTextFile>>,
@@ -239,54 +206,45 @@ export function useVersionBrowserController({
       ["skill-workspaces", workspaceId, "draft"],
       resource,
     )
-    await queryClient.invalidateQueries({
-      queryKey: ["skill-workspaces", workspaceId],
-    })
-    await queryClient.invalidateQueries({
-      queryKey: ["skill-workspaces"],
-    })
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: [
+          "skill-workspaces",
+          workspaceId,
+          "draft",
+          resource.draft.id,
+          "files",
+        ],
+      }),
+      queryClient.invalidateQueries({ queryKey: ["skill-workspaces"] }),
+    ])
   }
 
-  async function runDraftMutation(
+  async function runMutation(
     action: () => Promise<
       Awaited<ReturnType<typeof saveDraftTextFile>>
     >,
   ): Promise<void> {
     setMutationPending(true)
     setMutationError(null)
-    setConflictServerPreview(null)
     try {
       await refreshAfterMutation(await action())
     } catch (error) {
-      const normalizedError =
+      const normalized =
         error instanceof Error ? error : new Error(String(error))
-      setMutationError(normalizedError)
+      setMutationError(normalized)
       if (
-        normalizedError instanceof SkillConsoleApiError &&
-        normalizedError.status === 412 &&
-        selectedFile
+        normalized instanceof SkillConsoleApiError &&
+        normalized.status === 412
       ) {
-        try {
-          const latest = await getActiveSkillDraft(workspaceId)
+        const latest = await getActiveSkillDraft(workspaceId).catch(
+          () => null,
+        )
+        if (latest) {
           queryClient.setQueryData(
             ["skill-workspaces", workspaceId, "draft"],
             latest,
           )
-          const [serverPreview, latestDiff] = await Promise.all([
-            readTargetTextFilePreview(
-              workspaceId,
-              { kind: "draft", id: latest.draft.id },
-              selectedFile.relativePath,
-            ),
-            readDraftDiff(workspaceId),
-          ])
-          setConflictServerPreview(serverPreview)
-          queryClient.setQueryData(
-            ["skill-workspaces", workspaceId, "draft", "diff"],
-            latestDiff,
-          )
-        } catch {
-          // The original 412 remains the actionable error.
         }
       }
       throw error
@@ -297,8 +255,8 @@ export function useVersionBrowserController({
 
   const imagePreviewUrl =
     selectedTarget &&
-    selectedFile?.previewable &&
-    selectedFile.previewKind === "image"
+    selectedFile?.previewKind === "image" &&
+    selectedFile.previewable
       ? getTargetImagePreviewUrl(
           workspaceId,
           selectedTarget,
@@ -314,11 +272,10 @@ export function useVersionBrowserController({
         )
       : null
   let previewIssue: VersionPreviewIssue | null = null
-
   if (selectedFilePath && filesQuery.isSuccess && !selectedFile) {
     previewIssue = "missing"
   } else if (
-    selectedTarget &&
+    selectedTarget?.kind === "version" &&
     selectedTarget.snapshot.state !== "READY"
   ) {
     previewIssue = "snapshot_unavailable"
@@ -349,10 +306,6 @@ export function useVersionBrowserController({
     textPreview: textPreviewQuery.data ?? null,
     imagePreviewUrl,
     downloadUrl,
-    draftEtag: draftQuery.data?.etag ?? null,
-    draftDiff: draftDiffQuery.data ?? null,
-    baseTextPreview: baseTextPreviewQuery.data ?? null,
-    conflictServerPreview,
     folderPreview,
     mutationPending,
     mutationError,
@@ -380,36 +333,12 @@ export function useVersionBrowserController({
         if (activeDraftId) void draftQuery.refetch()
         if (selectedTarget) void filesQuery.refetch()
       },
-      retryPreview: () => {
-        void textPreviewQuery.refetch()
-      },
+      retryPreview: () => void textPreviewQuery.refetch(),
       setSearchTerm,
       setMarkdownView,
-      createDraft: async () => {
-        setMutationPending(true)
-        setMutationError(null)
-        try {
-          const resource = await createSkillDraft(workspaceId)
-          queryClient.setQueryData(
-            ["skill-workspaces", workspaceId, "draft"],
-            resource,
-          )
-          await queryClient.invalidateQueries({
-            queryKey: ["skill-workspaces"],
-          })
-          return resource.draft.id
-        } catch (error) {
-          setMutationError(
-            error instanceof Error ? error : new Error(String(error)),
-          )
-          throw error
-        } finally {
-          setMutationPending(false)
-        }
-      },
       saveText: async (content) => {
         if (!draftQuery.data || !selectedFile) return
-        await runDraftMutation(() =>
+        await runMutation(() =>
           saveDraftTextFile(
             workspaceId,
             draftQuery.data.etag,
@@ -420,7 +349,7 @@ export function useVersionBrowserController({
       },
       uploadFile: async (file, relativePath) => {
         if (!draftQuery.data) return
-        await runDraftMutation(() =>
+        await runMutation(() =>
           uploadDraftFile(
             workspaceId,
             draftQuery.data.etag,
@@ -431,7 +360,7 @@ export function useVersionBrowserController({
       },
       deleteFile: async (relativePath) => {
         if (!draftQuery.data) return
-        await runDraftMutation(() =>
+        await runMutation(() =>
           deleteDraftFile(
             workspaceId,
             draftQuery.data.etag,
@@ -439,18 +368,7 @@ export function useVersionBrowserController({
           ),
         )
       },
-      moveFile: async (fromPath, toPath) => {
-        if (!draftQuery.data) return
-        await runDraftMutation(() =>
-          moveDraftFile(
-            workspaceId,
-            draftQuery.data.etag,
-            fromPath,
-            toPath,
-          ),
-        )
-      },
-      previewFolder: async (files, ignoreRules) => {
+      previewFolder: async (filesToUpload, ignoreRules) => {
         if (!draftQuery.data) return
         setMutationPending(true)
         setMutationError(null)
@@ -459,7 +377,7 @@ export function useVersionBrowserController({
             await previewDraftFolderMerge(
               workspaceId,
               draftQuery.data.etag,
-              files,
+              filesToUpload,
               ignoreRules,
             ),
           )
@@ -474,7 +392,7 @@ export function useVersionBrowserController({
       },
       commitFolder: async () => {
         if (!draftQuery.data || !folderPreview) return
-        await runDraftMutation(() =>
+        await runMutation(() =>
           commitDraftFolderMerge(
             workspaceId,
             draftQuery.data.etag,
@@ -484,19 +402,20 @@ export function useVersionBrowserController({
         setFolderPreview(null)
       },
       clearFolderPreview: () => setFolderPreview(null),
-      abandonDraft: async () => {
-        if (!draftQuery.data) return
+      createVersion: async (input) => {
         setMutationPending(true)
         setMutationError(null)
         try {
-          await abandonSkillDraft(workspaceId, draftQuery.data.etag)
-          queryClient.setQueryData(
-            ["skill-workspaces", workspaceId, "draft"],
-            undefined,
-          )
-          await queryClient.invalidateQueries({
-            queryKey: ["skill-workspaces"],
-          })
+          const version = await createSkillVersion(workspaceId, input)
+          await Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: ["skill-workspaces", workspaceId, "versions"],
+            }),
+            queryClient.invalidateQueries({
+              queryKey: ["skill-workspaces"],
+            }),
+          ])
+          return version
         } catch (error) {
           setMutationError(
             error instanceof Error ? error : new Error(String(error)),
@@ -506,10 +425,56 @@ export function useVersionBrowserController({
           setMutationPending(false)
         }
       },
-      clearMutationError: () => {
+      setOnline: async (versionId) => {
+        setMutationPending(true)
         setMutationError(null)
-        setConflictServerPreview(null)
+        try {
+          await setOnlineSkillVersion(workspaceId, versionId)
+          await Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: ["skill-workspaces", workspaceId, "versions"],
+            }),
+            queryClient.invalidateQueries({
+              queryKey: ["skill-workspaces"],
+            }),
+          ])
+        } catch (error) {
+          setMutationError(
+            error instanceof Error ? error : new Error(String(error)),
+          )
+          throw error
+        } finally {
+          setMutationPending(false)
+        }
       },
+      updateVersion: async (versionId, input) => {
+        setMutationPending(true)
+        setMutationError(null)
+        try {
+          const version = await updateSkillVersion(
+            workspaceId,
+            versionId,
+            input,
+          )
+          await Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: ["skill-workspaces", workspaceId, "versions"],
+            }),
+            queryClient.invalidateQueries({
+              queryKey: ["skill-workspaces"],
+            }),
+          ])
+          return version
+        } catch (error) {
+          setMutationError(
+            error instanceof Error ? error : new Error(String(error)),
+          )
+          throw error
+        } finally {
+          setMutationPending(false)
+        }
+      },
+      clearMutationError: () => setMutationError(null),
     },
   }
 }

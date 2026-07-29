@@ -115,14 +115,14 @@ export function WorkbenchSidebar({
                   <span className="mt-1.5 flex items-center justify-between gap-2 font-mono text-[10px] text-muted-foreground">
                     <span className="truncate">
                       {workspace.activeDraft?.sourceName ??
-                        workspace.currentVersion?.sourceName ??
+                        workspace.onlineVersion?.sourceName ??
                         copy.noFormalVersion}
                     </span>
                     <span className="shrink-0">
                       {workspace.activeDraft
                         ? copy.initialCandidateStatus
-                        : workspace.currentVersion
-                          ? `V${workspace.currentVersion.versionNumber}`
+                        : workspace.onlineVersion
+                          ? workspace.onlineVersion.name
                           : copy.noFormalVersion}
                     </span>
                   </span>

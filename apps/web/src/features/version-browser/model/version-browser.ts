@@ -18,13 +18,16 @@ export type VersionPreviewIssue =
 
 export interface SkillVersionBrowser {
   id: string
-  versionNumber: number
+  sequenceNumber: number
+  name: string
+  description: string | null
+  labels: string[]
   sourceType: SkillSourceKind
   sourceName: string
   createdAt: string
-  publishedAt: string
-  isCurrent: boolean
-  isDefaultBaseline: boolean
+  frozenAt: string
+  isOnline: boolean
+  isComparisonBaseline: boolean
   snapshot: {
     id: string
     state: SnapshotState
@@ -37,11 +40,8 @@ export interface SkillVersionBrowser {
 
 export interface SkillDraftBrowser {
   id: string
-  improvementCycleId: string
-  baseVersionId: string | null
-  baseSnapshotId: string
   contentRevision: number
-  status: "OPEN" | "FINALIZING"
+  status: "OPEN"
   sourceType: SkillSourceKind
   sourceName: string
   ignoreRules: string[]
@@ -51,13 +51,9 @@ export interface SkillDraftBrowser {
   }>
   createdAt: string
   updatedAt: string
-  snapshot: {
-    id: string
-    state: SnapshotState
-    manifestHash: string
+  workingCopy: {
     fileCount: number
     totalBytes: number
-    createdAt: string
   }
 }
 
@@ -142,8 +138,34 @@ export interface SnapshotFile {
 }
 
 export interface SnapshotFileList {
-  snapshotId: string
+  targetId: string
   files: SnapshotFile[]
+}
+
+export interface VersionComparisonEntry {
+  relativePath: string
+  status: Exclude<DraftDiffStatus, "IGNORED">
+  left: SnapshotFile | null
+  right: SnapshotFile | null
+}
+
+export interface VersionComparison {
+  leftVersion: SkillVersionBrowser
+  rightVersion: SkillVersionBrowser
+  summary: {
+    added: number
+    modified: number
+    deleted: number
+    unchanged: number
+  }
+  entries: VersionComparisonEntry[]
+}
+
+export interface CreateSkillVersionInput {
+  name: string
+  description?: string | null
+  labels?: string[]
+  setOnline?: boolean
 }
 
 export interface TextFilePreview {

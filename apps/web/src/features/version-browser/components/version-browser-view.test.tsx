@@ -6,6 +6,7 @@ import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { useState } from "react"
 import { I18nextProvider } from "react-i18next"
+import { MemoryRouter } from "react-router-dom"
 import { beforeAll, describe, expect, it, vi } from "vitest"
 
 import { VersionBrowserView } from "@/features/version-browser/components/version-browser-view"
@@ -18,13 +19,16 @@ import { i18n } from "@/shared/i18n/i18n"
 const versions: SkillVersionBrowser[] = [
   {
     id: "01900000-0000-7000-8000-000000000102",
-    versionNumber: 2,
+    sequenceNumber: 2,
+    name: "V2",
+    description: null,
+    labels: [],
     sourceType: "folder",
     sourceName: "second-source",
     createdAt: "2026-07-25T02:00:00.000Z",
-    publishedAt: "2026-07-25T02:00:00.000Z",
-    isCurrent: true,
-    isDefaultBaseline: false,
+    frozenAt: "2026-07-25T02:00:00.000Z",
+    isOnline: true,
+    isComparisonBaseline: false,
     snapshot: {
       id: "01900000-0000-7000-8000-000000000202",
       state: "READY",
@@ -36,13 +40,16 @@ const versions: SkillVersionBrowser[] = [
   },
   {
     id: "01900000-0000-7000-8000-000000000101",
-    versionNumber: 1,
+    sequenceNumber: 1,
+    name: "V1",
+    description: null,
+    labels: [],
     sourceType: "single_file",
     sourceName: "first-source",
     createdAt: "2026-07-25T01:00:00.000Z",
-    publishedAt: "2026-07-25T01:00:00.000Z",
-    isCurrent: false,
-    isDefaultBaseline: true,
+    frozenAt: "2026-07-25T01:00:00.000Z",
+    isOnline: false,
+    isComparisonBaseline: true,
     snapshot: {
       id: "01900000-0000-7000-8000-000000000201",
       state: "READY",
@@ -56,9 +63,6 @@ const versions: SkillVersionBrowser[] = [
 
 const initialCandidate: SkillDraftBrowser = {
   id: "01900000-0000-7000-8000-000000000301",
-  improvementCycleId: "01900000-0000-7000-8000-000000000302",
-  baseVersionId: null,
-  baseSnapshotId: "01900000-0000-7000-8000-000000000303",
   contentRevision: 1,
   status: "OPEN",
   sourceType: "folder",
@@ -67,13 +71,9 @@ const initialCandidate: SkillDraftBrowser = {
   ignoredPaths: [],
   createdAt: "2026-07-25T03:00:00.000Z",
   updatedAt: "2026-07-25T03:00:00.000Z",
-  snapshot: {
-    id: "01900000-0000-7000-8000-000000000303",
-    state: "READY",
-    manifestHash: "c".repeat(64),
+  workingCopy: {
     fileCount: 1,
     totalBytes: 28,
-    createdAt: "2026-07-25T03:00:00.000Z",
   },
 }
 
@@ -85,57 +85,8 @@ vi.mock("@/features/version-browser/api/version-browser-api", () => ({
     draft: initialCandidate,
     etag: `"draft-${initialCandidate.id}-r1"`,
   })),
-  readDraftDiff: vi.fn(async () => ({
-    basis: {
-      kind: "INITIAL_IMPORT",
-      snapshotId: initialCandidate.baseSnapshotId,
-      versionId: null,
-    },
-    currentSnapshotId: initialCandidate.snapshot.id,
-    contentRevision: 1,
-    summary: {
-      added: 0,
-      modified: 0,
-      deleted: 0,
-      unchanged: 1,
-      ignored: 0,
-      unpreviewable: 0,
-    },
-    entries: [
-      {
-        relativePath: "SKILL.md",
-        status: "UNCHANGED",
-        previewable: true,
-        base: {
-          sha256: "c".repeat(64),
-          byteSize: 20,
-          mediaTypeHint: "text/markdown",
-          contentKind: "text",
-        },
-        current: {
-          sha256: "c".repeat(64),
-          byteSize: 20,
-          mediaTypeHint: "text/markdown",
-          contentKind: "text",
-        },
-        ignoredReason: null,
-      },
-    ],
-  })),
-  readDraftBaseTextFile: vi.fn(async () => ({
-    kind: "markdown",
-    relativePath: "SKILL.md",
-    mediaType: "text/markdown",
-    encoding: "utf-8",
-    content: "# Candidate content",
-  })),
   listTargetFiles: vi.fn(async (_workspaceId: string, target: { id: string }) => ({
-    snapshotId:
-      target.id === initialCandidate.id
-        ? initialCandidate.snapshot.id
-        : target.id === versions[0]!.id
-        ? versions[0]!.snapshot.id
-        : versions[1]!.snapshot.id,
+    targetId: target.id,
     files: [
       {
         relativePath: "SKILL.md",
@@ -201,8 +152,6 @@ function VersionSwitchHarness() {
   const [versionId, setVersionId] = useState<string | null>(null)
   return (
     <VersionBrowserView
-      locale="zh-CN"
-      onDraftAbandoned={vi.fn()}
       onFileSelect={vi.fn()}
       onTargetSelect={(target) => {
         if (target.kind === "version") setVersionId(target.id)
@@ -215,13 +164,16 @@ function VersionSwitchHarness() {
         createdAt: "2026-07-25T00:00:00.000Z",
         updatedAt: "2026-07-25T02:00:00.000Z",
         activeDraft: null,
-        currentVersion: {
+        versionCount: 2,
+        onlineVersion: {
           id: versions[0]!.id,
-          versionNumber: 2,
+          sequenceNumber: 2,
+          name: "V2",
+          labels: [],
           sourceType: "folder",
           sourceName: "second-source",
-          publishedAt: "2026-07-25T02:00:00.000Z",
-          isDefaultBaseline: false,
+          frozenAt: "2026-07-25T02:00:00.000Z",
+          isComparisonBaseline: false,
           snapshot: {
             id: versions[0]!.snapshot.id,
             manifestHash: "b".repeat(64),
@@ -244,8 +196,6 @@ describe("VersionBrowserView", () => {
       <I18nextProvider i18n={i18n}>
         <QueryClientProvider client={queryClient}>
           <VersionBrowserView
-            locale="en"
-            onDraftAbandoned={vi.fn()}
             onFileSelect={vi.fn()}
             onTargetSelect={vi.fn()}
             selectedFilePath="scripts/assemble_ppt.py"
@@ -255,15 +205,10 @@ describe("VersionBrowserView", () => {
               name: "Candidate workbench",
               createdAt: initialCandidate.createdAt,
               updatedAt: initialCandidate.updatedAt,
-              currentVersion: null,
+              onlineVersion: null,
+              versionCount: 0,
               activeDraft: {
                 ...initialCandidate,
-                snapshot: {
-                  id: initialCandidate.snapshot.id,
-                  manifestHash: initialCandidate.snapshot.manifestHash,
-                  fileCount: initialCandidate.snapshot.fileCount,
-                  totalBytes: initialCandidate.snapshot.totalBytes,
-                },
               },
             }}
           />
@@ -285,8 +230,11 @@ describe("VersionBrowserView", () => {
     expect(
       screen.queryByRole("button", { name: "Current file actions" }),
     ).not.toBeInTheDocument()
-    expect(screen.getAllByText("Initial candidate").length).toBeGreaterThan(0)
-    expect(screen.getByText("Awaiting test and confirmation")).toBeInTheDocument()
+    expect(screen.getAllByText(/工作副本/).length).toBeGreaterThan(0)
+    expect(
+      screen.getByRole("button", { name: "保存为版本" }),
+    ).toBeInTheDocument()
+    expect(screen.getByText("可持续编辑的工作副本")).toBeInTheDocument()
     expect(screen.queryByText("V1")).not.toBeInTheDocument()
     const codeEditor = document.querySelector(
       '.cm-content[contenteditable="true"]',
@@ -334,7 +282,9 @@ describe("VersionBrowserView", () => {
     render(
       <I18nextProvider i18n={i18n}>
         <QueryClientProvider client={queryClient}>
-          <VersionSwitchHarness />
+          <MemoryRouter>
+            <VersionSwitchHarness />
+          </MemoryRouter>
         </QueryClientProvider>
       </I18nextProvider>,
     )
@@ -345,7 +295,7 @@ describe("VersionBrowserView", () => {
 
     await user.selectOptions(
       screen.getByRole("combobox", {
-        name: "Select candidate or version",
+        name: "查看目标",
       }),
       `version:${versions[1]!.id}`,
     )
@@ -353,19 +303,21 @@ describe("VersionBrowserView", () => {
     expect(
       await screen.findByRole("heading", { name: "V1 content" }),
     ).toBeInTheDocument()
-    expect(screen.getByText("Viewing a historical version")).toBeInTheDocument()
+    expect(screen.getByText("内容已冻结的测试版本")).toBeInTheDocument()
     await user.click(
       screen.getByRole("button", {
-        name: "View version information",
+        name: "编辑版本信息",
       }),
     )
     await waitFor(() => {
-      expect(screen.getByText("first-source")).toBeInTheDocument()
+      expect(
+        screen.getByRole("textbox", { name: "版本名称" }),
+      ).toHaveValue("V1")
     })
-    await user.click(screen.getByRole("button", { name: "Close" }))
+    await user.click(screen.getByRole("button", { name: "取消" }))
     expect(
       screen.getByRole("combobox", {
-        name: "Select candidate or version",
+        name: "查看目标",
       }),
     ).toHaveValue(`version:${versions[1]!.id}`)
   })

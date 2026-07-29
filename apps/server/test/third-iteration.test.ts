@@ -72,7 +72,7 @@ test("applies UI rules after file rules but never re-includes protected metadata
   )
 })
 
-test("builds Draft diff categories against a fixed basis", () => {
+test("builds folder-merge diff categories against the current working copy", () => {
   const base = [
     {
       relativePath: "deleted.md",

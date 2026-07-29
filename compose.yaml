@@ -71,7 +71,7 @@ services:
       retries: 12
       start_period: 10s
     ports:
-      - "3000:3000"
+      - "${SKILLCONSOLE_API_HOST_PORT:-13000}:3000"
     restart: unless-stopped
     volumes:
       - ./apps/server/src:/workspace/apps/server/src
@@ -134,7 +134,7 @@ services:
       retries: 12
       start_period: 15s
     ports:
-      - "3000:3000"
+      - "${SKILLCONSOLE_API_HOST_PORT:-13000}:3000"
     restart: unless-stopped
     volumes:
       - skillconsole_data:/workspace/var

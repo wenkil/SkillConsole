@@ -1,8 +1,7 @@
 import {
   AlertTriangle,
-  Baseline,
   CheckCircle2,
-  CircleDashed,
+  GitCompareArrows,
   History,
   LoaderCircle,
   LockKeyhole,
@@ -11,13 +10,14 @@ import {
   RotateCcw,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
+import { Link } from "react-router-dom"
 
-import { VersionFilePreview } from "@/features/version-browser/components/version-file-preview"
+import { CreateVersionDialog } from "@/features/version-browser/components/create-version-dialog"
 import { DraftFileEditor } from "@/features/version-browser/components/draft-file-editor"
-import { DraftLifecycleMenu } from "@/features/version-browser/components/draft-lifecycle-menu"
 import { DraftUploadMenu } from "@/features/version-browser/components/draft-upload-menu"
-import { VersionContextBar } from "@/features/version-browser/components/version-context-bar"
+import { VersionFilePreview } from "@/features/version-browser/components/version-file-preview"
 import { VersionFileTree } from "@/features/version-browser/components/version-file-tree"
+import { VersionMetadataDialog } from "@/features/version-browser/components/version-metadata-dialog"
 import { useVersionBrowserController } from "@/features/version-browser/hooks/use-version-browser-controller"
 import type { SkillBrowserTarget } from "@/features/version-browser/model/version-browser"
 import type { SkillWorkspace } from "@/features/workbench-home/model/workbench"
@@ -25,20 +25,16 @@ import { Button } from "@/shared/components/ui/button"
 
 interface VersionBrowserViewProps {
   workspace: SkillWorkspace
-  locale: string
   selectedVersionId: string | null
   selectedFilePath: string | null
-  onDraftAbandoned: () => void
   onTargetSelect: (target: Pick<SkillBrowserTarget, "kind" | "id">) => void
   onFileSelect: (relativePath: string) => void
 }
 
 export function VersionBrowserView({
   workspace,
-  locale,
   selectedVersionId,
   selectedFilePath,
-  onDraftAbandoned,
   onTargetSelect,
   onFileSelect,
 }: VersionBrowserViewProps) {
@@ -53,11 +49,8 @@ export function VersionBrowserView({
 
   if (controller.loading) {
     return (
-      <main className="flex h-full min-h-0 min-w-0 items-center justify-center overflow-hidden px-10 py-9">
-        <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground uppercase">
-          <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
-          {copy.loading}
-        </div>
+      <main className="flex h-full min-h-0 min-w-0 items-center justify-center overflow-hidden">
+        <LoaderCircle className="size-4 animate-spin" />
       </main>
     )
   }
@@ -66,12 +59,9 @@ export function VersionBrowserView({
     return (
       <main className="flex h-full min-h-0 min-w-0 items-center justify-center overflow-hidden px-10 py-9">
         <div className="max-w-md border border-destructive/50 bg-paper-raised p-7 text-center">
-          <PackageOpen
-            aria-hidden="true"
-            className="mx-auto mb-3 size-8 text-destructive"
-          />
+          <PackageOpen className="mx-auto mb-3 size-8 text-destructive" />
           <strong className="block">{copy.loadError}</strong>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          <p className="mt-2 text-sm text-muted-foreground">
             {copy.workspaceUnavailable}
           </p>
           <Button
@@ -80,7 +70,7 @@ export function VersionBrowserView({
             type="button"
             variant="outline"
           >
-            <RotateCcw aria-hidden="true" data-icon="inline-start" />
+            <RotateCcw data-icon="inline-start" />
             {copy.retry}
           </Button>
         </div>
@@ -88,57 +78,34 @@ export function VersionBrowserView({
     )
   }
 
-  const baseVersionTarget =
-    selectedTarget.kind === "draft" && selectedTarget.baseVersionId
-      ? controller.targets.find(
-          (target) =>
-            target.kind === "version" &&
-            target.id === selectedTarget.baseVersionId,
-        )
-      : null
-  const baseVersionNumber =
-    baseVersionTarget?.kind === "version"
-      ? baseVersionTarget.versionNumber
-      : null
-  const statusByPath =
-    selectedTarget.kind === "draft" && controller.draftDiff
-      ? Object.fromEntries(
-          controller.draftDiff.entries.map((entry) => [
-            entry.relativePath,
-            entry.status,
-          ]),
-        )
-      : undefined
-
   return (
     <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-foreground bg-background px-7 pt-4 pb-3">
-        <div className="flex items-start justify-between gap-6">
+      <header className="shrink-0 border-b border-foreground bg-background px-6 py-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="min-w-0">
             <div className="mb-1.5 flex items-center gap-2 font-mono text-[10px] font-bold tracking-[0.08em] text-signal-dark uppercase">
               {selectedTarget.kind === "draft" ? (
-                <PencilLine aria-hidden="true" className="size-3.5" />
-              ) : selectedTarget.isCurrent ? (
-                <CheckCircle2 aria-hidden="true" className="size-3.5" />
+                <PencilLine className="size-3.5" />
+              ) : selectedTarget.isOnline ? (
+                <CheckCircle2 className="size-3.5" />
               ) : (
-                <History aria-hidden="true" className="size-3.5" />
+                <History className="size-3.5" />
               )}
-              {copy.eyebrow} /{" "}
+              Skill 版本 /{" "}
               {selectedTarget.kind === "draft"
-                ? copy.initialCandidate
-                : `V${selectedTarget.versionNumber}`}
+                ? "工作副本"
+                : selectedTarget.name}
             </div>
-            <h1 className="truncate text-[clamp(1.75rem,2.4vw,2.5rem)] leading-none font-[780] tracking-[-0.035em]">
+            <h1 className="truncate text-3xl leading-none font-[780] tracking-[-0.035em]">
               {workspace.name}
             </h1>
           </div>
 
-          <div className="flex shrink-0 items-end gap-2">
-            <label className="grid gap-1 font-mono text-[9px] tracking-[0.04em] text-muted-foreground uppercase">
-              {copy.versionPicker}
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="grid gap-1 font-mono text-[9px] text-muted-foreground uppercase">
+              查看目标
               <select
-                aria-label={copy.versionPicker}
-                className="h-9 min-w-44 border border-foreground bg-paper-raised px-3 font-mono text-xs text-foreground outline-none focus:border-primary"
+                className="h-9 min-w-48 border border-foreground bg-paper-raised px-3 font-mono text-xs outline-none focus:border-primary"
                 onChange={(event) => {
                   const target = controller.targets.find(
                     (item) =>
@@ -154,119 +121,83 @@ export function VersionBrowserView({
                     value={`${target.kind}:${target.id}`}
                   >
                     {target.kind === "draft"
-                      ? copy.initialCandidate
-                      : `V${target.versionNumber}${target.isCurrent ? ` · ${copy.currentVersion}` : ""}`}
+                      ? `工作副本 · Revision ${target.contentRevision}`
+                      : `${target.name}${target.isOnline ? " · 当前上线" : ""}`}
                   </option>
                 ))}
               </select>
             </label>
-            <div className="flex h-9 items-center gap-2 border border-rule bg-paper-raised px-3 font-mono text-[10px]">
-              {selectedTarget.kind === "draft" ? (
-                <>
-                  <PencilLine aria-hidden="true" className="size-3.5 text-primary" />
-                  {copy.candidateState}
-                </>
-              ) : selectedTarget.isCurrent ? (
-                <>
-                  <CheckCircle2 aria-hidden="true" className="size-3.5 text-signal-dark" />
-                  {copy.currentVersion}
-                </>
-              ) : (
-                <>
-                  <History aria-hidden="true" className="size-3.5 text-muted-foreground" />
-                  {copy.historicalVersion}
-                </>
-              )}
-            </div>
-            {selectedTarget.kind === "version" &&
-            selectedTarget.isDefaultBaseline ? (
-              <div className="flex h-9 items-center gap-2 border border-rule bg-paper-raised px-3 font-mono text-[10px]">
-                <Baseline aria-hidden="true" className="size-3.5 text-technical" />
-                {copy.defaultBaseline}
-              </div>
-            ) : null}
-            <div className="flex h-9 items-center border border-rule bg-paper-muted px-3 font-mono text-[10px] text-muted-foreground">
-              {copy.notTested}
-            </div>
-            {selectedTarget.kind === "draft" ? (
-              <>
-                <Button
-                  className="h-9 rounded-none"
-                  disabled
-                  title={t("lifecycle.publishTodoDescription")}
-                  type="button"
-                >
-                  <CircleDashed
-                    aria-hidden="true"
-                    data-icon="inline-start"
-                  />
-                  {t("lifecycle.publishTodo")}
-                </Button>
-                <DraftLifecycleMenu
-                  diff={controller.draftDiff}
-                  draft={selectedTarget}
-                  onAbandon={async () => {
-                    await controller.actions.abandonDraft()
-                    onDraftAbandoned()
-                  }}
-                  pending={controller.mutationPending}
-                />
-              </>
-            ) : null}
-            {selectedTarget.kind === "version" &&
-            selectedTarget.isCurrent &&
-            !controller.targets.some((target) => target.kind === "draft") ? (
-              <Button
-                className="h-9 rounded-none"
-                disabled={controller.mutationPending}
-                onClick={() => {
-                  void controller.actions
-                    .createDraft()
-                    .then((draftId) => {
-                      if (draftId) {
-                        onTargetSelect({ kind: "draft", id: draftId })
-                      }
-                    })
-                    .catch(() => undefined)
-                }}
-                type="button"
-              >
-                <PencilLine aria-hidden="true" data-icon="inline-start" />
-                {copy.newVersionDraft}
+            {controller.versions.length >= 2 ? (
+              <Button asChild className="h-9 rounded-none" variant="outline">
+                <Link to={`/workbenches/${workspace.id}/versions/compare`}>
+                  <GitCompareArrows data-icon="inline-start" />
+                  版本对比
+                </Link>
               </Button>
             ) : null}
+            {selectedTarget.kind === "draft" ? (
+              <CreateVersionDialog
+                onCreate={controller.actions.createVersion}
+                onCreated={(version) =>
+                  onTargetSelect({ kind: "version", id: version.id })
+                }
+                pending={controller.mutationPending}
+                suggestedName={`V${controller.versions.length + 1}`}
+              />
+            ) : !selectedTarget.isOnline ? (
+              <>
+                <VersionMetadataDialog
+                  onSave={controller.actions.updateVersion}
+                  pending={controller.mutationPending}
+                  version={selectedTarget}
+                />
+                <Button
+                  className="h-9 rounded-none"
+                  disabled={controller.mutationPending}
+                  onClick={() => {
+                    void controller.actions
+                      .setOnline(selectedTarget.id)
+                      .catch(() => undefined)
+                  }}
+                  type="button"
+                >
+                  <CheckCircle2 data-icon="inline-start" />
+                  标记为当前上线
+                </Button>
+              </>
+            ) : (
+              <VersionMetadataDialog
+                onSave={controller.actions.updateVersion}
+                pending={controller.mutationPending}
+                version={selectedTarget}
+              />
+            )}
           </div>
         </div>
 
-        <div className="mt-3 flex items-center gap-3 border border-technical/55 bg-technical/5 px-3.5 py-2 text-xs text-technical-foreground">
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border border-technical/55 bg-technical/5 px-3.5 py-2 text-xs">
           {selectedTarget.kind === "draft" ? (
-            <PencilLine aria-hidden="true" className="size-4 shrink-0" />
+            <PencilLine className="size-4 shrink-0 text-technical" />
           ) : (
-            <LockKeyhole aria-hidden="true" className="size-4 shrink-0" />
+            <LockKeyhole className="size-4 shrink-0 text-technical" />
           )}
           <strong>
             {selectedTarget.kind === "draft"
-              ? copy.candidateTitle
-              : copy.immutableTitle}
+              ? "可持续编辑的工作副本"
+              : "内容已冻结的测试版本"}
           </strong>
           <span className="text-muted-foreground">
             {selectedTarget.kind === "draft"
-              ? copy.candidateDescription
-              : copy.immutableDescription}
+              ? `${selectedTarget.workingCopy.fileCount} 个文件 · 保存时只写入变化文件`
+              : `${selectedTarget.snapshot.fileCount} 个文件 · ${selectedTarget.labels.join("、") || "暂无标签"}`}
           </span>
+          {selectedTarget.kind === "version" && selectedTarget.isOnline ? (
+            <span className="ml-auto border border-technical/50 bg-technical/10 px-2 py-1 font-mono text-[10px] font-bold text-technical-foreground">
+              当前上线
+            </span>
+          ) : null}
         </div>
       </header>
-
-      <VersionContextBar
-        baseVersionNumber={baseVersionNumber}
-        copy={copy}
-        diff={
-          selectedTarget.kind === "draft" ? controller.draftDiff : null
-        }
-        locale={locale}
-        onSelectPath={onFileSelect}
-        target={selectedTarget}
-      />
 
       {controller.mutationError ? (
         <div
@@ -274,14 +205,11 @@ export function VersionBrowserView({
           role="alert"
         >
           <span className="flex items-center gap-2">
-            <AlertTriangle
-              aria-hidden="true"
-              className="size-4 shrink-0 text-destructive"
-            />
+            <AlertTriangle className="size-4 text-destructive" />
             {controller.mutationError.message}
           </span>
           <button
-            className="shrink-0 font-mono text-[10px] underline"
+            className="font-mono text-[10px] underline"
             onClick={controller.actions.clearMutationError}
             type="button"
           >
@@ -297,9 +225,7 @@ export function VersionBrowserView({
               <DraftUploadMenu
                 draft={selectedTarget}
                 folderPreview={controller.folderPreview}
-                onClearFolderPreview={
-                  controller.actions.clearFolderPreview
-                }
+                onClearFolderPreview={controller.actions.clearFolderPreview}
                 onCommitFolder={controller.actions.commitFolder}
                 onPreviewFolder={controller.actions.previewFolder}
                 onUploadFile={async (file, relativePath) => {
@@ -316,7 +242,6 @@ export function VersionBrowserView({
           onSearchTermChange={controller.actions.setSearchTerm}
           searchTerm={controller.searchTerm}
           selectedPath={controller.selectedFilePath}
-          statusByPath={statusByPath}
           tree={controller.tree}
         />
         {selectedTarget.kind === "draft" &&
@@ -324,29 +249,17 @@ export function VersionBrowserView({
         controller.textPreview &&
         controller.selectedFile.contentKind === "text" ? (
           <DraftFileEditor
-            basePreview={controller.baseTextPreview}
             conflict={controller.conflict}
-            conflictServerPreview={controller.conflictServerPreview}
-            diffEntry={
-              controller.draftDiff?.entries.find(
-                (entry) =>
-                  entry.relativePath ===
-                  controller.selectedFile?.relativePath,
-              ) ?? null
-            }
             errorMessage={controller.mutationError?.message ?? null}
             file={controller.selectedFile}
             key={controller.selectedFile.relativePath}
             onClearError={controller.actions.clearMutationError}
             onDelete={async () => {
-              const relativePath =
-                controller.selectedFile?.relativePath
-              if (!relativePath) return
-
-              await controller.actions.deleteFile(relativePath)
+              const path = controller.selectedFile?.relativePath
+              if (!path) return
+              await controller.actions.deleteFile(path)
               const fallback = controller.files.find(
-                (candidate) =>
-                  candidate.relativePath !== relativePath,
+                (candidate) => candidate.relativePath !== path,
               )
               if (fallback) onFileSelect(fallback.relativePath)
             }}

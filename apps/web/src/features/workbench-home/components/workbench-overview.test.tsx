@@ -12,7 +12,7 @@ const copy = getWorkbenchHomeCopy(
 )
 
 describe("WorkbenchOverview", () => {
-  it("shows formal version facts without presenting the baseline as passed", async () => {
+  it("shows user-managed online and version facts without system approval", async () => {
     await i18n.changeLanguage("zh-CN")
     render(
       <MemoryRouter>
@@ -25,13 +25,16 @@ describe("WorkbenchOverview", () => {
             createdAt: "2026-07-24T10:00:00.000Z",
             updatedAt: "2026-07-24T10:00:00.000Z",
             activeDraft: null,
-            currentVersion: {
+            versionCount: 1,
+            onlineVersion: {
               id: "01900000-0000-7000-8000-000000000002",
-              versionNumber: 1,
+              sequenceNumber: 1,
+              name: "V1",
+              labels: [],
               sourceType: "folder",
               sourceName: "invoice-skill",
-              publishedAt: "2026-07-24T10:00:00.000Z",
-              isDefaultBaseline: true,
+              frozenAt: "2026-07-24T10:00:00.000Z",
+              isComparisonBaseline: true,
               snapshot: {
                 id: "01900000-0000-7000-8000-000000000003",
                 manifestHash: "a".repeat(64),
@@ -47,13 +50,11 @@ describe("WorkbenchOverview", () => {
     expect(
       screen.getByRole("heading", { name: "发票审核 Skill" }),
     ).toBeInTheDocument()
-    expect(screen.getByText("V1 · 已发布")).toBeInTheDocument()
-    expect(screen.getByText("V1 · 已建立")).toBeInTheDocument()
+    expect(screen.getByText("当前上线 · V1")).toBeInTheDocument()
+    expect(screen.getByText("当前上线版本")).toBeInTheDocument()
+    expect(screen.getByText("已保存版本")).toBeInTheDocument()
     expect(screen.getAllByText(/TODO/).length).toBeGreaterThan(0)
     expect(screen.queryByText("已通过")).not.toBeInTheDocument()
-    expect(screen.getByText(/sha256:aaaa/)).toHaveAttribute(
-      "title",
-      "a".repeat(64),
-    )
+    expect(screen.queryByText(/sha256:/)).not.toBeInTheDocument()
   })
 })

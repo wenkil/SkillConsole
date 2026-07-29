@@ -31,14 +31,6 @@ export const DraftTextSaveSchema = Type.Object(
   { additionalProperties: false },
 )
 
-export const DraftMoveFileSchema = Type.Object(
-  {
-    fromPath: Type.String({ minLength: 1, maxLength: 512 }),
-    toPath: Type.String({ minLength: 1, maxLength: 512 }),
-  },
-  { additionalProperties: false },
-)
-
 export const DraftMutationResponseSchema = Type.Object(
   {
     draft: SkillDraftBrowserSchema,
@@ -160,7 +152,6 @@ export const DraftOperationParamsSchema = Type.Object(
 )
 
 export type DraftTextSave = Static<typeof DraftTextSaveSchema>
-export type DraftMoveFile = Static<typeof DraftMoveFileSchema>
 export type DraftMutationResponse = Static<
   typeof DraftMutationResponseSchema
 >

@@ -32,6 +32,7 @@ function getActiveModule(pathname: string): WorkspaceModule {
   if (pathname.includes("/test-cases")) return "test-cases"
   if (pathname.includes("/datasets")) return "datasets"
   if (pathname.includes("/runs")) return "runs"
+  if (pathname.includes("/reports")) return "reports"
   return "overview"
 }
 

@@ -28,13 +28,21 @@ export const VersionBrowserSnapshotSchema = Type.Intersect(
 export const SkillVersionBrowserSchema = Type.Object(
   {
     id: Type.String({ format: "uuid" }),
-    versionNumber: Type.Integer({ minimum: 1 }),
+    sequenceNumber: Type.Integer({ minimum: 1 }),
+    name: Type.String({ minLength: 1, maxLength: 120 }),
+    description: Type.Union([
+      Type.String({ maxLength: 2_000 }),
+      Type.Null(),
+    ]),
+    labels: Type.Array(Type.String({ minLength: 1, maxLength: 40 }), {
+      maxItems: 20,
+    }),
     sourceType: SkillSourceTypeSchema,
     sourceName: Type.String({ minLength: 1 }),
     createdAt: Type.String({ format: "date-time" }),
-    publishedAt: Type.String({ format: "date-time" }),
-    isCurrent: Type.Boolean(),
-    isDefaultBaseline: Type.Boolean(),
+    frozenAt: Type.String({ format: "date-time" }),
+    isOnline: Type.Boolean(),
+    isComparisonBaseline: Type.Boolean(),
     snapshot: VersionBrowserSnapshotSchema,
   },
   { additionalProperties: false },
@@ -47,17 +55,8 @@ export const SkillVersionBrowserListSchema = Type.Array(
 export const SkillDraftBrowserSchema = Type.Object(
   {
     id: Type.String({ format: "uuid" }),
-    improvementCycleId: Type.String({ format: "uuid" }),
-    baseVersionId: Type.Union([
-      Type.String({ format: "uuid" }),
-      Type.Null(),
-    ]),
-    baseSnapshotId: Type.String({ format: "uuid" }),
     contentRevision: Type.Integer({ minimum: 1 }),
-    status: Type.Union([
-      Type.Literal("OPEN"),
-      Type.Literal("FINALIZING"),
-    ]),
+    status: Type.Literal("OPEN"),
     sourceType: SkillSourceTypeSchema,
     sourceName: Type.String({ minLength: 1 }),
     ignoreRules: Type.Array(Type.String({ maxLength: 512 }), {
@@ -78,7 +77,13 @@ export const SkillDraftBrowserSchema = Type.Object(
     ),
     createdAt: Type.String({ format: "date-time" }),
     updatedAt: Type.String({ format: "date-time" }),
-    snapshot: VersionBrowserSnapshotSchema,
+    workingCopy: Type.Object(
+      {
+        fileCount: Type.Integer({ minimum: 1 }),
+        totalBytes: Type.Integer({ minimum: 0 }),
+      },
+      { additionalProperties: false },
+    ),
   },
   { additionalProperties: false },
 )
@@ -125,8 +130,85 @@ export const SnapshotFileSchema = Type.Object(
 
 export const SnapshotFileListSchema = Type.Object(
   {
-    snapshotId: Type.String({ format: "uuid" }),
+    targetId: Type.String({ format: "uuid" }),
     files: Type.Array(SnapshotFileSchema),
+  },
+  { additionalProperties: false },
+)
+
+export const CreateSkillVersionSchema = Type.Object(
+  {
+    name: Type.String({ minLength: 1, maxLength: 120 }),
+    description: Type.Optional(
+      Type.Union([Type.String({ maxLength: 2_000 }), Type.Null()]),
+    ),
+    labels: Type.Optional(
+      Type.Array(Type.String({ minLength: 1, maxLength: 40 }), {
+        maxItems: 20,
+      }),
+    ),
+    setOnline: Type.Optional(Type.Boolean()),
+  },
+  { additionalProperties: false },
+)
+
+export const UpdateSkillVersionMetadataSchema = Type.Object(
+  {
+    name: Type.Optional(Type.String({ minLength: 1, maxLength: 120 })),
+    description: Type.Optional(
+      Type.Union([Type.String({ maxLength: 2_000 }), Type.Null()]),
+    ),
+    labels: Type.Optional(
+      Type.Array(Type.String({ minLength: 1, maxLength: 40 }), {
+        maxItems: 20,
+      }),
+    ),
+  },
+  { additionalProperties: false, minProperties: 1 },
+)
+
+export const VersionComparisonQuerySchema = Type.Object(
+  {
+    leftVersionId: Type.String({ format: "uuid" }),
+    rightVersionId: Type.String({ format: "uuid" }),
+  },
+  { additionalProperties: false },
+)
+
+export const VersionComparisonFileSideSchema = Type.Union([
+  SnapshotFileSchema,
+  Type.Null(),
+])
+
+export const VersionComparisonSchema = Type.Object(
+  {
+    leftVersion: SkillVersionBrowserSchema,
+    rightVersion: SkillVersionBrowserSchema,
+    summary: Type.Object(
+      {
+        added: Type.Integer({ minimum: 0 }),
+        modified: Type.Integer({ minimum: 0 }),
+        deleted: Type.Integer({ minimum: 0 }),
+        unchanged: Type.Integer({ minimum: 0 }),
+      },
+      { additionalProperties: false },
+    ),
+    entries: Type.Array(
+      Type.Object(
+        {
+          relativePath: Type.String({ minLength: 1, maxLength: 512 }),
+          status: Type.Union([
+            Type.Literal("ADDED"),
+            Type.Literal("MODIFIED"),
+            Type.Literal("DELETED"),
+            Type.Literal("UNCHANGED"),
+          ]),
+          left: VersionComparisonFileSideSchema,
+          right: VersionComparisonFileSideSchema,
+        },
+        { additionalProperties: false },
+      ),
+    ),
   },
   { additionalProperties: false },
 )
@@ -156,3 +238,8 @@ export type SnapshotFilePreviewKind = Static<
   typeof SnapshotFilePreviewKindSchema
 >
 export type TextFilePreview = Static<typeof TextFilePreviewSchema>
+export type CreateSkillVersion = Static<typeof CreateSkillVersionSchema>
+export type UpdateSkillVersionMetadata = Static<
+  typeof UpdateSkillVersionMetadataSchema
+>
+export type VersionComparison = Static<typeof VersionComparisonSchema>

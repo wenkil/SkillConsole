@@ -8,8 +8,8 @@
     "retry": "重新加载",
     "emptyTitle": "暂无工作台",
     "emptyDescription": "创建第一个 Skill 测试工作台后，它会显示在这里。",
-    "initialCandidate": "初始候选 · 无正式版本",
-    "noFormalVersion": "无正式版本"
+    "initialCandidate": "工作副本",
+    "noFormalVersion": "尚无版本"
   },
   "hero": {
     "eyebrow": "Skill 版本与测试证据工作台",
@@ -118,14 +118,16 @@
       "versions": "Skill 版本",
       "testCases": "测试用例",
       "datasets": "数据集",
-      "runs": "测试任务"
+      "runs": "测试任务",
+      "reports": "对比报告"
     },
     "backToList": "返回工作台列表",
     "collapseSidebar": "收起工作台侧栏",
     "expandSidebar": "展开工作台侧栏",
     "initialCandidate": "初始候选",
     "draftBasedOn": "草稿 · 基于 V{{version}}",
-    "noFormalVersion": "无正式版本",
+    "noFormalVersion": "尚无版本",
+    "workingCopy": "工作副本 · 持续保存",
     "localFirst": "LOCAL-FIRST · 数据保留在本机",
     "loading": "正在读取工作台",
     "loadError": "无法读取工作台",
@@ -146,6 +148,10 @@
       "runs": {
         "description": "用于发起测试运行、跟踪执行状态并查看运行证据。",
         "plannedStage": "后续迭代 · 测试运行能力"
+      },
+      "reports": {
+        "description": "用于汇总版本目录差异、测试点、任务结果和用户标签。",
+        "plannedStage": "后续迭代 · 报告与对比"
       }
     }
   },

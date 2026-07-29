@@ -19,7 +19,7 @@ export function registerOpenApi(application: FastifyInstance): void {
         {
           name: "skill-workspaces",
           description:
-            "Skill testing workbench creation, initial candidates, formal versions, and upload diagnostics.",
+            "Skill testing workbench creation, mutable working copies, immutable versions, comparison, and upload diagnostics.",
         },
       ],
     },

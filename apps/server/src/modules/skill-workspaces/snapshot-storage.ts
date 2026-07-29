@@ -1,5 +1,7 @@
 import { createWriteStream } from "node:fs"
+import { randomUUID } from "node:crypto"
 import {
+  access,
   copyFile,
   mkdir,
   readFile,
@@ -42,17 +44,20 @@ export interface StreamWriteResult {
 export class LocalSnapshotStorage {
   readonly dataRoot: string
   readonly snapshotsRoot: string
+  readonly draftsRoot: string
   readonly stagingRoot: string
 
   constructor(dataRoot: string) {
     this.dataRoot = path.resolve(dataRoot)
     this.snapshotsRoot = path.join(this.dataRoot, "snapshots")
+    this.draftsRoot = path.join(this.dataRoot, "drafts")
     this.stagingRoot = path.join(this.dataRoot, "staging")
   }
 
   async initialize(): Promise<void> {
     await Promise.all([
       mkdir(this.snapshotsRoot, { recursive: true }),
+      mkdir(this.draftsRoot, { recursive: true }),
       mkdir(this.stagingRoot, { recursive: true }),
     ])
   }
@@ -107,6 +112,217 @@ export class LocalSnapshotStorage {
     )
     assertWithinRoot(snapshotFilesRoot, snapshotFilePath)
     return snapshotFilePath
+  }
+
+  getDraftFilePath(draftId: string, relativePath: string): string {
+    assertInternalId(draftId)
+    const segments = relativePath.split("/")
+    if (
+      !relativePath ||
+      relativePath.includes("\\") ||
+      path.posix.isAbsolute(relativePath) ||
+      segments.some(
+        (segment) => segment === "" || segment === "." || segment === "..",
+      )
+    ) {
+      throw new Error("A Draft file path is invalid.")
+    }
+
+    const draftFilesRoot = path.join(this.draftsRoot, draftId, "files")
+    const target = path.join(draftFilesRoot, ...segments)
+    assertWithinRoot(draftFilesRoot, target)
+    return target
+  }
+
+  async ensureDraftWorkspace(
+    draftId: string,
+    seedSnapshotId: string | null,
+    relativePaths: readonly string[],
+  ): Promise<void> {
+    assertInternalId(draftId)
+    const draftRoot = path.join(this.draftsRoot, draftId)
+    const filesRoot = path.join(draftRoot, "files")
+    try {
+      await access(filesRoot)
+      return
+    } catch {
+      // The working copy has not been materialized yet.
+    }
+
+    const temporaryRoot = path.join(
+      this.draftsRoot,
+      `${draftId}.${randomUUID()}.materializing`,
+    )
+    assertWithinRoot(this.draftsRoot, temporaryRoot)
+    await rm(temporaryRoot, { recursive: true, force: true })
+    await mkdir(path.join(temporaryRoot, "files"), { recursive: true })
+
+    try {
+      if (seedSnapshotId) {
+        for (const relativePath of relativePaths) {
+          const destination = path.join(
+            temporaryRoot,
+            "files",
+            ...relativePath.split("/"),
+          )
+          assertWithinRoot(path.join(temporaryRoot, "files"), destination)
+          await mkdir(path.dirname(destination), { recursive: true })
+          await copyFile(
+            this.getSnapshotFilePath(seedSnapshotId, relativePath),
+            destination,
+          )
+        }
+      }
+      try {
+        await rename(temporaryRoot, draftRoot)
+      } catch (error) {
+        const code =
+          error && typeof error === "object" && "code" in error
+            ? error.code
+            : undefined
+        if (code !== "EEXIST" && code !== "ENOTEMPTY") throw error
+      }
+    } finally {
+      await rm(temporaryRoot, { recursive: true, force: true })
+    }
+  }
+
+  async promoteDraft(
+    operationId: string,
+    draftId: string,
+  ): Promise<string> {
+    assertInternalId(draftId)
+    const contentRoot = path.join(this.getOperationRoot(operationId), "content")
+    const draftRoot = path.join(this.draftsRoot, draftId)
+    assertWithinRoot(this.draftsRoot, draftRoot)
+    await mkdir(draftRoot)
+    try {
+      await rename(contentRoot, path.join(draftRoot, "files"))
+    } catch (error) {
+      await rm(draftRoot, { recursive: true, force: true })
+      throw error
+    }
+    return path.posix.join("drafts", draftId)
+  }
+
+  async removeDraft(draftId: string): Promise<void> {
+    assertInternalId(draftId)
+    const draftRoot = path.join(this.draftsRoot, draftId)
+    assertWithinRoot(this.draftsRoot, draftRoot)
+    await rm(draftRoot, { recursive: true, force: true })
+  }
+
+  async cloneDraftFiles(
+    operationId: string,
+    draftId: string,
+    relativePaths: readonly string[],
+  ): Promise<void> {
+    const operationRoot = this.getOperationRoot(operationId)
+    const contentRoot = path.join(operationRoot, "content")
+    await rm(contentRoot, { recursive: true, force: true })
+    await mkdir(contentRoot, { recursive: true })
+
+    for (const relativePath of relativePaths) {
+      const destination = this.getOperationContentFilePath(
+        operationId,
+        relativePath,
+      )
+      await mkdir(path.dirname(destination), { recursive: true })
+      await copyFile(
+        this.getDraftFilePath(draftId, relativePath),
+        destination,
+      )
+    }
+  }
+
+  async applyDraftFileChanges(
+    draftId: string,
+    operationId: string,
+    changes: readonly {
+      readonly relativePath: string
+      readonly sourcePath: string | null
+    }[],
+  ): Promise<{
+    commit: () => Promise<void>
+    rollback: () => Promise<void>
+  }> {
+    const operationRoot = this.getOperationRoot(operationId)
+    const backupRoot = path.join(operationRoot, "draft-backup")
+    const applied: Array<{
+      relativePath: string
+      hadOriginal: boolean
+    }> = []
+    await mkdir(backupRoot, { recursive: true })
+
+    try {
+      for (const change of changes) {
+        const target = this.getDraftFilePath(draftId, change.relativePath)
+        const backup = path.join(
+          backupRoot,
+          ...change.relativePath.split("/"),
+        )
+        assertWithinRoot(backupRoot, backup)
+        let hadOriginal = false
+        try {
+          await access(target)
+          hadOriginal = true
+          await mkdir(path.dirname(backup), { recursive: true })
+          await rename(target, backup)
+        } catch (error) {
+          const code =
+            error && typeof error === "object" && "code" in error
+              ? error.code
+              : undefined
+          if (code !== "ENOENT") throw error
+        }
+        applied.push({ relativePath: change.relativePath, hadOriginal })
+
+        if (change.sourcePath) {
+          await mkdir(path.dirname(target), { recursive: true })
+          const temporaryTarget = `${target}.skillconsole-${operationId}`
+          try {
+            await copyFile(change.sourcePath, temporaryTarget)
+            await rename(temporaryTarget, target)
+          } finally {
+            await rm(temporaryTarget, { force: true }).catch(
+              () => undefined,
+            )
+          }
+        }
+      }
+    } catch (error) {
+      for (const item of [...applied].reverse()) {
+        const target = this.getDraftFilePath(draftId, item.relativePath)
+        const backup = path.join(backupRoot, ...item.relativePath.split("/"))
+        await rm(target, { force: true }).catch(() => undefined)
+        if (item.hadOriginal) {
+          await mkdir(path.dirname(target), { recursive: true })
+          await rename(backup, target).catch(() => undefined)
+        }
+      }
+      throw error
+    }
+
+    return {
+      commit: async () => {
+        await rm(backupRoot, { recursive: true, force: true })
+      },
+      rollback: async () => {
+        for (const item of [...applied].reverse()) {
+          const target = this.getDraftFilePath(draftId, item.relativePath)
+          const backup = path.join(
+            backupRoot,
+            ...item.relativePath.split("/"),
+          )
+          await rm(target, { force: true })
+          if (item.hadOriginal) {
+            await mkdir(path.dirname(target), { recursive: true })
+            await rename(backup, target)
+          }
+        }
+        await rm(backupRoot, { recursive: true, force: true })
+      },
+    }
   }
 
   getOperationContentFilePath(

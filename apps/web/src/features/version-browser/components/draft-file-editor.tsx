@@ -1,40 +1,36 @@
 import { json } from "@codemirror/lang-json"
 import { markdown } from "@codemirror/lang-markdown"
 import { yaml } from "@codemirror/lang-yaml"
-import { MergeView } from "@codemirror/merge"
-import { EditorState } from "@codemirror/state"
 import { EditorView } from "@codemirror/view"
 import CodeMirror from "@uiw/react-codemirror"
 import {
   AlertTriangle,
-  Columns2,
   LoaderCircle,
   Save,
   Undo2,
 } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
-import type {
-  DraftDiffEntry,
-  SnapshotFile,
-  TextFilePreview,
-} from "@/features/version-browser/model/version-browser"
+import type { SnapshotFile, TextFilePreview } from "@/features/version-browser/model/version-browser"
 import { DraftFileDeleteButton } from "@/features/version-browser/components/draft-file-delete-button"
 import { Button } from "@/shared/components/ui/button"
 
 interface DraftFileEditorProps {
   file: SnapshotFile
   preview: TextFilePreview
-  basePreview: TextFilePreview | null
-  conflictServerPreview: TextFilePreview | null
-  diffEntry: DraftDiffEntry | null
   saving: boolean
   conflict: boolean
   errorMessage: string | null
   onDelete: () => Promise<void>
   onSave: (content: string) => Promise<void>
   onClearError: () => void
+  /** @deprecated Draft-to-basis comparison was removed. */
+  basePreview?: TextFilePreview | null
+  /** @deprecated Draft-to-basis comparison was removed. */
+  conflictServerPreview?: TextFilePreview | null
+  /** @deprecated Draft-to-basis comparison was removed. */
+  diffEntry?: unknown
 }
 
 const editorTheme = EditorView.theme({
@@ -64,87 +60,9 @@ function languageExtension(kind: TextFilePreview["kind"]) {
   return []
 }
 
-function MergeComparison({
-  comparisonLabel,
-  comparisonValue,
-  currentLabel,
-  currentValue,
-  kind,
-}: {
-  comparisonLabel: string
-  comparisonValue: string
-  currentLabel: string
-  currentValue: string
-  kind: TextFilePreview["kind"]
-}) {
-  const parentRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!parentRef.current) return
-
-    const readOnlyExtensions = (label: string) => [
-      languageExtension(kind),
-      EditorState.readOnly.of(true),
-      EditorView.editable.of(false),
-      EditorView.contentAttributes.of({ "aria-label": label }),
-      EditorView.lineWrapping,
-      editorTheme,
-    ]
-    const mergeView = new MergeView({
-      a: {
-        doc: comparisonValue,
-        extensions: readOnlyExtensions(comparisonLabel),
-      },
-      b: {
-        doc: currentValue,
-        extensions: readOnlyExtensions(currentLabel),
-      },
-      parent: parentRef.current,
-      orientation: "a-b",
-      highlightChanges: true,
-      gutter: true,
-      collapseUnchanged: {
-        margin: 3,
-        minSize: 8,
-      },
-      diffConfig: {
-        timeout: 1_000,
-      },
-    })
-
-    return () => mergeView.destroy()
-  }, [
-    comparisonLabel,
-    comparisonValue,
-    currentLabel,
-    currentValue,
-    kind,
-  ])
-
-  return (
-    <section className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="grid grid-cols-2 divide-x divide-rule border-b border-rule bg-paper-muted">
-        <h3 className="px-3 py-2 font-mono text-[10px] font-bold tracking-[0.04em] uppercase">
-          {comparisonLabel}
-        </h3>
-        <h3 className="px-3 py-2 font-mono text-[10px] font-bold tracking-[0.04em] uppercase">
-          {currentLabel}
-        </h3>
-      </div>
-      <div
-        className="min-h-0 flex-1 [&_.cm-mergeView]:h-full [&_.cm-mergeView]:overflow-auto [&_.cm-mergeViewEditors]:min-h-full"
-        ref={parentRef}
-      />
-    </section>
-  )
-}
-
 export function DraftFileEditor({
   file,
   preview,
-  basePreview,
-  conflictServerPreview,
-  diffEntry,
   saving,
   conflict,
   errorMessage,
@@ -154,20 +72,8 @@ export function DraftFileEditor({
 }: DraftFileEditorProps) {
   const { t } = useTranslation("versionBrowser")
   const [content, setContent] = useState(preview.content)
-  const [mode, setMode] = useState<"edit" | "diff">("edit")
 
   const unsaved = content !== preview.content
-  const comparisonContent =
-    conflict && conflictServerPreview
-      ? conflictServerPreview.content
-      : (basePreview?.content ?? "")
-  const comparisonLabel =
-    conflict && conflictServerPreview
-      ? t("draft.latestServer")
-      : diffEntry?.base
-        ? t("draft.fixedBasis")
-        : t("draft.missingFromBasis")
-  const currentLabel = t("draft.localContent")
   const extensions = useMemo(
     () => [
       languageExtension(preview.kind),
@@ -189,16 +95,6 @@ export function DraftFileEditor({
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Button
-            className="h-8 rounded-none"
-            onClick={() => setMode(mode === "edit" ? "diff" : "edit")}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            <Columns2 aria-hidden="true" data-icon="inline-start" />
-            {mode === "edit" ? t("draft.viewDiff") : t("draft.backToEdit")}
-          </Button>
           <Button
             className="h-8 rounded-none"
             disabled={!unsaved || saving}
@@ -252,33 +148,23 @@ export function DraftFileEditor({
       ) : null}
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        {mode === "diff" ? (
-          <MergeComparison
-            comparisonLabel={comparisonLabel}
-            comparisonValue={comparisonContent}
-            currentLabel={currentLabel}
-            currentValue={content}
-            kind={preview.kind}
-          />
-        ) : (
-          <CodeMirror
-            aria-label={t("draft.editorLabel")}
-            basicSetup={{
-              autocompletion: false,
-              bracketMatching: true,
-              closeBrackets: true,
-              foldGutter: true,
-              highlightActiveLine: true,
-              highlightActiveLineGutter: true,
-              lineNumbers: true,
-            }}
-            className="h-full overflow-hidden"
-            extensions={extensions}
-            height="100%"
-            onChange={setContent}
-            value={content}
-          />
-        )}
+        <CodeMirror
+          aria-label={t("draft.editorLabel")}
+          basicSetup={{
+            autocompletion: false,
+            bracketMatching: true,
+            closeBrackets: true,
+            foldGutter: true,
+            highlightActiveLine: true,
+            highlightActiveLineGutter: true,
+            lineNumbers: true,
+          }}
+          className="h-full overflow-hidden"
+          extensions={extensions}
+          height="100%"
+          onChange={setContent}
+          value={content}
+        />
       </div>
 
       {unsaved ? (

@@ -5,22 +5,15 @@ import type { Multipart } from "@fastify/multipart"
 
 import type { UploadLimits } from "../../config/index.js"
 import { DomainError } from "../../core/errors/domain-error.js"
+import type { Database } from "../../infrastructure/database/index.js"
 import type {
-  Database,
-  SkillSnapshotFileRow,
-} from "../../infrastructure/database/index.js"
-
-import type {
-  DraftDiff,
   DraftFolderMergePreview,
-  DraftMoveFile,
   DraftMutationResponse,
   DraftTextSave,
 } from "./draft.contract.js"
 import {
   buildDraftDiffEntries,
   buildFolderPreviewSummary,
-  summarizeDraftDiff,
 } from "./draft-diff.js"
 import {
   applyDraftFolderIgnoreRules,
@@ -28,17 +21,15 @@ import {
   type DraftIgnoredPath,
 } from "./draft-ignore.js"
 import {
-  abandonActiveDraft,
-  commitDraftSnapshot,
+  commitDraftMutation,
   createDraftEtag,
   createDraftFromCurrentVersion,
   getActiveDraftContext,
   getDraftMutationReplay,
-  listSnapshotFileRows,
+  type ActiveDraftContext,
 } from "./draft.repository.js"
 import {
   buildSnapshotManifest,
-  type CandidateFile,
   type SnapshotManifest,
   type SnapshotManifestFile,
 } from "./snapshot-manifest.js"
@@ -53,10 +44,8 @@ import type { UploadFolderIgnorePolicy } from "./upload-folder-ignore-policy.js"
 import type { SkillDraftBrowser } from "./version-browser.contract.js"
 import { getActiveSkillDraft } from "./version-browser.repository.js"
 
-const editableExtensions = new Set([".md", ".txt", ".json", ".yaml", ".yml"])
-
 interface FolderMergeOperationMetadata {
-  readonly schemaVersion: 1
+  readonly schemaVersion: 2
   readonly kind: "DRAFT_FOLDER_MERGE"
   readonly workspaceId: string
   readonly draftId: string
@@ -76,36 +65,6 @@ function hashRequest(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex")
 }
 
-function getExtension(relativePath: string): string {
-  const filename = relativePath.split("/").at(-1) ?? relativePath
-  const index = filename.lastIndexOf(".")
-  return index > 0 ? filename.slice(index).toLowerCase() : ""
-}
-
-function assertEditablePath(relativePath: string): void {
-  if (!editableExtensions.has(getExtension(relativePath))) {
-    throw new DomainError({
-      code: "DRAFT_FILE_EDIT_NOT_SUPPORTED",
-      message:
-        "Online editing is limited to Markdown, TXT, JSON, YAML, and YML files.",
-      kind: "unsupported_media_type",
-      details: { path: relativePath },
-    })
-  }
-}
-
-function assertDraftPathIsNotZip(relativePath: string): void {
-  if (getExtension(relativePath) === ".zip") {
-    throw new DomainError({
-      code: "DRAFT_ZIP_NOT_SUPPORTED",
-      message:
-        "ZIP archives are not supported during Draft editing. Upload a folder instead.",
-      kind: "unsupported_media_type",
-      details: { path: relativePath },
-    })
-  }
-}
-
 function assertNoFileDirectoryConflicts(
   relativePaths: readonly string[],
 ): void {
@@ -118,7 +77,7 @@ function assertNoFileDirectoryConflicts(
         throw new DomainError({
           code: "DRAFT_PATH_TYPE_CONFLICT",
           message:
-            "A Draft path cannot be both a file and a parent directory.",
+            "A working-copy path cannot be both a file and a parent directory.",
           kind: "conflict",
           details: { firstPath: ancestor, secondPath: relativePath },
         })
@@ -132,7 +91,7 @@ function validateDraftSourceName(value: string | undefined): string {
   if (normalized.length > 255) {
     throw uploadValidationError(
       "DRAFT_SOURCE_NAME_INVALID",
-      "The Draft source name is too long.",
+      "The working-copy source name is too long.",
     )
   }
   return normalized
@@ -148,37 +107,29 @@ function requireHeader(
         headerName === "If-Match"
           ? "DRAFT_IF_MATCH_REQUIRED"
           : "DRAFT_IDEMPOTENCY_KEY_REQUIRED",
-      message: `${headerName} is required for this Draft change.`,
+      message: `${headerName} is required for this working-copy change.`,
       kind: "precondition_required",
     })
   }
-  const normalized = value.trim()
-  if (normalized.length > (headerName === "If-Match" ? 300 : 200)) {
-    throw uploadValidationError(
-      "DRAFT_HEADER_INVALID",
-      `${headerName} is too long.`,
-    )
-  }
-  return normalized
+  return value.trim()
 }
 
 function assertMatchingEtag(
   ifMatch: string | string[] | undefined,
   draftId: string,
   contentRevision: number,
-): string {
+): void {
   const value = requireHeader(ifMatch, "If-Match")
   const currentEtag = createDraftEtag(draftId, contentRevision)
   if (value !== currentEtag) {
     throw new DomainError({
       code: "DRAFT_ETAG_STALE",
       message:
-        "The Draft changed after this client loaded it. Local content was not overwritten.",
+        "The working copy changed after this client loaded it. Local content was not overwritten.",
       kind: "precondition_failed",
       details: { currentEtag, contentRevision },
     })
   }
-  return value
 }
 
 function requireIdempotencyKey(
@@ -191,32 +142,18 @@ function assertDraftOpen(status: string): void {
   if (status !== "OPEN") {
     throw new DomainError({
       code: "DRAFT_NOT_EDITABLE",
-      message: "The Draft is not open for editing.",
+      message: "The Skill working copy is not open for editing.",
       kind: "conflict",
       details: { status },
     })
   }
 }
 
-function manifestCandidates(
-  storage: LocalSnapshotStorage,
-  operationId: string,
-  relativePaths: readonly string[],
-): CandidateFile[] {
-  return relativePaths.map((relativePath) => ({
-    incomingPath: storage.getOperationContentFilePath(
-      operationId,
-      relativePath,
-    ),
-    relativePath,
-  }))
-}
-
 function mapMultipartField(part: Extract<Multipart, { type: "field" }>) {
   if (part.valueTruncated || typeof part.value !== "string") {
     throw uploadValidationError(
       "DRAFT_UPLOAD_FIELD_INVALID",
-      "A Draft upload field is invalid or too long.",
+      "A working-copy upload field is invalid or too long.",
       { field: part.fieldname },
     )
   }
@@ -228,9 +165,8 @@ function isFolderMergeOperationMetadata(
 ): value is FolderMergeOperationMetadata {
   if (!value || typeof value !== "object") return false
   const record = value as Record<string, unknown>
-  const uploadedManifest = record.uploadedManifest
   return (
-    record.schemaVersion === 1 &&
+    record.schemaVersion === 2 &&
     record.kind === "DRAFT_FOLDER_MERGE" &&
     typeof record.workspaceId === "string" &&
     typeof record.draftId === "string" &&
@@ -239,64 +175,39 @@ function isFolderMergeOperationMetadata(
     Array.isArray(record.ignoreRules) &&
     Array.isArray(record.ignoredPaths) &&
     Array.isArray(record.files) &&
-    record.files.every(
-      (file) =>
-        Boolean(file) &&
-        typeof file === "object" &&
-        Number.isInteger(
-          (file as Record<string, unknown>).incomingIndex,
-        ) &&
-        ((file as Record<string, unknown>).incomingIndex as number) >= 0 &&
-        typeof (file as Record<string, unknown>).relativePath === "string",
-    ) &&
-    Boolean(uploadedManifest) &&
-    typeof uploadedManifest === "object" &&
-    typeof (uploadedManifest as Record<string, unknown>).manifestHash ===
-      "string"
+    Boolean(record.uploadedManifest)
   )
 }
 
-function mergeSnapshotFiles(
-  currentFiles: readonly SkillSnapshotFileRow[],
+function asManifestFile(file: {
+  readonly relativePath: string
+  readonly sha256: string
+  readonly byteSize: number
+  readonly mediaTypeHint: string
+  readonly contentKind: string
+}): SnapshotManifestFile {
+  return {
+    relativePath: file.relativePath,
+    sha256: file.sha256,
+    byteSize: file.byteSize,
+    mediaTypeHint: file.mediaTypeHint,
+    contentKind: file.contentKind as "text" | "binary",
+  }
+}
+
+function mergeFiles(
+  currentFiles: readonly SnapshotManifestFile[],
   uploadedFiles: readonly SnapshotManifestFile[],
 ): SnapshotManifestFile[] {
-  const uploadedByPath = new Map(
+  const uploaded = new Map(
     uploadedFiles.map((file) => [file.relativePath, file]),
   )
   return [
-    ...currentFiles
-      .filter((file) => !uploadedByPath.has(file.relativePath))
-      .map((file) => ({
-        relativePath: file.relativePath,
-        sha256: file.sha256,
-        byteSize: file.byteSize,
-        mediaTypeHint: file.mediaTypeHint,
-        contentKind: file.contentKind as "text" | "binary",
-      })),
+    ...currentFiles.filter((file) => !uploaded.has(file.relativePath)),
     ...uploadedFiles,
   ].sort((left, right) =>
     left.relativePath.localeCompare(right.relativePath, "en"),
   )
-}
-
-function findFolderMergeCaseConflicts(
-  currentFiles: readonly SkillSnapshotFileRow[],
-  uploadedFiles: readonly SnapshotManifestFile[],
-): string[] {
-  const currentByCasefoldPath = new Map(
-    currentFiles.map((file) => [
-      file.relativePath.toLowerCase(),
-      file.relativePath,
-    ]),
-  )
-  return uploadedFiles.flatMap((file) => {
-    const currentPath = currentByCasefoldPath.get(
-      file.relativePath.toLowerCase(),
-    )
-    return currentPath && currentPath !== file.relativePath
-      ? [currentPath, file.relativePath]
-      : []
-  })
 }
 
 export interface DraftServiceOptions {
@@ -311,6 +222,7 @@ export class DraftService {
   readonly storage: LocalSnapshotStorage
   readonly limits: UploadLimits
   readonly folderIgnorePolicy: UploadFolderIgnorePolicy
+  private readonly mutationQueues = new Map<string, Promise<void>>()
 
   constructor({
     database,
@@ -328,39 +240,154 @@ export class DraftService {
     return createDraftEtag(draft.id, draft.contentRevision)
   }
 
+  async ensureWorkingCopy(workspaceId: string): Promise<ActiveDraftContext> {
+    const draft = await getActiveDraftContext(this.database, workspaceId)
+    await this.storage.ensureDraftWorkspace(
+      draft.id,
+      draft.seedSnapshotId,
+      draft.currentFiles.map((file) => file.relativePath),
+    )
+    return draft
+  }
+
+  async getDraft(workspaceId: string): Promise<SkillDraftBrowser> {
+    await this.ensureWorkingCopy(workspaceId)
+    return getActiveSkillDraft(this.database, workspaceId)
+  }
+
   async createDraft(workspaceId: string): Promise<SkillDraftBrowser> {
-    return createDraftFromCurrentVersion(this.database, {
+    const draft = await createDraftFromCurrentVersion(this.database, {
       workspaceId,
       draftId: randomUUID(),
       improvementCycleId: randomUUID(),
     })
+    await this.ensureWorkingCopy(workspaceId)
+    return draft
   }
 
-  async getDiff(workspaceId: string): Promise<DraftDiff> {
-    const draft = await getActiveDraftContext(this.database, workspaceId)
-    const baseFiles = await listSnapshotFileRows(
-      this.database,
-      draft.baseSnapshotId,
-    )
-    const entries = buildDraftDiffEntries(
-      baseFiles,
-      draft.currentFiles,
-      draft.ignoredPaths,
-    )
-    return {
-      basis: {
-        kind:
-          draft.baseVersionId === null
-            ? "INITIAL_IMPORT"
-            : "FORMAL_VERSION",
-        snapshotId: draft.baseSnapshotId,
-        versionId: draft.baseVersionId,
-      },
-      currentSnapshotId: draft.currentSnapshotId,
-      contentRevision: draft.contentRevision,
-      summary: summarizeDraftDiff(entries),
-      entries,
+  private async withMutationLock<T>(
+    draftId: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const previous = this.mutationQueues.get(draftId) ?? Promise.resolve()
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const queued = previous.catch(() => undefined).then(() => gate)
+    this.mutationQueues.set(draftId, queued)
+    await previous.catch(() => undefined)
+    try {
+      return await operation()
+    } finally {
+      release()
+      if (this.mutationQueues.get(draftId) === queued) {
+        this.mutationQueues.delete(draftId)
+      }
     }
+  }
+
+  private async commitFileChanges(input: {
+    readonly draft: ActiveDraftContext
+    readonly operationId: string
+    readonly idempotencyKey: string
+    readonly requestHash: string
+    readonly nextFiles: readonly SnapshotManifestFile[]
+    readonly upserts: readonly SnapshotManifestFile[]
+    readonly deletedPaths: readonly string[]
+    readonly changes: readonly {
+      readonly relativePath: string
+      readonly sourcePath: string | null
+    }[]
+    readonly ignoreRules: readonly string[]
+    readonly ignoredPaths: readonly DraftIgnoredPath[]
+    readonly sourceName?: string
+    readonly retainOperationMetadata?: boolean
+  }): Promise<DraftMutationResponse> {
+    return this.withMutationLock(input.draft.id, async () => {
+      const replay = await getDraftMutationReplay(this.database, {
+        workspaceId: input.draft.workspaceId,
+        draftId: input.draft.id,
+        idempotencyKey: input.idempotencyKey,
+        requestHash: input.requestHash,
+      })
+      if (replay) {
+        if (input.retainOperationMetadata) {
+          await this.storage
+            .retainOperationMetadataOnly(input.operationId)
+            .catch(() => undefined)
+        } else {
+          await this.storage
+            .cleanupOperation(input.operationId)
+            .catch(() => undefined)
+        }
+        return { draft: replay, replayed: true }
+      }
+
+      const latest = await getActiveDraftContext(
+        this.database,
+        input.draft.workspaceId,
+      )
+      if (
+        latest.id !== input.draft.id ||
+        latest.contentRevision !== input.draft.contentRevision
+      ) {
+        throw new DomainError({
+          code: "DRAFT_ETAG_STALE",
+          message:
+            "The working copy changed after this client loaded it. Local content was not overwritten.",
+          kind: "precondition_failed",
+          details: {
+            currentEtag: createDraftEtag(
+              latest.id,
+              latest.contentRevision,
+            ),
+            contentRevision: latest.contentRevision,
+          },
+        })
+      }
+
+      const fileTransaction = await this.storage.applyDraftFileChanges(
+        input.draft.id,
+        input.operationId,
+        input.changes,
+      )
+      try {
+        const result = await commitDraftMutation(this.database, {
+          workspaceId: input.draft.workspaceId,
+          draftId: input.draft.id,
+          expectedRevision: input.draft.contentRevision,
+          idempotencyKey: input.idempotencyKey,
+          requestHash: input.requestHash,
+          nextFiles: input.nextFiles,
+          upserts: input.upserts,
+          deletedPaths: input.deletedPaths,
+          ignoreRules: input.ignoreRules,
+          ignoredPaths: input.ignoredPaths,
+          ...(input.sourceName
+            ? { sourceType: "folder" as const, sourceName: input.sourceName }
+            : {}),
+        })
+        await fileTransaction.commit()
+        const draft = await getActiveSkillDraft(
+          this.database,
+          input.draft.workspaceId,
+        )
+        if (input.retainOperationMetadata) {
+          await this.storage
+            .retainOperationMetadataOnly(input.operationId)
+            .catch(() => undefined)
+        } else {
+          await this.storage
+            .cleanupOperation(input.operationId)
+            .catch(() => undefined)
+        }
+        return { draft, replayed: result.replayed }
+      } catch (error) {
+        await fileTransaction.rollback().catch(() => undefined)
+        throw error
+      }
+    })
   }
 
   async saveText(
@@ -372,19 +399,27 @@ export class DraftService {
     },
   ): Promise<DraftMutationResponse> {
     const relativePath = normalizeRelativePath(input.path, this.limits)
-    assertEditablePath(relativePath)
-    const byteSize = Buffer.byteLength(input.content, "utf8")
-    if (byteSize > this.limits.maxFileBytes) {
+    const draft = await this.ensureWorkingCopy(workspaceId)
+    assertDraftOpen(draft.status)
+    const existing = draft.currentFiles.find(
+      (file) => file.relativePath === relativePath,
+    )
+    if (!existing) {
       throw new DomainError({
-        code: "UPLOAD_FILE_SIZE_EXCEEDED",
-        message: "The edited file exceeds the maximum file size.",
-        kind: "payload_too_large",
-        details: { path: relativePath, limit: this.limits.maxFileBytes },
+        code: "DRAFT_FILE_NOT_FOUND",
+        message: "The edited working-copy file was not found.",
+        kind: "not_found",
+        details: { path: relativePath },
       })
     }
-
-    const draft = await getActiveDraftContext(this.database, workspaceId)
-    assertDraftOpen(draft.status)
+    if (existing.contentKind !== "text") {
+      throw new DomainError({
+        code: "DRAFT_FILE_EDIT_NOT_SUPPORTED",
+        message: "Binary files cannot be edited as UTF-8 text.",
+        kind: "unsupported_media_type",
+        details: { path: relativePath },
+      })
+    }
     const idempotencyKey = requireIdempotencyKey(headers.idempotencyKey)
     const requestHash = hashRequest({
       kind: "SAVE_TEXT",
@@ -398,68 +433,81 @@ export class DraftService {
       requestHash,
     })
     if (replay) return { draft: replay, replayed: true }
-    assertMatchingEtag(
-      headers.ifMatch,
-      draft.id,
-      draft.contentRevision,
-    )
-    const existing = draft.currentFiles.find(
-      (file) => file.relativePath === relativePath,
-    )
-    if (!existing) {
-      throw new DomainError({
-        code: "SNAPSHOT_FILE_NOT_FOUND",
-        message: "The edited Draft file was not found.",
-        kind: "not_found",
-        details: { path: relativePath },
-      })
-    }
-    if (existing.contentKind !== "text") {
-      throw new DomainError({
-        code: "DRAFT_FILE_EDIT_NOT_SUPPORTED",
-        message: "Binary files cannot be edited as UTF-8 text.",
-        kind: "unsupported_media_type",
-        details: { path: relativePath },
-      })
-    }
+    assertMatchingEtag(headers.ifMatch, draft.id, draft.contentRevision)
 
-    return this.commitMaterializedMutation({
-      draft,
-      idempotencyKey,
-      requestHash,
-      prepare: async (operationId) => {
-        await this.storage.cloneSnapshotFiles(
-          operationId,
-          draft.currentSnapshotId,
-          draft.currentFiles.map((file) => file.relativePath),
-        )
-        await this.storage.writeOperationTextFile(
-          operationId,
-          relativePath,
-          input.content,
-        )
-        return {
-          relativePaths: draft.currentFiles.map(
-            (file) => file.relativePath,
+    const operationId = randomUUID()
+    await this.storage.resetOperation(operationId)
+    try {
+      await this.storage.writeOperationTextFile(
+        operationId,
+        relativePath,
+        input.content,
+      )
+      const manifest = await buildSnapshotManifest(
+        [{
+          incomingPath: this.storage.getOperationContentFilePath(
+            operationId,
+            relativePath,
           ),
-          ignoreRules: draft.ignoreRules,
-          ignoredPaths: draft.ignoredPaths,
-        }
-      },
-    })
+          relativePath,
+        }],
+        this.limits,
+      )
+      const changed = manifest.files[0]
+      if (!changed) throw new Error("The saved file manifest is empty.")
+      const nextFiles = mergeFiles(
+        draft.currentFiles.map(asManifestFile),
+        [changed],
+      )
+      return await this.commitFileChanges({
+        draft,
+        operationId,
+        idempotencyKey,
+        requestHash,
+        nextFiles,
+        upserts: [changed],
+        deletedPaths: [],
+        changes: [{
+          relativePath,
+          sourcePath: this.storage.getOperationContentFilePath(
+            operationId,
+            relativePath,
+          ),
+        }],
+        ignoreRules: draft.ignoreRules,
+        ignoredPaths: draft.ignoredPaths,
+      })
+    } catch (error) {
+      await this.storage.cleanupOperation(operationId).catch(() => undefined)
+      throw error
+    }
   }
 
   async deleteFile(
     workspaceId: string,
-    path: string,
+    relativePathInput: string,
     headers: {
       readonly ifMatch: string | string[] | undefined
       readonly idempotencyKey: string | string[] | undefined
     },
   ): Promise<DraftMutationResponse> {
-    const relativePath = normalizeRelativePath(path, this.limits)
-    const draft = await getActiveDraftContext(this.database, workspaceId)
+    const relativePath = normalizeRelativePath(relativePathInput, this.limits)
+    const draft = await this.ensureWorkingCopy(workspaceId)
     assertDraftOpen(draft.status)
+    if (!draft.currentFiles.some((file) => file.relativePath === relativePath)) {
+      throw new DomainError({
+        code: "DRAFT_FILE_NOT_FOUND",
+        message: "The working-copy file to delete was not found.",
+        kind: "not_found",
+      })
+    }
+    if (draft.currentFiles.length === 1) {
+      throw new DomainError({
+        code: "DRAFT_CANNOT_BE_EMPTY",
+        message: "A working copy must contain at least one file.",
+        kind: "conflict",
+      })
+    }
     const idempotencyKey = requireIdempotencyKey(headers.idempotencyKey)
     const requestHash = hashRequest({ kind: "DELETE_FILE", relativePath })
     const replay = await getDraftMutationReplay(this.database, {
@@ -469,139 +517,29 @@ export class DraftService {
       requestHash,
     })
     if (replay) return { draft: replay, replayed: true }
-    assertMatchingEtag(
-      headers.ifMatch,
-      draft.id,
-      draft.contentRevision,
-    )
-    if (
-      !draft.currentFiles.some(
-        (file) => file.relativePath === relativePath,
-      )
-    ) {
-      throw new DomainError({
-        code: "SNAPSHOT_FILE_NOT_FOUND",
-        message: "The Draft file to delete was not found.",
-        kind: "not_found",
-        details: { path: relativePath },
-      })
-    }
-    if (draft.currentFiles.length === 1) {
-      throw new DomainError({
-        code: "DRAFT_CANNOT_BE_EMPTY",
-        message: "A Draft must contain at least one file.",
-        kind: "conflict",
-      })
-    }
+    assertMatchingEtag(headers.ifMatch, draft.id, draft.contentRevision)
 
-    return this.commitMaterializedMutation({
-      draft,
-      idempotencyKey,
-      requestHash,
-      prepare: async (operationId) => {
-        await this.storage.cloneSnapshotFiles(
-          operationId,
-          draft.currentSnapshotId,
-          draft.currentFiles.map((file) => file.relativePath),
-        )
-        await this.storage.removeOperationContentFile(
-          operationId,
-          relativePath,
-        )
-        return {
-          relativePaths: draft.currentFiles
-            .map((file) => file.relativePath)
-            .filter((candidate) => candidate !== relativePath),
-          ignoreRules: draft.ignoreRules,
-          ignoredPaths: draft.ignoredPaths,
-        }
-      },
-    })
-  }
-
-  async moveFile(
-    workspaceId: string,
-    input: DraftMoveFile,
-    headers: {
-      readonly ifMatch: string | string[] | undefined
-      readonly idempotencyKey: string | string[] | undefined
-    },
-  ): Promise<DraftMutationResponse> {
-    const fromPath = normalizeRelativePath(input.fromPath, this.limits)
-    const toPath = normalizeRelativePath(input.toPath, this.limits)
-    assertDraftPathIsNotZip(toPath)
-    if (fromPath === toPath) {
-      throw uploadValidationError(
-        "DRAFT_MOVE_PATH_UNCHANGED",
-        "The destination path must differ from the current path.",
-      )
-    }
-    const draft = await getActiveDraftContext(this.database, workspaceId)
-    assertDraftOpen(draft.status)
-    const idempotencyKey = requireIdempotencyKey(headers.idempotencyKey)
-    const requestHash = hashRequest({ kind: "MOVE_FILE", fromPath, toPath })
-    const replay = await getDraftMutationReplay(this.database, {
-      workspaceId,
-      draftId: draft.id,
-      idempotencyKey,
-      requestHash,
-    })
-    if (replay) return { draft: replay, replayed: true }
-    assertMatchingEtag(
-      headers.ifMatch,
-      draft.id,
-      draft.contentRevision,
-    )
-    const paths = new Set(
-      draft.currentFiles.map((file) => file.relativePath),
-    )
-    if (!paths.has(fromPath)) {
-      throw new DomainError({
-        code: "SNAPSHOT_FILE_NOT_FOUND",
-        message: "The Draft file to move was not found.",
-        kind: "not_found",
-        details: { path: fromPath },
+    const operationId = randomUUID()
+    await this.storage.resetOperation(operationId)
+    try {
+      return await this.commitFileChanges({
+        draft,
+        operationId,
+        idempotencyKey,
+        requestHash,
+        nextFiles: draft.currentFiles
+          .filter((file) => file.relativePath !== relativePath)
+          .map(asManifestFile),
+        upserts: [],
+        deletedPaths: [relativePath],
+        changes: [{ relativePath, sourcePath: null }],
+        ignoreRules: draft.ignoreRules,
+        ignoredPaths: draft.ignoredPaths,
       })
+    } catch (error) {
+      await this.storage.cleanupOperation(operationId).catch(() => undefined)
+      throw error
     }
-    if (
-      [...paths].some(
-        (candidate) =>
-          candidate.toLowerCase() === toPath.toLowerCase() &&
-          candidate !== fromPath,
-      )
-    ) {
-      throw new DomainError({
-        code: "DRAFT_PATH_CONFLICT",
-        message: "The destination path already exists.",
-        kind: "conflict",
-        details: { path: toPath },
-      })
-    }
-
-    return this.commitMaterializedMutation({
-      draft,
-      idempotencyKey,
-      requestHash,
-      prepare: async (operationId) => {
-        await this.storage.cloneSnapshotFiles(
-          operationId,
-          draft.currentSnapshotId,
-          [...paths],
-        )
-        await this.storage.moveOperationContentFile(
-          operationId,
-          fromPath,
-          toPath,
-        )
-        return {
-          relativePaths: [...paths].map((candidate) =>
-            candidate === fromPath ? toPath : candidate,
-          ),
-          ignoreRules: draft.ignoreRules,
-          ignoredPaths: draft.ignoredPaths,
-        }
-      },
-    })
   }
 
   async uploadSingleFile(
@@ -612,39 +550,34 @@ export class DraftService {
       readonly idempotencyKey: string | string[] | undefined
     },
   ): Promise<DraftMutationResponse> {
-    const draft = await getActiveDraftContext(this.database, workspaceId)
-    assertDraftOpen(draft.status)
+    const draft = await this.ensureWorkingCopy(workspaceId)
     const idempotencyKey = requireIdempotencyKey(headers.idempotencyKey)
     const operationId = randomUUID()
     const fields = new Map<string, string>()
     let receivedFile = false
-    let targetPath: string | undefined
-
+    let relativePath: string | undefined
     await this.storage.resetOperation(operationId)
+
     try {
       for await (const part of parts) {
         if (part.type === "field") {
-          if (
-            receivedFile ||
-            part.fieldname !== "path" ||
-            fields.has(part.fieldname)
-          ) {
+          if (receivedFile || part.fieldname !== "path") {
             throw uploadValidationError(
               "DRAFT_UPLOAD_FIELD_INVALID",
-              "The target path must be sent once before the file.",
+              "The target path must be sent before the file.",
             )
           }
-          fields.set(part.fieldname, mapMultipartField(part))
+          fields.set("path", mapMultipartField(part))
           continue
         }
         if (receivedFile || part.fieldname !== "file") {
           part.file.resume()
           throw uploadValidationError(
             "DRAFT_UPLOAD_FILE_INVALID",
-            "A single-file Draft upload must contain exactly one file.",
+            "A single-file upload must contain exactly one file.",
           )
         }
-        targetPath = normalizeRelativePath(
+        relativePath = normalizeRelativePath(
           fields.get("path") || part.filename,
           this.limits,
         )
@@ -656,28 +589,25 @@ export class DraftService {
           this.limits.maxFileBytes,
         )
       }
-      if (!receivedFile || !targetPath) {
+      if (!receivedFile || !relativePath) {
         throw uploadValidationError(
           "DRAFT_UPLOAD_FILE_REQUIRED",
-          "Select one file to add to the Draft.",
+          "Select one file to add to the working copy.",
         )
       }
-
-      const relativePath = targetPath
-      assertDraftPathIsNotZip(relativePath)
-      const uploadedManifest = await buildSnapshotManifest(
-        [
-          {
-            incomingPath: this.storage.getIncomingPath(operationId, 0),
-            relativePath,
-          },
-        ],
+      const manifest = await buildSnapshotManifest(
+        [{
+          incomingPath: this.storage.getIncomingPath(operationId, 0),
+          relativePath,
+        }],
         this.limits,
       )
+      const uploaded = manifest.files[0]
+      if (!uploaded) throw new Error("The uploaded file manifest is empty.")
       const requestHash = hashRequest({
         kind: "UPLOAD_SINGLE_FILE",
         relativePath,
-        sha256: uploadedManifest.files[0]?.sha256,
+        sha256: uploaded.sha256,
       })
       const replay = await getDraftMutationReplay(this.database, {
         workspaceId,
@@ -686,64 +616,48 @@ export class DraftService {
         requestHash,
       })
       if (replay) {
-        await this.storage.cleanupOperation(operationId)
+        await this.storage.cleanupOperation(operationId).catch(() => undefined)
         return { draft: replay, replayed: true }
       }
-      assertMatchingEtag(
-        headers.ifMatch,
-        draft.id,
-        draft.contentRevision,
-      )
-      const currentPaths = draft.currentFiles.map(
-        (file) => file.relativePath,
-      )
-      const conflictingPath = currentPaths.find(
-        (candidate) =>
-          candidate.toLowerCase() === relativePath.toLowerCase() &&
-          candidate !== relativePath,
+      assertMatchingEtag(headers.ifMatch, draft.id, draft.contentRevision)
+
+      const conflictingPath = draft.currentFiles.find(
+        (file) =>
+          file.relativePath.toLowerCase() === relativePath!.toLowerCase() &&
+          file.relativePath !== relativePath,
       )
       if (conflictingPath) {
         throw new DomainError({
           code: "DRAFT_PATH_CONFLICT",
           message: "The uploaded path conflicts by letter case.",
           kind: "conflict",
-          details: { firstPath: conflictingPath, secondPath: relativePath },
         })
       }
-
-      await this.assertCurrentSnapshotIntegrity(draft)
-      await this.storage.cloneSnapshotFiles(
-        operationId,
-        draft.currentSnapshotId,
-        currentPaths,
+      const nextFiles = mergeFiles(
+        draft.currentFiles.map(asManifestFile),
+        [uploaded],
       )
-      await this.storage.moveIncomingToContent(
-        operationId,
-        0,
-        relativePath,
-      )
-      const relativePaths = [
-        ...currentPaths.filter((candidate) => candidate !== relativePath),
-        relativePath,
-      ]
-      if (relativePaths.length > this.limits.maxFiles) {
+      if (nextFiles.length > this.limits.maxFiles) {
         throw uploadValidationError(
           "UPLOAD_FILE_COUNT_EXCEEDED",
-          "The Draft contains too many files.",
-          { limit: this.limits.maxFiles },
+          "The working copy contains too many files.",
         )
       }
-      assertNoFileDirectoryConflicts(relativePaths)
-      const manifest = await buildSnapshotManifest(
-        manifestCandidates(this.storage, operationId, relativePaths),
-        this.limits,
+      assertNoFileDirectoryConflicts(
+        nextFiles.map((file) => file.relativePath),
       )
-      return await this.promoteAndCommit({
+      return await this.commitFileChanges({
         draft,
         operationId,
         idempotencyKey,
         requestHash,
-        manifest,
+        nextFiles,
+        upserts: [uploaded],
+        deletedPaths: [],
+        changes: [{
+          relativePath,
+          sourcePath: this.storage.getIncomingPath(operationId, 0),
+        }],
         ignoreRules: draft.ignoreRules,
         ignoredPaths: draft.ignoredPaths,
       })
@@ -758,8 +672,7 @@ export class DraftService {
     parts: AsyncIterableIterator<Multipart>,
     ifMatch: string | string[] | undefined,
   ): Promise<DraftFolderMergePreview> {
-    const draft = await getActiveDraftContext(this.database, workspaceId)
-    assertDraftOpen(draft.status)
+    const draft = await this.ensureWorkingCopy(workspaceId)
     assertMatchingEtag(ifMatch, draft.id, draft.contentRevision)
     const fields = new Map<string, string>()
     const incomingFiles: Array<{
@@ -782,44 +695,23 @@ export class DraftService {
           ) {
             throw uploadValidationError(
               "DRAFT_UPLOAD_FIELD_INVALID",
-              "Folder merge fields must be unique and precede files.",
+              "Folder fields must be unique and precede files.",
             )
           }
           fields.set(part.fieldname, mapMultipartField(part))
           continue
         }
 
-        operationId ??= validateOperationId(
-          fields.get("operationId") ?? "",
-        )
-        if (incomingFiles.length === 0) {
-          try {
-            await this.storage.createOperation(operationId)
-            operationCreated = true
-          } catch (error) {
-            const code =
-              error && typeof error === "object" && "code" in error
-                ? error.code
-                : undefined
-            throw new DomainError({
-              code:
-                code === "EEXIST"
-                  ? "DRAFT_FOLDER_OPERATION_CONFLICT"
-                  : "DRAFT_FOLDER_OPERATION_CREATE_FAILED",
-              message:
-                code === "EEXIST"
-                  ? "This folder merge operation identifier is already in use."
-                  : "The folder merge staging area could not be created.",
-              kind: code === "EEXIST" ? "conflict" : "internal",
-              cause: error,
-            })
-          }
+        operationId ??= validateOperationId(fields.get("operationId") ?? "")
+        if (!operationCreated) {
+          await this.storage.createOperation(operationId)
+          operationCreated = true
         }
         if (part.fieldname !== "files") {
           part.file.resume()
           throw uploadValidationError(
             "DRAFT_UPLOAD_FILE_INVALID",
-            "Folder merge only accepts files fields.",
+            "Folder upload only accepts files fields.",
           )
         }
         if (incomingFiles.length >= this.limits.maxFiles) {
@@ -852,79 +744,34 @@ export class DraftService {
         })
       }
 
-      operationId ??= validateOperationId(
-        fields.get("operationId") ?? "",
-      )
+      operationId ??= validateOperationId(fields.get("operationId") ?? "")
       if (incomingFiles.length === 0) {
         throw uploadValidationError(
           "UPLOAD_SOURCE_EMPTY",
           "The selected folder does not contain any files.",
         )
       }
-
       let customRules: readonly string[] = []
-      const rawCustomRules = fields.get("ignoreRules")
-      if (rawCustomRules) {
-        let parsed: unknown
-        try {
-          parsed = JSON.parse(rawCustomRules)
-        } catch {
-          throw uploadValidationError(
-            "DRAFT_IGNORE_RULES_INVALID",
-            "Custom ignore rules must be a JSON array of strings.",
-          )
-        }
+      if (fields.get("ignoreRules")) {
+        const parsed = JSON.parse(fields.get("ignoreRules")!) as unknown
         if (
           !Array.isArray(parsed) ||
           parsed.length > 200 ||
-          parsed.some(
-            (value) => typeof value !== "string" || value.length > 512,
-          )
+          parsed.some((value) => typeof value !== "string")
         ) {
           throw uploadValidationError(
             "DRAFT_IGNORE_RULES_INVALID",
-            "Custom ignore rules must be a JSON array of strings.",
+            "Custom ignore rules must be an array of strings.",
           )
         }
         customRules = parsed
       }
 
-      let prepared
-      try {
-        prepared = prepareRelativePaths(
-          incomingFiles.map((file) => file.originalPath),
-          "folder",
-          this.limits,
-        )
-      } catch (error) {
-        if (
-          error instanceof DomainError &&
-          error.code === "UPLOAD_PATH_CASE_CONFLICT"
-        ) {
-          const conflicts = [
-            String(error.details?.firstPath ?? ""),
-            String(error.details?.secondPath ?? ""),
-          ].filter(Boolean)
-          await this.storage.cleanupOperation(operationId)
-          return {
-            operationId,
-            draftId: draft.id,
-            baseContentRevision: draft.contentRevision,
-            sourceName: fields.get("sourceName")?.trim() || "Skill folder",
-            ignoreRules: [...customRules],
-            summary: buildFolderPreviewSummary(
-              [],
-              0,
-              0,
-              conflicts,
-            ),
-            conflicts,
-            committable: false,
-          }
-        }
-        throw error
-      }
-
+      const prepared = prepareRelativePaths(
+        incomingFiles.map((file) => file.originalPath),
+        "folder",
+        this.limits,
+      )
       const allRelativePaths = incomingFiles.map((file) => {
         const normalized = normalizeRelativePath(
           file.originalPath,
@@ -937,31 +784,18 @@ export class DraftService {
             )
           : normalized
       })
-      for (const relativePath of allRelativePaths) {
-        assertDraftPathIsNotZip(relativePath)
-      }
-      const ignoreFileIndex = allRelativePaths.findIndex(
-        (path) => path === ".skillconsoleignore",
-      )
-      let skillconsoleRules: readonly string[] = []
+      const ignoreFileIndex = allRelativePaths.indexOf(".skillconsoleignore")
+      let fileRules: readonly string[] = []
       if (ignoreFileIndex >= 0) {
         const source = await readFile(
-          incomingFiles[ignoreFileIndex]?.incomingPath ?? "",
+          incomingFiles[ignoreFileIndex]!.incomingPath,
+          "utf8",
         )
-        let decoded: string
-        try {
-          decoded = new TextDecoder("utf-8", { fatal: true }).decode(source)
-        } catch {
-          throw uploadValidationError(
-            "DRAFT_IGNORE_FILE_UTF8_INVALID",
-            ".skillconsoleignore must be valid UTF-8 text.",
-          )
-        }
-        skillconsoleRules = parseDraftIgnoreRules(decoded)
+        fileRules = parseDraftIgnoreRules(source)
       }
       const ignored = applyDraftFolderIgnoreRules(
         allRelativePaths,
-        skillconsoleRules,
+        fileRules,
         customRules,
         this.folderIgnorePolicy,
       )
@@ -971,74 +805,52 @@ export class DraftService {
           "The selected folder contains no files after ignore rules.",
         )
       }
-      assertNoFileDirectoryConflicts(ignored.includedPaths)
-      const indexByPath = new Map(
+      const pathToIndex = new Map(
         allRelativePaths.map((path, index) => [path, index]),
       )
-      const candidates = ignored.includedPaths.map((relativePath) => {
-        const index = indexByPath.get(relativePath)
-        const incoming = index === undefined ? undefined : incomingFiles[index]
-        if (!incoming) {
-          throw new Error("A validated folder file could not be resolved.")
-        }
-        return { incomingPath: incoming.incomingPath, relativePath }
-      })
+      const candidates = ignored.includedPaths.map((relativePath) => ({
+        incomingPath:
+          incomingFiles[pathToIndex.get(relativePath) ?? -1]!.incomingPath,
+        relativePath,
+      }))
       const uploadedManifest = await buildSnapshotManifest(
         candidates,
         this.limits,
       )
-      const conflicts = findFolderMergeCaseConflicts(
-        draft.currentFiles,
-        uploadedManifest.files,
+      const currentFiles = draft.currentFiles.map(asManifestFile)
+      const existingByLowerPath = new Map(
+        currentFiles.map((file) => [
+          file.relativePath.toLowerCase(),
+          file.relativePath,
+        ]),
       )
-      if (conflicts.length > 0) {
-        await this.storage.cleanupOperation(operationId)
-        return {
-          operationId,
-          draftId: draft.id,
-          baseContentRevision: draft.contentRevision,
-          sourceName:
-            fields.get("sourceName")?.trim() ||
-            prepared.strippedRoot ||
-            "Skill folder",
-          ignoreRules: [...customRules],
-          summary: buildFolderPreviewSummary(
-            [],
-            draft.currentSnapshot.fileCount,
-            draft.currentSnapshot.totalBytes,
-            conflicts,
-          ),
-          conflicts,
-          committable: false,
-        }
-      }
-      const mergedFiles = mergeSnapshotFiles(
-        draft.currentFiles,
-        uploadedManifest.files,
-      )
-      if (mergedFiles.length > this.limits.maxFiles) {
-        throw uploadValidationError(
-          "UPLOAD_FILE_COUNT_EXCEEDED",
-          "The merged Draft contains too many files.",
-          { limit: this.limits.maxFiles },
-        )
-      }
+      const conflicts = uploadedManifest.files.flatMap((file) => {
+        const existing = existingByLowerPath.get(file.relativePath.toLowerCase())
+        return existing && existing !== file.relativePath
+          ? [existing, file.relativePath]
+          : []
+      })
+      const mergedFiles = mergeFiles(currentFiles, uploadedManifest.files)
       const mergedTotalBytes = mergedFiles.reduce(
         (total, file) => total + file.byteSize,
         0,
       )
-      if (mergedTotalBytes > this.limits.maxTotalBytes) {
+      if (
+        mergedFiles.length > this.limits.maxFiles ||
+        mergedTotalBytes > this.limits.maxTotalBytes
+      ) {
         throw uploadValidationError(
-          "UPLOAD_TOTAL_SIZE_EXCEEDED",
-          "The merged Draft exceeds the maximum total size.",
-          { limit: this.limits.maxTotalBytes },
+          mergedFiles.length > this.limits.maxFiles
+            ? "UPLOAD_FILE_COUNT_EXCEEDED"
+            : "UPLOAD_TOTAL_SIZE_EXCEEDED",
+          "The merged working copy exceeds the configured resource limit.",
         )
       }
       assertNoFileDirectoryConflicts(
         mergedFiles.map((file) => file.relativePath),
       )
       const entries = buildDraftDiffEntries(
-        draft.currentFiles,
+        currentFiles,
         mergedFiles,
         ignored.ignoredPaths,
       )
@@ -1046,12 +858,13 @@ export class DraftService {
         entries,
         mergedFiles.length,
         mergedTotalBytes,
+        conflicts,
       )
       const sourceName = validateDraftSourceName(
         fields.get("sourceName") || prepared.strippedRoot || undefined,
       )
       const metadata: FolderMergeOperationMetadata = {
-        schemaVersion: 1,
+        schemaVersion: 2,
         kind: "DRAFT_FOLDER_MERGE",
         workspaceId,
         draftId: draft.id,
@@ -1076,12 +889,18 @@ export class DraftService {
         sourceName,
         ignoreRules: [...customRules],
         summary,
-        conflicts: [],
-        committable: true,
+        conflicts,
+        committable: conflicts.length === 0,
       }
     } catch (error) {
       if (operationId && operationCreated) {
         await this.storage.cleanupOperation(operationId).catch(() => undefined)
+      }
+      if (error instanceof SyntaxError) {
+        throw uploadValidationError(
+          "DRAFT_IGNORE_RULES_INVALID",
+          "Custom ignore rules must be valid JSON.",
+        )
       }
       throw error
     }
@@ -1096,108 +915,77 @@ export class DraftService {
     },
   ): Promise<DraftMutationResponse> {
     const operationId = validateOperationId(operationIdInput)
-    let metadataValue: unknown
+    let value: unknown
     try {
-      metadataValue = await this.storage.readOperationMetadata(operationId)
+      value = await this.storage.readOperationMetadata(operationId)
     } catch (error) {
       throw new DomainError({
         code: "DRAFT_FOLDER_OPERATION_NOT_FOUND",
-        message:
-          "The staged folder merge was not found or is no longer available.",
+        message: "The staged folder upload is no longer available.",
         kind: "not_found",
         cause: error,
       })
     }
-    if (!isFolderMergeOperationMetadata(metadataValue)) {
+    if (!isFolderMergeOperationMetadata(value) || value.workspaceId !== workspaceId) {
       throw new DomainError({
         code: "DRAFT_FOLDER_OPERATION_INVALID",
-        message: "The staged folder merge is invalid.",
+        message: "The staged folder upload is invalid.",
         kind: "conflict",
       })
     }
-    const metadata = metadataValue
-    if (metadata.workspaceId !== workspaceId) {
-      throw new DomainError({
-        code: "DRAFT_FOLDER_OPERATION_NOT_FOUND",
-        message: "The staged folder merge was not found.",
-        kind: "not_found",
-      })
-    }
-    const draft = await getActiveDraftContext(this.database, workspaceId)
-    assertDraftOpen(draft.status)
+    const metadata = value
+    const draft = await this.ensureWorkingCopy(workspaceId)
     const idempotencyKey = requireIdempotencyKey(headers.idempotencyKey)
     const requestHash = hashRequest({
       kind: "MERGE_FOLDER",
       operationId,
       manifestHash: metadata.uploadedManifest.manifestHash,
-      ignoreRules: metadata.ignoreRules,
     })
     const replay = await getDraftMutationReplay(this.database, {
       workspaceId,
-      draftId: metadata.draftId,
+      draftId: draft.id,
       idempotencyKey,
       requestHash,
     })
     if (replay) return { draft: replay, replayed: true }
-    assertMatchingEtag(
-      headers.ifMatch,
-      draft.id,
-      draft.contentRevision,
-    )
+    assertMatchingEtag(headers.ifMatch, draft.id, draft.contentRevision)
     if (
       draft.id !== metadata.draftId ||
       draft.contentRevision !== metadata.baseContentRevision
     ) {
       throw new DomainError({
         code: "DRAFT_FOLDER_PREVIEW_STALE",
-        message:
-          "The Draft changed after this folder merge was previewed.",
+        message: "The working copy changed after this folder was previewed.",
         kind: "precondition_failed",
-        details: {
-          currentEtag: createDraftEtag(draft.id, draft.contentRevision),
-        },
       })
     }
-    try {
-      await this.assertCurrentSnapshotIntegrity(draft)
-      const currentPaths = draft.currentFiles.map(
-        (file) => file.relativePath,
-      )
-      await this.storage.cloneSnapshotFiles(
-        operationId,
-        draft.currentSnapshotId,
-        currentPaths,
-      )
-      for (const file of metadata.files) {
-        await this.storage.moveIncomingToContent(
+
+    const nextFiles = mergeFiles(
+      draft.currentFiles.map(asManifestFile),
+      metadata.uploadedManifest.files,
+    )
+    const uploadedPaths = new Set(
+      metadata.files.map((file) => file.relativePath),
+    )
+    return this.commitFileChanges({
+      draft,
+      operationId,
+      idempotencyKey,
+      requestHash,
+      nextFiles,
+      upserts: metadata.uploadedManifest.files,
+      deletedPaths: [],
+      changes: metadata.files.map((file) => ({
+        relativePath: file.relativePath,
+        sourcePath: this.storage.getIncomingPath(
           operationId,
           file.incomingIndex,
-          file.relativePath,
-        )
-      }
-      const uploadedPaths = new Set(
-        metadata.files.map((file) => file.relativePath),
-      )
-      const relativePaths = [
-        ...currentPaths.filter((path) => !uploadedPaths.has(path)),
-        ...uploadedPaths,
-      ]
-      if (relativePaths.length > this.limits.maxFiles) {
-        throw uploadValidationError(
-          "UPLOAD_FILE_COUNT_EXCEEDED",
-          "The Draft contains too many files.",
-          { limit: this.limits.maxFiles },
-        )
-      }
-      assertNoFileDirectoryConflicts(relativePaths)
-      const manifest = await buildSnapshotManifest(
-        manifestCandidates(this.storage, operationId, relativePaths),
-        this.limits,
-      )
-      const ignoreRules = [
+        ),
+      })),
+      ignoreRules: [
         ...new Set([...draft.ignoreRules, ...metadata.ignoreRules]),
-      ]
-      const ignoredPaths = [
+      ],
+      ignoredPaths: [
         ...new Map(
           [
             ...draft.ignoredPaths.filter(
@@ -1206,218 +994,9 @@ export class DraftService {
             ...metadata.ignoredPaths,
           ].map((path) => [path.relativePath, path]),
         ).values(),
-      ]
-      return await this.promoteAndCommit({
-        draft,
-        operationId,
-        idempotencyKey,
-        requestHash,
-        manifest,
-        ignoreRules,
-        ignoredPaths,
-      })
-    } catch (error) {
-      await this.storage.cleanupOperation(operationId).catch(() => undefined)
-      throw error
-    }
-  }
-
-  async abandon(
-    workspaceId: string,
-    ifMatch: string | string[] | undefined,
-  ): Promise<void> {
-    const draft = await getActiveDraftContext(this.database, workspaceId)
-    assertDraftOpen(draft.status)
-    assertMatchingEtag(ifMatch, draft.id, draft.contentRevision)
-    await abandonActiveDraft(this.database, {
-      workspaceId,
-      draftId: draft.id,
-      expectedRevision: draft.contentRevision,
+      ],
+      sourceName: metadata.sourceName,
+      retainOperationMetadata: true,
     })
-  }
-
-  private async assertCurrentSnapshotIntegrity(
-    draft: Awaited<ReturnType<typeof getActiveDraftContext>>,
-  ): Promise<void> {
-    if (draft.currentSnapshot.state !== "READY") {
-      throw new DomainError({
-        code: "SNAPSHOT_NOT_READY",
-        message: "The current Draft Snapshot is not ready for editing.",
-        kind: "conflict",
-        details: { state: draft.currentSnapshot.state },
-      })
-    }
-    let actualManifest: SnapshotManifest
-    try {
-      actualManifest = await buildSnapshotManifest(
-        draft.currentFiles.map((file) => ({
-          incomingPath: this.storage.getSnapshotFilePath(
-            draft.currentSnapshotId,
-            file.relativePath,
-          ),
-          relativePath: file.relativePath,
-        })),
-        this.limits,
-      )
-    } catch (error) {
-      throw new DomainError({
-        code: "SNAPSHOT_FILE_CORRUPTED",
-        message:
-          "The current Draft Snapshot is missing or cannot be verified before editing.",
-        kind: "conflict",
-        cause: error,
-      })
-    }
-
-    if (
-      actualManifest.manifestHash !== draft.currentSnapshot.manifestHash ||
-      actualManifest.fileCount !== draft.currentSnapshot.fileCount ||
-      actualManifest.totalBytes !== draft.currentSnapshot.totalBytes
-    ) {
-      throw new DomainError({
-        code: "SNAPSHOT_FILE_CORRUPTED",
-        message:
-          "The current Draft Snapshot no longer matches its persisted Manifest.",
-        kind: "conflict",
-      })
-    }
-  }
-
-  private async commitMaterializedMutation(input: {
-    readonly draft: Awaited<ReturnType<typeof getActiveDraftContext>>
-    readonly idempotencyKey: string
-    readonly requestHash: string
-    readonly prepare: (operationId: string) => Promise<{
-      readonly relativePaths: readonly string[]
-      readonly ignoreRules: readonly string[]
-      readonly ignoredPaths: readonly DraftIgnoredPath[]
-    }>
-  }): Promise<DraftMutationResponse> {
-    const operationId = randomUUID()
-    await this.assertCurrentSnapshotIntegrity(input.draft)
-    await this.storage.resetOperation(operationId)
-    try {
-      const prepared = await input.prepare(operationId)
-      if (prepared.relativePaths.length === 0) {
-        throw new DomainError({
-          code: "DRAFT_CANNOT_BE_EMPTY",
-          message: "A Draft must contain at least one file.",
-          kind: "conflict",
-        })
-      }
-      if (prepared.relativePaths.length > this.limits.maxFiles) {
-        throw uploadValidationError(
-          "UPLOAD_FILE_COUNT_EXCEEDED",
-          "The Draft contains too many files.",
-          { limit: this.limits.maxFiles },
-        )
-      }
-      assertNoFileDirectoryConflicts(prepared.relativePaths)
-      const manifest = await buildSnapshotManifest(
-        manifestCandidates(
-          this.storage,
-          operationId,
-          prepared.relativePaths,
-        ),
-        this.limits,
-      )
-      return await this.promoteAndCommit({
-        draft: input.draft,
-        operationId,
-        idempotencyKey: input.idempotencyKey,
-        requestHash: input.requestHash,
-        manifest,
-        ignoreRules: prepared.ignoreRules,
-        ignoredPaths: prepared.ignoredPaths,
-      })
-    } catch (error) {
-      await this.storage.cleanupOperation(operationId).catch(() => undefined)
-      throw error
-    }
-  }
-
-  private async promoteAndCommit(input: {
-    readonly draft: Awaited<ReturnType<typeof getActiveDraftContext>>
-    readonly operationId: string
-    readonly idempotencyKey: string
-    readonly requestHash: string
-    readonly manifest: SnapshotManifest
-    readonly ignoreRules: readonly string[]
-    readonly ignoredPaths: readonly DraftIgnoredPath[]
-    readonly sourceType?: "folder"
-    readonly sourceName?: string
-    readonly cleanupOperationOnSuccess?: boolean
-  }): Promise<DraftMutationResponse> {
-    const snapshotId = randomUUID()
-    const storageLocator = await this.storage.promoteSnapshot(
-      input.operationId,
-      snapshotId,
-      input.manifest,
-    )
-    let databaseCommitted = false
-    try {
-      let result
-      try {
-        result = await commitDraftSnapshot(this.database, {
-          workspaceId: input.draft.workspaceId,
-          draftId: input.draft.id,
-          expectedRevision: input.draft.contentRevision,
-          idempotencyKey: input.idempotencyKey,
-          requestHash: input.requestHash,
-          snapshotId,
-          storageLocator,
-          manifest: input.manifest,
-          ignoreRules: input.ignoreRules,
-          ignoredPaths: input.ignoredPaths,
-          ...(input.sourceType ? { sourceType: input.sourceType } : {}),
-          ...(input.sourceName ? { sourceName: input.sourceName } : {}),
-        })
-      } catch (error) {
-        if (
-          error instanceof DomainError &&
-          error.code === "DRAFT_ETAG_STALE"
-        ) {
-          const replay = await getDraftMutationReplay(this.database, {
-            workspaceId: input.draft.workspaceId,
-            draftId: input.draft.id,
-            idempotencyKey: input.idempotencyKey,
-            requestHash: input.requestHash,
-          })
-          if (replay) {
-            await this.storage.removeSnapshot(snapshotId)
-            if (input.cleanupOperationOnSuccess !== false) {
-              await this.storage
-                .cleanupOperation(input.operationId)
-                .catch(() => undefined)
-            }
-            return { draft: replay, replayed: true }
-          }
-        }
-        throw error
-      }
-      databaseCommitted = !result.replayed
-      if (result.usedSnapshotId !== snapshotId) {
-        await this.storage.removeSnapshot(snapshotId)
-      }
-      const draft = await getActiveSkillDraft(
-        this.database,
-        input.draft.workspaceId,
-      )
-      if (input.cleanupOperationOnSuccess !== false) {
-        await this.storage
-          .cleanupOperation(input.operationId)
-          .catch(() => undefined)
-      } else {
-        await this.storage
-          .retainOperationMetadataOnly(input.operationId)
-          .catch(() => undefined)
-      }
-      return { draft, replayed: result.replayed }
-    } catch (error) {
-      if (!databaseCommitted) {
-        await this.storage.removeSnapshot(snapshotId).catch(() => undefined)
-      }
-      throw error
-    }
   }
 }

@@ -1,5 +1,5 @@
 import type {
-  DraftDiff,
+  CreateSkillVersionInput,
   DraftFolderMergePreview,
   DraftResource,
   SkillBrowserTarget,
@@ -7,6 +7,7 @@ import type {
   SkillVersionBrowser,
   SnapshotFileList,
   TextFilePreview,
+  VersionComparison,
 } from "@/features/version-browser/model/version-browser"
 import { readApiError } from "@/shared/api/http"
 
@@ -125,31 +126,6 @@ export function deleteDraftFile(
   )
 }
 
-export function moveDraftFile(
-  workspaceId: string,
-  etag: string,
-  fromPath: string,
-  toPath: string,
-): Promise<DraftResource> {
-  return readDraftResource(`${draftBaseUrl(workspaceId)}/files/move`, {
-    method: "POST",
-    headers: draftWriteHeaders(etag),
-    body: JSON.stringify({ fromPath, toPath }),
-  })
-}
-
-export function readDraftDiff(workspaceId: string): Promise<DraftDiff> {
-  return readJson(`${draftBaseUrl(workspaceId)}/diff`)
-}
-
-export function readDraftBaseTextFile(
-  workspaceId: string,
-  relativePath: string,
-): Promise<TextFilePreview> {
-  const query = new URLSearchParams({ path: relativePath })
-  return readJson(`${draftBaseUrl(workspaceId)}/diff/base-text?${query}`)
-}
-
 export async function previewDraftFolderMerge(
   workspaceId: string,
   etag: string,
@@ -197,22 +173,76 @@ export function commitDraftFolderMerge(
   )
 }
 
-export async function abandonSkillDraft(
-  workspaceId: string,
-  etag: string,
-): Promise<void> {
-  const response = await fetch(draftBaseUrl(workspaceId), {
-    method: "DELETE",
-    headers: { "If-Match": etag },
-  })
-  if (!response.ok) throw await readApiError(response)
-}
-
 export function listSkillVersions(
   workspaceId: string,
 ): Promise<SkillVersionBrowser[]> {
   return readJson(
     `/api/skill-workspaces/${encodeURIComponent(workspaceId)}/versions`,
+  )
+}
+
+export async function createSkillVersion(
+  workspaceId: string,
+  input: CreateSkillVersionInput,
+): Promise<SkillVersionBrowser> {
+  const response = await fetch(
+    `/api/skill-workspaces/${encodeURIComponent(workspaceId)}/versions`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(input),
+    },
+  )
+  if (!response.ok) throw await readApiError(response)
+  return (await response.json()) as SkillVersionBrowser
+}
+
+export async function updateSkillVersion(
+  workspaceId: string,
+  versionId: string,
+  input: Pick<
+    CreateSkillVersionInput,
+    "name" | "description" | "labels"
+  >,
+): Promise<SkillVersionBrowser> {
+  const response = await fetch(versionBaseUrl(workspaceId, versionId), {
+    method: "PATCH",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  })
+  if (!response.ok) throw await readApiError(response)
+  return (await response.json()) as SkillVersionBrowser
+}
+
+export async function setOnlineSkillVersion(
+  workspaceId: string,
+  versionId: string,
+): Promise<SkillVersionBrowser> {
+  const response = await fetch(
+    `${versionBaseUrl(workspaceId, versionId)}/online`,
+    {
+      method: "PUT",
+      headers: { Accept: "application/json" },
+    },
+  )
+  if (!response.ok) throw await readApiError(response)
+  return (await response.json()) as SkillVersionBrowser
+}
+
+export function compareSkillVersions(
+  workspaceId: string,
+  leftVersionId: string,
+  rightVersionId: string,
+): Promise<VersionComparison> {
+  const query = new URLSearchParams({ leftVersionId, rightVersionId })
+  return readJson(
+    `/api/skill-workspaces/${encodeURIComponent(workspaceId)}/versions/compare?${query}`,
   )
 }
 

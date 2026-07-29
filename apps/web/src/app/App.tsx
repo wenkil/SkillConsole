@@ -27,6 +27,10 @@ export function AppRoutes() {
           <Route index element={<WorkbenchOverviewRoute />} />
           <Route element={<VersionBrowserRoute />} path="versions" />
           <Route
+            element={<VersionBrowserRoute comparison />}
+            path="versions/compare"
+          />
+          <Route
             element={<VersionBrowserRoute />}
             path="versions/:versionId"
           />
@@ -41,6 +45,10 @@ export function AppRoutes() {
           <Route
             element={<ModulePlaceholderRoute module="runs" />}
             path="runs"
+          />
+          <Route
+            element={<ModulePlaceholderRoute module="reports" />}
+            path="reports"
           />
           <Route element={<WorkspaceFallbackRoute />} path="*" />
         </Route>

@@ -22,17 +22,20 @@ import {
 } from "./skill-workspace.repository.js"
 import { validateOperationId } from "./upload-validation.js"
 import {
+  CreateSkillVersionSchema,
   SkillDraftBrowserSchema,
   SkillVersionBrowserListSchema,
   SkillVersionBrowserSchema,
   SnapshotFileListSchema,
   TextFilePreviewSchema,
+  UpdateSkillVersionMetadataSchema,
   VersionFilePathQuerySchema,
+  VersionComparisonQuerySchema,
+  VersionComparisonSchema,
   WorkspaceVersionParamsSchema,
 } from "./version-browser.contract.js"
 import {
   getActiveSkillDraft,
-  getDraftFileRecord,
   getSkillVersion,
   getVersionFileRecord,
   listDraftFiles,
@@ -50,18 +53,16 @@ import {
   UploadFolderIgnorePolicySchema,
 } from "./upload-folder-ignore-policy.js"
 import {
-  DraftConditionalHeadersSchema,
-  DraftDiffSchema,
   DraftFolderMergeCommitSchema,
   DraftFolderMergePreviewSchema,
-  DraftMoveFileSchema,
   DraftMutationResponseSchema,
   DraftOperationParamsSchema,
   DraftTextSaveSchema,
   DraftWriteHeadersSchema,
 } from "./draft.contract.js"
 import { DraftService } from "./draft.service.js"
-import { createDraftEtag, getDraftBaseFileRecord } from "./draft.repository.js"
+import { getDraftFileRecord } from "./draft.repository.js"
+import { VersionService } from "./version.service.js"
 
 function contentDispositionFilename(relativePath: string): string {
   const filename = relativePath.split("/").at(-1) ?? "download"
@@ -117,6 +118,11 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
     limits,
     folderIgnorePolicy,
   })
+  const versionService = new VersionService(
+    application.databaseClient.database,
+    storage,
+    limits,
+  )
 
   application.get(
     "/api/skill-workspace-upload-policy",
@@ -186,15 +192,9 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
       },
     },
     async (request, reply) => {
-      const draft = await getActiveSkillDraft(
-        application.databaseClient.database,
-        request.params.workspaceId,
-      )
+      const draft = await draftService.getDraft(request.params.workspaceId)
       return reply
-        .header(
-          "ETag",
-          createDraftEtag(draft.id, draft.contentRevision),
-        )
+        .header("ETag", draftService.getEtag(draft))
         .send(draft)
     },
   )
@@ -204,7 +204,7 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
     {
       schema: {
         tags: ["skill-workspaces"],
-        summary: "Create a unique Draft from the latest formal version",
+        summary: "Create a mutable working copy from the online version",
         params: WorkspaceIdParamsSchema,
         response: {
           201: SkillDraftBrowserSchema,
@@ -224,38 +224,12 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
     },
   )
 
-  application.delete(
-    "/api/skill-workspaces/:workspaceId/draft",
-    {
-      schema: {
-        tags: ["skill-workspaces"],
-        summary: "Abandon the active Draft without creating a version",
-        params: WorkspaceIdParamsSchema,
-        headers: DraftConditionalHeadersSchema,
-        response: {
-          204: Type.Null(),
-          404: ErrorResponseSchema,
-          409: ErrorResponseSchema,
-          412: ErrorResponseSchema,
-          428: ErrorResponseSchema,
-        },
-      },
-    },
-    async (request, reply) => {
-      await draftService.abandon(
-        request.params.workspaceId,
-        request.headers["if-match"],
-      )
-      return reply.code(204).send(null)
-    },
-  )
-
   application.get(
     "/api/skill-workspaces/:workspaceId/draft/files",
     {
       schema: {
         tags: ["skill-workspaces"],
-        summary: "List the active candidate Snapshot Manifest",
+        summary: "List files in the active mutable working copy",
         params: WorkspaceIdParamsSchema,
         response: {
           200: SnapshotFileListSchema,
@@ -263,12 +237,14 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
         },
       },
     },
-    async (request) =>
-      listDraftFiles(
+    async (request) => {
+      await draftService.ensureWorkingCopy(request.params.workspaceId)
+      return listDraftFiles(
         application.databaseClient.database,
         request.params.workspaceId,
         classifySnapshotFile,
-      ),
+      )
+    },
   )
 
   application.put(
@@ -380,90 +356,13 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
   )
 
   application.post(
-    "/api/skill-workspaces/:workspaceId/draft/files/move",
-    {
-      schema: {
-        tags: ["skill-workspaces"],
-        summary: "Move or rename one Draft file",
-        params: WorkspaceIdParamsSchema,
-        headers: DraftWriteHeadersSchema,
-        body: DraftMoveFileSchema,
-        response: {
-          200: DraftMutationResponseSchema,
-          404: ErrorResponseSchema,
-          409: ErrorResponseSchema,
-          412: ErrorResponseSchema,
-          422: ErrorResponseSchema,
-          428: ErrorResponseSchema,
-        },
-      },
-    },
-    async (request, reply) => {
-      const result = await draftService.moveFile(
-        request.params.workspaceId,
-        request.body,
-        {
-          ifMatch: request.headers["if-match"],
-          idempotencyKey: request.headers["idempotency-key"],
-        },
-      )
-      return reply
-        .header("ETag", draftService.getEtag(result.draft))
-        .send(result)
-    },
-  )
-
-  application.get(
-    "/api/skill-workspaces/:workspaceId/draft/diff",
-    {
-      schema: {
-        tags: ["skill-workspaces"],
-        summary: "Compare the Draft with its fixed comparison basis",
-        params: WorkspaceIdParamsSchema,
-        response: {
-          200: DraftDiffSchema,
-          404: ErrorResponseSchema,
-        },
-      },
-    },
-    async (request) =>
-      draftService.getDiff(request.params.workspaceId),
-  )
-
-  application.get(
-    "/api/skill-workspaces/:workspaceId/draft/diff/base-text",
-    {
-      schema: {
-        tags: ["skill-workspaces"],
-        summary: "Read one UTF-8 file from the fixed Draft comparison basis",
-        params: WorkspaceIdParamsSchema,
-        querystring: VersionFilePathQuerySchema,
-        response: {
-          200: TextFilePreviewSchema,
-          404: ErrorResponseSchema,
-          409: ErrorResponseSchema,
-          415: ErrorResponseSchema,
-        },
-      },
-    },
-    async (request) => {
-      const record = await getDraftBaseFileRecord(
-        application.databaseClient.database,
-        request.params.workspaceId,
-        request.query.path,
-      )
-      return readTextPreview(storage, record)
-    },
-  )
-
-  application.post(
     "/api/skill-workspaces/:workspaceId/draft/folder-merges",
     {
       schema: {
         tags: ["skill-workspaces"],
         summary: "Stage and preview a folder merge into the current Draft",
         params: WorkspaceIdParamsSchema,
-        headers: DraftConditionalHeadersSchema,
+        headers: DraftWriteHeadersSchema,
         consumes: ["multipart/form-data"],
         response: {
           200: DraftFolderMergePreviewSchema,
@@ -534,6 +433,7 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
       },
     },
     async (request) => {
+      await draftService.ensureWorkingCopy(request.params.workspaceId)
       const record = await getDraftFileRecord(
         application.databaseClient.database,
         request.params.workspaceId,
@@ -560,6 +460,7 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
       },
     },
     async (request, reply) => {
+      await draftService.ensureWorkingCopy(request.params.workspaceId)
       const record = await getDraftFileRecord(
         application.databaseClient.database,
         request.params.workspaceId,
@@ -590,6 +491,7 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
       },
     },
     async (request, reply) => {
+      await draftService.ensureWorkingCopy(request.params.workspaceId)
       const record = await getDraftFileRecord(
         application.databaseClient.database,
         request.params.workspaceId,
@@ -633,7 +535,7 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
     {
       schema: {
         tags: ["skill-workspaces"],
-        summary: "List immutable formal versions in a Skill workbench",
+        summary: "List immutable testable versions in a Skill workbench",
         params: WorkspaceIdParamsSchema,
         response: {
           200: SkillVersionBrowserListSchema,
@@ -648,12 +550,62 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
       ),
   )
 
+  application.post(
+    "/api/skill-workspaces/:workspaceId/versions",
+    {
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "Freeze the current working copy as an immutable version",
+        params: WorkspaceIdParamsSchema,
+        body: CreateSkillVersionSchema,
+        response: {
+          201: SkillVersionBrowserSchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          422: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) =>
+      reply
+        .code(201)
+        .send(
+          await versionService.create(
+            request.params.workspaceId,
+            request.body,
+          ),
+        ),
+  )
+
+  application.get(
+    "/api/skill-workspaces/:workspaceId/versions/compare",
+    {
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "Compare two immutable version directory trees",
+        params: WorkspaceIdParamsSchema,
+        querystring: VersionComparisonQuerySchema,
+        response: {
+          200: VersionComparisonSchema,
+          404: ErrorResponseSchema,
+          422: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request) =>
+      versionService.compare(
+        request.params.workspaceId,
+        request.query.leftVersionId,
+        request.query.rightVersionId,
+      ),
+  )
+
   application.get(
     "/api/skill-workspaces/:workspaceId/versions/:versionId",
     {
       schema: {
         tags: ["skill-workspaces"],
-        summary: "Read immutable formal version metadata",
+        summary: "Read immutable version metadata",
         params: WorkspaceVersionParamsSchema,
         response: {
           200: SkillVersionBrowserSchema,
@@ -664,6 +616,50 @@ export const skillWorkspacePlugin: FastifyPluginAsyncTypebox = async (
     async (request) =>
       getSkillVersion(
         application.databaseClient.database,
+        request.params.workspaceId,
+        request.params.versionId,
+      ),
+  )
+
+  application.patch(
+    "/api/skill-workspaces/:workspaceId/versions/:versionId",
+    {
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "Update mutable metadata on an immutable version",
+        params: WorkspaceVersionParamsSchema,
+        body: UpdateSkillVersionMetadataSchema,
+        response: {
+          200: SkillVersionBrowserSchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          422: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request) =>
+      versionService.updateMetadata(
+        request.params.workspaceId,
+        request.params.versionId,
+        request.body,
+      ),
+  )
+
+  application.put(
+    "/api/skill-workspaces/:workspaceId/versions/:versionId/online",
+    {
+      schema: {
+        tags: ["skill-workspaces"],
+        summary: "Mark one immutable version as the current online version",
+        params: WorkspaceVersionParamsSchema,
+        response: {
+          200: SkillVersionBrowserSchema,
+          404: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request) =>
+      versionService.setOnline(
         request.params.workspaceId,
         request.params.versionId,
       ),

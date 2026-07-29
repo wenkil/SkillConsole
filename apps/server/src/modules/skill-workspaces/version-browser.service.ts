@@ -2,7 +2,10 @@ import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 
-import type { SkillSnapshotFileRow } from "../../infrastructure/database/index.js"
+import type {
+  SkillDraftFileRow,
+  SkillSnapshotFileRow,
+} from "../../infrastructure/database/index.js"
 import { DomainError } from "../../core/errors/domain-error.js"
 
 import type { LocalSnapshotStorage } from "./snapshot-storage.js"
@@ -10,7 +13,7 @@ import type {
   SnapshotFilePreviewKind,
   TextFilePreview,
 } from "./version-browser.contract.js"
-import type { SnapshotFileRecord } from "./version-browser.repository.js"
+import type { StoredFileRecord } from "./version-browser.repository.js"
 
 const inlineImageMediaTypes = new Set([
   "image/gif",
@@ -25,7 +28,7 @@ function getExtension(relativePath: string): string {
 
 export function classifySnapshotFile(
   file: Pick<
-    SkillSnapshotFileRow,
+    SkillSnapshotFileRow | SkillDraftFileRow,
     "relativePath" | "byteSize" | "mediaTypeHint" | "contentKind"
   >,
 ): {
@@ -63,8 +66,11 @@ export function classifySnapshotFile(
   }
 }
 
-function assertSnapshotReady(record: SnapshotFileRecord): void {
-  if (record.snapshotState !== "READY") {
+function assertSnapshotReady(record: StoredFileRecord): void {
+  if (
+    record.storageKind === "snapshot" &&
+    record.snapshotState !== "READY"
+  ) {
     throw new DomainError({
       code: "SNAPSHOT_NOT_READY",
       message: "This Snapshot is not available for browsing.",
@@ -76,17 +82,22 @@ function assertSnapshotReady(record: SnapshotFileRecord): void {
 
 async function readVerifiedFile(
   storage: LocalSnapshotStorage,
-  record: SnapshotFileRecord,
+  record: StoredFileRecord,
 ): Promise<Buffer> {
   assertSnapshotReady(record)
 
   let content: Buffer
   try {
     content = await readFile(
-      storage.getSnapshotFilePath(
-        record.snapshotId,
-        record.file.relativePath,
-      ),
+      record.storageKind === "snapshot"
+        ? storage.getSnapshotFilePath(
+            record.snapshotId,
+            record.file.relativePath,
+          )
+        : storage.getDraftFilePath(
+            record.draftId,
+            record.file.relativePath,
+          ),
     )
   } catch (error) {
     throw new DomainError({
@@ -116,7 +127,7 @@ async function readVerifiedFile(
 
 export async function readTextPreview(
   storage: LocalSnapshotStorage,
-  record: SnapshotFileRecord,
+  record: StoredFileRecord,
 ): Promise<TextFilePreview> {
   const classification = classifySnapshotFile(record.file)
   if (
@@ -159,7 +170,7 @@ export async function readTextPreview(
 
 export async function readImagePreview(
   storage: LocalSnapshotStorage,
-  record: SnapshotFileRecord,
+  record: StoredFileRecord,
 ): Promise<{
   content: Buffer
   mediaType: string
@@ -185,7 +196,7 @@ export async function readImagePreview(
 
 export async function readFileDownload(
   storage: LocalSnapshotStorage,
-  record: SnapshotFileRecord,
+  record: StoredFileRecord,
 ): Promise<Buffer> {
   return readVerifiedFile(storage, record)
 }

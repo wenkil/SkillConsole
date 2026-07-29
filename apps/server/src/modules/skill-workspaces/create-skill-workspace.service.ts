@@ -443,13 +443,11 @@ export class CreateSkillWorkspaceService {
       )
 
       const workspaceId = randomUUID()
-      const snapshotId = randomUUID()
       const draftId = randomUUID()
       const improvementCycleId = randomUUID()
-      const storageLocator = await this.storage.promoteSnapshot(
+      const workingStorageLocator = await this.storage.promoteDraft(
         metadata.operationId,
-        snapshotId,
-        manifest,
+        draftId,
       )
 
       try {
@@ -457,19 +455,18 @@ export class CreateSkillWorkspaceService {
           operationId: metadata.operationId,
           workspaceId,
           workspaceName: metadata.workspaceName,
-          snapshotId,
           draftId,
           improvementCycleId,
           sourceType: metadata.sourceType,
           sourceName,
           ignoredFileCount,
           strippedRoot,
-          storageLocator,
+          workingStorageLocator,
           manifest,
         })
         committed = true
       } catch (error) {
-        await this.storage.removeSnapshot(snapshotId)
+        await this.storage.removeDraft(draftId)
         throw error
       }
 
