@@ -7,6 +7,7 @@ import { registerErrorHandling } from "../core/http/error-handler.js"
 import { databasePlugin } from "../infrastructure/database/database.plugin.js"
 import { requestContextPlugin } from "../infrastructure/observability/request-context.plugin.js"
 import { registerModules } from "./register-modules.js"
+import type { AgentRuntimeAdapter } from "../modules/agent-sessions/agent-session.domain.js"
 import { registerOpenApi } from "./openapi.js"
 import { registerSecurity } from "./security.js"
 import { registerStaticContent } from "./static-content.js"
@@ -14,11 +15,13 @@ import { registerStaticContent } from "./static-content.js"
 export interface BuildApplicationOptions {
   readonly config: ApplicationConfig
   readonly logger?: boolean
+  readonly agentRuntimeAdapter?: AgentRuntimeAdapter
 }
 
 export async function buildApplication({
   config,
   logger,
+  agentRuntimeAdapter,
 }: BuildApplicationOptions): Promise<FastifyInstance> {
   const application = Fastify({
     logger:
@@ -49,7 +52,11 @@ export async function buildApplication({
     registerOpenApi(application)
   }
 
-  registerModules(application)
+  registerModules(application, {
+    agentSessions: {
+      ...(agentRuntimeAdapter ? { runtimeAdapter: agentRuntimeAdapter } : {}),
+    },
+  })
   registerStaticContent(application, config.staticRoot)
 
   return application

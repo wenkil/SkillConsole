@@ -2,7 +2,6 @@ import { Outlet, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 
 import { CreateWorkbenchDialog } from "@/features/workbench-home/components/create-workbench-dialog"
-import { RuntimeSettingsDialog } from "@/features/workbench-home/components/runtime-settings-dialog"
 import {
   useWorkbenchHomeController,
 } from "@/features/workbench-home/hooks/use-workbench-home-controller"
@@ -24,18 +23,11 @@ export function AppLayoutRoute() {
     navigate(`/workbenches/${workspace.id}`)
   }
 
-  function handleSaveSettings() {
-    actions.saveRuntimeDefaults()
-    toast.success(copy.settingsSaved)
-  }
-
   return (
     <AppLayoutContext.Provider value={{ controller }}>
       <AppHeader
         locale={controller.locale}
         onLocaleChange={actions.changeLocale}
-        onSettingsClick={actions.openSettingsDialog}
-        settingsLabel={copy.settings}
       />
 
       <Outlet />
@@ -57,18 +49,6 @@ export function AppLayoutRoute() {
         }}
         open={controller.createDialog.open}
         submitting={controller.createDialog.submitting}
-      />
-
-      <RuntimeSettingsDialog
-        copy={copy}
-        onOpenChange={(open) => {
-          if (open) actions.openSettingsDialog()
-          else actions.closeSettingsDialog()
-        }}
-        onSubmit={handleSaveSettings}
-        onValuesChange={actions.updateRuntimeDefaults}
-        open={controller.settingsDialog.open}
-        values={controller.settingsDialog.values}
       />
     </AppLayoutContext.Provider>
   )

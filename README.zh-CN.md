@@ -90,7 +90,7 @@ SkillConsole 自己管理版本，不接入 Git，也不向用户暴露 Branch�
 7. **查看结果**：检查任务总结、Trace、产物和测试报告。
 8. **执行回归**：比较最新候选版本与基线版本的行为变化。
 
-SkillConsole 使用 **Claude Agent SDK** 执行 Agent Session。推理 Endpoint、API Key 和模型由用户自行管理，Endpoint 需要满足 Claude Agent SDK 使用的 Anthropic Messages API 契约。
+SkillConsole 使用 **Claude Agent SDK** 执行 Agent Session。运行时配置完全沿用 Anthropic 官方的 Claude 配置体系，不在 SkillConsole Web 界面中编辑。自定义 Endpoint 需要满足 Claude Agent SDK 使用的 Anthropic Messages API 契约。
 
 ## 设计原则
 
@@ -120,7 +120,23 @@ SkillConsole 使用 **Claude Agent SDK** 执行 Agent Session。推理 Endpoint�
 
 需要 Docker Desktop，或 Docker Engine 与 Docker Compose。
 
-在仓库根目录执行：
+### 1. 配置 Claude
+
+启动前，编辑项目根目录的 `settings.json`：
+
+```json
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "env": {
+    "ANTHROPIC_API_KEY": "replace-with-your-api-key",
+    "ANTHROPIC_BASE_URL": "https://api.anthropic.com"
+  }
+}
+```
+
+配置项沿用 [Anthropic 官方 Settings](https://code.claude.com/docs/en/settings)。`settings.json` 已被 Git 忽略，修改后新建 Agent Session 即可生效。
+
+### 2. 启动服务
 
 ```powershell
 docker compose -f compose.yaml -f compose.development.yaml --profile development up --build
@@ -131,6 +147,8 @@ docker compose -f compose.yaml -f compose.development.yaml --profile development
 ```text
 http://localhost:5173
 ```
+
+更多配置见[部署与本地开发](./docs/部署与本地开发.md)。
 
 ## 参与贡献
 

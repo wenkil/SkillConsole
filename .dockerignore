@@ -11,6 +11,7 @@ node_modules
 .env
 .env.*
 !.env.example
+settings.json
 var
 tmp
 temp

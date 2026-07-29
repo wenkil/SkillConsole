@@ -12,7 +12,6 @@ interface SourceKindCopy {
 }
 
 export interface WorkbenchHomeCopy {
-  settings: string
   workbenches: string
   workbenchList: string
   loadingWorkbenches: string
@@ -70,14 +69,7 @@ export interface WorkbenchHomeCopy {
   createFailed: string
   fileCountExceeded: string
   unknownCreateError: string
-  settingsDialogTitle: string
-  settingsDescription: string
-  endpointUrl: string
-  apiKey: string
-  modelId: string
-  saveSettings: string
   workspaceCreated: string
-  settingsSaved: string
   backToHome: string
   overviewEyebrow: string
   overviewDescription: string
@@ -104,11 +96,9 @@ export interface WorkbenchHomeCopy {
 }
 
 export function getWorkbenchHomeCopy(
-  translateCommon: TFunction<"common">,
   translate: TFunction<"workbenchHome">,
 ): WorkbenchHomeCopy {
   return {
-    settings: translateCommon("actions.settings"),
     workbenches: translate("sidebar.workbenches"),
     workbenchList: translate("sidebar.workbenchList"),
     loadingWorkbenches: translate("sidebar.loading"),
@@ -216,14 +206,7 @@ export function getWorkbenchHomeCopy(
     createFailed: translate("createDialog.createFailed"),
     fileCountExceeded: translate("createDialog.fileCountExceeded"),
     unknownCreateError: translate("createDialog.unknownCreateError"),
-    settingsDialogTitle: translate("settingsDialog.title"),
-    settingsDescription: translate("settingsDialog.description"),
-    endpointUrl: translate("settingsDialog.endpointUrl"),
-    apiKey: translate("settingsDialog.apiKey"),
-    modelId: translate("settingsDialog.modelId"),
-    saveSettings: translate("settingsDialog.saveSettings"),
     workspaceCreated: translate("notifications.workspaceCreated"),
-    settingsSaved: translate("notifications.settingsSaved"),
     backToHome: translate("overview.backToHome"),
     overviewEyebrow: translate("overview.eyebrow"),
     overviewDescription: translate("overview.description"),

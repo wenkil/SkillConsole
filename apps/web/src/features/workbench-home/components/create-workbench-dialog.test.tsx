@@ -13,7 +13,6 @@ import { getWorkbenchHomeCopy } from "@/features/workbench-home/model/workbench-
 import { i18n } from "@/shared/i18n/i18n"
 
 const copy = getWorkbenchHomeCopy(
-  i18n.getFixedT("zh-CN", "common"),
   i18n.getFixedT("zh-CN", "workbenchHome"),
 )
 

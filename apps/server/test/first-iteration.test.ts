@@ -491,6 +491,7 @@ test(
       logLevel: "silent",
       openApiEnabled: true,
       dataRoot,
+      claudeSettingsPath: path.join(dataRoot, "settings.json"),
       uploadFolderIgnoreConfigPath: folderIgnorePolicyPath,
       uploadLimits: limits,
     } as const

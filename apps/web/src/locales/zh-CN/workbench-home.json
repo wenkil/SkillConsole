@@ -99,17 +99,8 @@
     "fileCountExceeded": "所选 Skill 来源的文件数量超过服务端上限。请减少文件数量或调整服务端上传配置后重试。",
     "unknownCreateError": "无法完成创建，请确认本地服务状态后重试。"
   },
-  "settingsDialog": {
-    "title": "默认运行环境",
-    "description": "配置新工作台默认使用的 Endpoint URL、API Key 和 Model ID。",
-    "endpointUrl": "Endpoint URL",
-    "apiKey": "API Key",
-    "modelId": "Model ID",
-    "saveSettings": "保存设置"
-  },
   "notifications": {
-    "workspaceCreated": "工作台与初始候选已创建",
-    "settingsSaved": "设置已保存"
+    "workspaceCreated": "工作台与初始候选已创建"
   },
   "workspaceShell": {
     "navigation": {

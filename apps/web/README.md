@@ -37,7 +37,9 @@ src/
 
 Dependency direction is `app → routes → features → shared`.
 
-Do not access PostgreSQL, the local file system, Endpoint Secrets, or Claude Agent SDK from this application.
+Do not access PostgreSQL, the local file system, Claude credentials, or Claude
+Agent SDK from this application. Claude is configured through the
+repository-root `settings.json`; the Web application has no Claude settings UI.
 
 ## Internationalization and client state
 
@@ -48,7 +50,8 @@ Do not access PostgreSQL, the local file system, Endpoint Secrets, or Claude Age
 - TanStack Query remains the owner of API-backed server state.
 - React Hook Form remains the owner of form state.
 
-API keys, Endpoint credentials, Skill contents, traces, and artifacts must never be written to localStorage.
+API keys, Endpoint credentials, Skill contents, traces, and artifacts must
+never be written to localStorage.
 
 ## Docker development
 

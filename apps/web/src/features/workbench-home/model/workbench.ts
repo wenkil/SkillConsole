@@ -82,12 +82,6 @@ export interface CreateWorkbenchErrors {
   upload?: string | undefined
 }
 
-export interface RuntimeDefaults {
-  endpointUrl: string
-  apiKey: string
-  modelId: string
-}
-
 export interface CreateSkillWorkspaceResponse {
   workspace: SkillWorkspace
   upload: {
@@ -116,14 +110,6 @@ export function createEmptyWorkbenchDraft(): CreateWorkbenchDraft {
     name: "",
     sourceKind: "folder",
     source: null,
-  }
-}
-
-export function createEmptyRuntimeDefaults(): RuntimeDefaults {
-  return {
-    endpointUrl: "",
-    apiKey: "",
-    modelId: "",
   }
 }
 

@@ -1,7 +1,4 @@
-import { Settings } from "lucide-react"
-
 import { BrandLockup } from "@/shared/components/layout/brand-lockup"
-import { Button } from "@/shared/components/ui/button"
 import {
   ToggleGroup,
   ToggleGroupItem,
@@ -10,16 +7,12 @@ import type { AppLocale } from "@/shared/types/locale"
 
 interface AppHeaderProps {
   locale: AppLocale
-  settingsLabel: string
   onLocaleChange: (locale: AppLocale) => void
-  onSettingsClick: () => void
 }
 
 export function AppHeader({
   locale,
-  settingsLabel,
   onLocaleChange,
-  onSettingsClick,
 }: AppHeaderProps) {
   return (
     <header className="sticky top-0 z-30 flex h-[var(--app-header-height)] items-center justify-between border border-foreground bg-paper-raised px-6">
@@ -53,16 +46,6 @@ export function AppHeader({
             中文
           </ToggleGroupItem>
         </ToggleGroup>
-
-        <Button
-          className="h-9 rounded-none border-foreground bg-paper-raised px-3.5 font-semibold shadow-none hover:border-primary hover:bg-paper-raised hover:text-signal-dark"
-          onClick={onSettingsClick}
-          type="button"
-          variant="outline"
-        >
-          <Settings aria-hidden="true" data-icon="inline-start" />
-          {settingsLabel}
-        </Button>
       </div>
     </header>
   )

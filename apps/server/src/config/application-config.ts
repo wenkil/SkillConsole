@@ -28,6 +28,7 @@ export interface ApplicationConfig {
   readonly logLevel: LogLevel
   readonly openApiEnabled: boolean
   readonly dataRoot: string
+  readonly claudeSettingsPath: string
   readonly uploadFolderIgnoreConfigPath: string
   readonly uploadLimits: UploadLimits
   readonly staticRoot?: string
@@ -47,6 +48,10 @@ type EnvironmentSource = Readonly<Record<string, string | undefined>>
 const defaultDataRoot = path.resolve(
   fileURLToPath(new URL("../../../../", import.meta.url)),
   "var",
+)
+const defaultClaudeSettingsPath = path.resolve(
+  fileURLToPath(new URL("../../../../", import.meta.url)),
+  "settings.json",
 )
 const defaultUploadFolderIgnoreConfigPath = fileURLToPath(
   new URL("../../config/upload-folder-ignore.json", import.meta.url),
@@ -177,6 +182,8 @@ export function parseApplicationConfig(
 
   const staticRoot = environment.STATIC_ROOT?.trim()
   const configuredDataRoot = environment.SKILLCONSOLE_DATA_ROOT?.trim()
+  const configuredClaudeSettingsPath =
+    environment.SKILLCONSOLE_CLAUDE_SETTINGS_PATH?.trim()
   const configuredUploadFolderIgnoreConfigPath =
     environment.SKILLCONSOLE_UPLOAD_FOLDER_IGNORE_CONFIG?.trim()
   const config: ApplicationConfig = {
@@ -194,6 +201,9 @@ export function parseApplicationConfig(
     dataRoot: configuredDataRoot
       ? path.resolve(configuredDataRoot)
       : defaultDataRoot,
+    claudeSettingsPath: configuredClaudeSettingsPath
+      ? path.resolve(configuredClaudeSettingsPath)
+      : defaultClaudeSettingsPath,
     uploadFolderIgnoreConfigPath: configuredUploadFolderIgnoreConfigPath
       ? path.resolve(configuredUploadFolderIgnoreConfigPath)
       : defaultUploadFolderIgnoreConfigPath,

@@ -47,16 +47,14 @@ const workspace = vi.hoisted(() => ({
 vi.mock(
   "@/features/workbench-home/hooks/use-workbench-home-controller",
   async () => {
-    const {
-      createEmptyRuntimeDefaults,
-      createEmptyWorkbenchDraft,
-    } = await import("@/features/workbench-home/model/workbench")
+    const { createEmptyWorkbenchDraft } = await import(
+      "@/features/workbench-home/model/workbench"
+    )
     const { getWorkbenchHomeCopy } = await import(
       "@/features/workbench-home/model/workbench-home-copy"
     )
     const { i18n: testI18n } = await import("@/shared/i18n/i18n")
     const copy = getWorkbenchHomeCopy(
-      testI18n.getFixedT("zh-CN", "common"),
       testI18n.getFixedT("zh-CN", "workbenchHome"),
     )
 
@@ -77,10 +75,6 @@ vi.mock(
           submitting: false,
           folderPolicyStatus: "ready",
         },
-        settingsDialog: {
-          open: false,
-          values: createEmptyRuntimeDefaults(),
-        },
         actions: {
           changeLocale: vi.fn(),
           openCreateDialog: vi.fn(),
@@ -90,10 +84,6 @@ vi.mock(
           selectSource: vi.fn(),
           createWorkspace: vi.fn(async () => null),
           retryWorkspaceList: vi.fn(),
-          openSettingsDialog: vi.fn(),
-          closeSettingsDialog: vi.fn(),
-          updateRuntimeDefaults: vi.fn(),
-          saveRuntimeDefaults: vi.fn(),
         },
       }),
     }

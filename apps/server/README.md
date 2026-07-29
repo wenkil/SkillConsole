@@ -11,6 +11,8 @@ The current executable foundation provides:
 - a generated Drizzle migration and a one-shot Compose migration service;
 - production hosting for the built React application;
 - SPA fallback for non-API routes.
+- Server-internal Claude Agent SDK sessions with start, status, complete-event
+  streaming, multi-turn resume, and active-turn cancellation APIs.
 
 ## Responsibilities
 
@@ -42,7 +44,30 @@ src/
 └── main.ts                      # Starts the HTTP server
 ```
 
-Route handlers translate HTTP requests into application operations. They must not contain database queries, direct file-system access, or Claude Agent SDK calls. A capability is extracted from Server only after it has a second real consumer or an independent deployment requirement.
+Route handlers translate HTTP requests into application operations. They must not contain database queries, direct file-system access, or Claude Agent SDK calls. The SDK is isolated inside `modules/agent-sessions/runtime`; it is not a separate Workspace or service. A capability is extracted from Server only after it has a second real consumer or an independent deployment requirement.
+
+## Agent Session API
+
+- `POST /api/agent-sessions` starts a session with its first prompt.
+- `GET /api/agent-sessions/:sessionId` reads public session state.
+- `POST /api/agent-sessions/:sessionId/messages` continues an idle or
+  resumable interrupted session.
+- `GET /api/agent-sessions/:sessionId/events` replays and streams normalized
+  complete events through SSE.
+- `POST /api/agent-sessions/:sessionId/cancel` interrupts only the active turn.
+
+## Claude configuration
+
+- Source file: repository-root `settings.json`.
+- Session copy:
+  `SKILLCONSOLE_DATA_ROOT/agent-sessions/<sessionId>/workspace/.claude/settings.json`.
+- SDK working directory: the session `workspace` root.
+- Settings source: `project`.
+- Direct deployment override: `SKILLCONSOLE_CLAUDE_SETTINGS_PATH`.
+- Transcript storage: the SDK default `~/.claude` location.
+
+Public responses exclude configuration content, sensitive values, absolute
+paths, SDK session IDs, and SDK raw objects.
 
 ## Docker development
 

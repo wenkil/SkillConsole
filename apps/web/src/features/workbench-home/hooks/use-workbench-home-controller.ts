@@ -8,7 +8,6 @@ import {
   listSkillWorkspaces,
 } from "@/features/workbench-home/api/skill-workspaces-api"
 import {
-  createEmptyRuntimeDefaults,
   createEmptyWorkbenchDraft,
   createSelectedSkillSource,
   SourceSelectionError,
@@ -16,7 +15,6 @@ import {
   type CreateSkillSourceKind,
   type CreateWorkbenchDraft,
   type CreateWorkbenchErrors,
-  type RuntimeDefaults,
   type SkillWorkspace,
 } from "@/features/workbench-home/model/workbench"
 import {
@@ -46,10 +44,6 @@ export interface WorkbenchHomeController {
     submitting: boolean
     folderPolicyStatus: "loading" | "ready" | "error"
   }
-  settingsDialog: {
-    open: boolean
-    values: RuntimeDefaults
-  }
   actions: {
     changeLocale: (locale: AppLocale) => void
     openCreateDialog: () => void
@@ -59,10 +53,6 @@ export interface WorkbenchHomeController {
     selectSource: (files: readonly File[]) => void
     createWorkspace: () => Promise<SkillWorkspace | null>
     retryWorkspaceList: () => void
-    openSettingsDialog: () => void
-    closeSettingsDialog: () => void
-    updateRuntimeDefaults: (values: RuntimeDefaults) => void
-    saveRuntimeDefaults: () => RuntimeDefaults
   }
 }
 
@@ -70,8 +60,10 @@ export function useWorkbenchHomeController(
   activeWorkspaceId: string | null,
 ): WorkbenchHomeController {
   const queryClient = useQueryClient()
-  const { t: translateCommon } = useTranslation("common")
-  const { t: translateWorkbenchHome } = useTranslation("workbenchHome")
+  const {
+    i18n,
+    t: translateWorkbenchHome,
+  } = useTranslation("workbenchHome")
   const locale = usePreferencesStore((state) => state.locale)
   const setLocale = usePreferencesStore((state) => state.setLocale)
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false)
@@ -79,10 +71,6 @@ export function useWorkbenchHomeController(
     createEmptyWorkbenchDraft,
   )
   const [errors, setErrors] = useState<CreateWorkbenchErrors>({})
-  const [isSettingsDialogOpen, setSettingsDialogOpen] = useState(false)
-  const [runtimeDefaults, setRuntimeDefaults] = useState<RuntimeDefaults>(
-    createEmptyRuntimeDefaults,
-  )
   const createOperationIdRef = useRef<string | null>(null)
 
   const workspaceQuery = useQuery({
@@ -120,8 +108,8 @@ export function useWorkbenchHomeController(
 
   const copy = useMemo(
     () =>
-      getWorkbenchHomeCopy(translateCommon, translateWorkbenchHome),
-    [translateCommon, translateWorkbenchHome],
+      getWorkbenchHomeCopy(translateWorkbenchHome),
+    [i18n.resolvedLanguage, translateWorkbenchHome],
   )
   const activeWorkspace =
     workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null
@@ -214,11 +202,6 @@ export function useWorkbenchHomeController(
     }
   }
 
-  function saveRuntimeDefaults() {
-    setSettingsDialogOpen(false)
-    return runtimeDefaults
-  }
-
   let folderPolicyStatus: "loading" | "ready" | "error" = "loading"
   if (uploadPolicyQuery.data) {
     folderPolicyStatus = "ready"
@@ -242,10 +225,6 @@ export function useWorkbenchHomeController(
       submitting: createMutation.isPending,
       folderPolicyStatus,
     },
-    settingsDialog: {
-      open: isSettingsDialogOpen,
-      values: runtimeDefaults,
-    },
     actions: {
       changeLocale: setLocale,
       openCreateDialog,
@@ -257,10 +236,6 @@ export function useWorkbenchHomeController(
       retryWorkspaceList: () => {
         void workspaceQuery.refetch()
       },
-      openSettingsDialog: () => setSettingsDialogOpen(true),
-      closeSettingsDialog: () => setSettingsDialogOpen(false),
-      updateRuntimeDefaults: setRuntimeDefaults,
-      saveRuntimeDefaults,
     },
   }
 }

@@ -99,17 +99,8 @@
     "fileCountExceeded": "The selected Skill source exceeds the server file-count limit. Reduce the file count or adjust the server upload configuration, then try again.",
     "unknownCreateError": "Creation could not be completed. Check the local service and try again."
   },
-  "settingsDialog": {
-    "title": "Default runtime",
-    "description": "Configure the Endpoint URL, API Key, and Model ID used by new workbenches.",
-    "endpointUrl": "Endpoint URL",
-    "apiKey": "API Key",
-    "modelId": "Model ID",
-    "saveSettings": "Save settings"
-  },
   "notifications": {
-    "workspaceCreated": "Workbench and initial candidate created",
-    "settingsSaved": "Settings saved"
+    "workspaceCreated": "Workbench and initial candidate created"
   },
   "workspaceShell": {
     "navigation": {

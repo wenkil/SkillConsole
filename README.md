@@ -90,7 +90,7 @@ A regression task runs the same inputs against a candidate and baseline, highlig
 7. **Inspect the result.** Review the summary, trace, artifacts, and reports.
 8. **Run regression.** Compare the latest candidate with the baseline.
 
-SkillConsole runs agent sessions through the **Claude Agent SDK**. Users manage their own inference endpoint, API key, and model. The endpoint must implement the Anthropic Messages API contract required by the SDK.
+SkillConsole runs agent sessions through the **Claude Agent SDK**. Runtime configuration follows Anthropic's official Claude settings system and is not edited in the SkillConsole Web interface. Custom endpoints must implement the Anthropic Messages API contract required by the SDK.
 
 ## Design principles
 
@@ -120,7 +120,25 @@ SkillConsole runs agent sessions through the **Claude Agent SDK**. Users manage 
 
 Install Docker Desktop, or Docker Engine with Docker Compose.
 
-From the repository root:
+### 1. Configure Claude
+
+Before starting SkillConsole, edit `settings.json` in the repository root:
+
+```json
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "env": {
+    "ANTHROPIC_API_KEY": "replace-with-your-api-key",
+    "ANTHROPIC_BASE_URL": "https://api.anthropic.com"
+  }
+}
+```
+
+Use the fields documented in
+[Anthropic's official settings reference](https://code.claude.com/docs/en/settings).
+The file is ignored by Git. Changes apply to newly created Agent Sessions.
+
+### 2. Start SkillConsole
 
 ```powershell
 docker compose -f compose.yaml -f compose.development.yaml --profile development up --build
@@ -131,6 +149,9 @@ When the containers are healthy, open:
 ```text
 http://localhost:5173
 ```
+
+See [Deployment and local development](./docs/部署与本地开发.md) for additional
+configuration.
 
 ## Contributing
 
