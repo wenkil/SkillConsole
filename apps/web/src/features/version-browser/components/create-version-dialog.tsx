@@ -5,6 +5,7 @@ import type {
   CreateSkillVersionInput,
   SkillVersionBrowser,
 } from "@/features/version-browser/model/version-browser"
+import { SkillConsoleApiError } from "@/shared/api/http"
 import { Button } from "@/shared/components/ui/button"
 import {
   Dialog,
@@ -38,9 +39,23 @@ export function CreateVersionDialog({
   const [description, setDescription] = useState("")
   const [labels, setLabels] = useState("")
   const [setOnline, setSetOnline] = useState(false)
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setName(suggestedName)
+      setDescription("")
+      setLabels("")
+      setSetOnline(false)
+    }
+    setNameError(null)
+    setSubmitError(null)
+    setOpen(nextOpen)
+  }
 
   return (
-    <Dialog onOpenChange={setOpen} open={open}>
+    <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogTrigger asChild>
         <Button className="h-9 rounded-none" type="button">
           <GitCommitVertical aria-hidden="true" data-icon="inline-start" />
@@ -55,15 +70,33 @@ export function CreateVersionDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 px-6 py-5">
-          <label className="grid gap-1.5 text-xs font-semibold">
-            版本名称
+          <div className="grid gap-1.5 text-xs font-semibold">
+            <label htmlFor="create-version-name">版本名称</label>
             <Input
+              aria-describedby={
+                nameError ? "create-version-name-error" : undefined
+              }
+              aria-invalid={Boolean(nameError)}
               className="rounded-none"
+              id="create-version-name"
               maxLength={120}
-              onChange={(event) => setName(event.target.value)}
+              onChange={(event) => {
+                setName(event.target.value)
+                setNameError(null)
+                setSubmitError(null)
+              }}
               value={name}
             />
-          </label>
+            {nameError ? (
+              <p
+                className="text-xs font-normal text-destructive"
+                id="create-version-name-error"
+                role="alert"
+              >
+                {nameError}
+              </p>
+            ) : null}
+          </div>
           <label className="grid gap-1.5 text-xs font-semibold">
             说明（可选）
             <textarea
@@ -95,10 +128,18 @@ export function CreateVersionDialog({
             <span>
               <strong className="block">同时标记为当前上线版本</strong>
               <span className="mt-1 block text-muted-foreground">
-                这是用户标注，不代表系统验收通过或自动发布。
+                仅作上线标记，不代表系统已验收或自动发布。
               </span>
             </span>
           </label>
+          {submitError ? (
+            <div
+              className="border-l-4 border-destructive bg-destructive/8 px-3 py-2 text-xs text-destructive"
+              role="alert"
+            >
+              {submitError}
+            </div>
+          ) : null}
         </div>
         <DialogFooter className="border-t border-rule px-6 py-4">
           <DialogClose asChild>
@@ -110,6 +151,8 @@ export function CreateVersionDialog({
             className="rounded-none"
             disabled={!name.trim() || pending}
             onClick={() => {
+              setNameError(null)
+              setSubmitError(null)
               void onCreate({
                 name: name.trim(),
                 description: description.trim() || null,
@@ -127,7 +170,20 @@ export function CreateVersionDialog({
                   setOpen(false)
                   onCreated(version)
                 })
-                .catch(() => undefined)
+                .catch((error: unknown) => {
+                  if (
+                    error instanceof SkillConsoleApiError &&
+                    error.code === "VERSION_NAME_CONFLICT"
+                  ) {
+                    setNameError("该版本名称已存在，请使用其他名称。")
+                    return
+                  }
+                  setSubmitError(
+                    error instanceof Error
+                      ? error.message
+                      : "版本保存失败，请稍后重试。",
+                  )
+                })
             }}
             type="button"
           >

@@ -99,7 +99,7 @@ export function WorkbenchOverview({
           )}
         </div>
         <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-          管理 Skill 的工作副本、不可变版本、测试任务、版本对比与用户标签。系统提供证据，不替用户决定哪个版本验收通过。
+          管理 Skill 的工作副本、不可变版本、测试任务、版本对比与版本标签。系统仅提供决策证据，最终上线版本由你选择。
         </p>
       </header>
 
@@ -109,7 +109,7 @@ export function WorkbenchOverview({
         </h2>
         <div className="grid grid-cols-3">
           <Metric
-            hint={online?.labels.join("、") || "由用户手动标记"}
+            hint={online?.labels.join("、") || "可随时手动标记"}
             label="当前上线版本"
             value={online?.name ?? "未设置"}
           />
@@ -169,7 +169,7 @@ export function WorkbenchOverview({
             title="测试任务"
           />
           <TodoPanel
-            description="汇总版本差异、测试结果和用户标注，不输出强制得分。"
+            description="汇总版本差异、测试结果和版本标记，不输出强制得分。"
             icon={FileChartColumn}
             title="对比报告"
           />
@@ -180,9 +180,9 @@ export function WorkbenchOverview({
         <div className="flex items-start gap-3">
           <Tags className="mt-0.5 size-5 text-technical" />
           <div>
-            <strong className="text-sm">版本标签由用户定义</strong>
+            <strong className="text-sm">按需要设置版本标签</strong>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              “候选”“实验”“当前上线”等均是可追溯的用户标注；测试点和评估结果作为决策证据展示，不自动生成“验收通过”结论。
+              可使用“候选”“实验”“当前上线”等标签记录版本用途；测试点和评估结果仅作为决策证据，不自动生成“验收通过”结论。
             </p>
           </div>
           <CircleDashed className="ml-auto size-5 text-muted-foreground" />

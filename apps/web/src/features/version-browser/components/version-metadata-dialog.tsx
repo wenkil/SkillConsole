@@ -5,6 +5,7 @@ import type {
   CreateSkillVersionInput,
   SkillVersionBrowser,
 } from "@/features/version-browser/model/version-browser"
+import { SkillConsoleApiError } from "@/shared/api/http"
 import { Button } from "@/shared/components/ui/button"
 import {
   Dialog,
@@ -41,11 +42,15 @@ export function VersionMetadataDialog({
     version.description ?? "",
   )
   const [labels, setLabels] = useState(version.labels.join(", "))
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   useEffect(() => {
     if (!open) {
       setName(version.name)
       setDescription(version.description ?? "")
       setLabels(version.labels.join(", "))
+      setNameError(null)
+      setSubmitError(null)
     }
   }, [open, version])
 
@@ -65,15 +70,33 @@ export function VersionMetadataDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 px-6 py-5">
-          <label className="grid gap-1.5 text-xs font-semibold">
-            版本名称
+          <div className="grid gap-1.5 text-xs font-semibold">
+            <label htmlFor="edit-version-name">版本名称</label>
             <Input
+              aria-describedby={
+                nameError ? "edit-version-name-error" : undefined
+              }
+              aria-invalid={Boolean(nameError)}
               className="rounded-none"
+              id="edit-version-name"
               maxLength={120}
-              onChange={(event) => setName(event.target.value)}
+              onChange={(event) => {
+                setName(event.target.value)
+                setNameError(null)
+                setSubmitError(null)
+              }}
               value={name}
             />
-          </label>
+            {nameError ? (
+              <p
+                className="text-xs font-normal text-destructive"
+                id="edit-version-name-error"
+                role="alert"
+              >
+                {nameError}
+              </p>
+            ) : null}
+          </div>
           <label className="grid gap-1.5 text-xs font-semibold">
             说明
             <textarea
@@ -91,6 +114,14 @@ export function VersionMetadataDialog({
               value={labels}
             />
           </label>
+          {submitError ? (
+            <div
+              className="border-l-4 border-destructive bg-destructive/8 px-3 py-2 text-xs text-destructive"
+              role="alert"
+            >
+              {submitError}
+            </div>
+          ) : null}
         </div>
         <DialogFooter className="border-t border-rule px-6 py-4">
           <DialogClose asChild>
@@ -102,6 +133,8 @@ export function VersionMetadataDialog({
             className="rounded-none"
             disabled={!name.trim() || pending}
             onClick={() => {
+              setNameError(null)
+              setSubmitError(null)
               void onSave(version.id, {
                 name: name.trim(),
                 description: description.trim() || null,
@@ -115,7 +148,20 @@ export function VersionMetadataDialog({
                 ],
               })
                 .then(() => setOpen(false))
-                .catch(() => undefined)
+                .catch((error: unknown) => {
+                  if (
+                    error instanceof SkillConsoleApiError &&
+                    error.code === "VERSION_NAME_CONFLICT"
+                  ) {
+                    setNameError("该版本名称已存在，请使用其他名称。")
+                    return
+                  }
+                  setSubmitError(
+                    error instanceof Error
+                      ? error.message
+                      : "版本信息保存失败，请稍后重试。",
+                  )
+                })
             }}
             type="button"
           >

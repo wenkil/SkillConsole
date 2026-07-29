@@ -127,7 +127,7 @@ export function ModulePlaceholderRoute({
         "workspaceShell.placeholders.reports.description",
         {
           defaultValue:
-            "汇总版本目录差异、测试点、任务结果和用户标签。",
+            "汇总版本目录差异、测试点、任务结果和版本标签。",
         },
       ),
       plannedStage: t(

@@ -416,11 +416,6 @@ export function useVersionBrowserController({
             }),
           ])
           return version
-        } catch (error) {
-          setMutationError(
-            error instanceof Error ? error : new Error(String(error)),
-          )
-          throw error
         } finally {
           setMutationPending(false)
         }
@@ -465,11 +460,6 @@ export function useVersionBrowserController({
             }),
           ])
           return version
-        } catch (error) {
-          setMutationError(
-            error instanceof Error ? error : new Error(String(error)),
-          )
-          throw error
         } finally {
           setMutationPending(false)
         }

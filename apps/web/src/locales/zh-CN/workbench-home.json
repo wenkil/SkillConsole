@@ -41,7 +41,7 @@
   },
   "localFirst": {
     "title": "本地部署的数据边界",
-    "description": "Skill 文件只复制到自托管服务的受控数据目录，不读取真实绝对路径，也不会写回用户原目录。"
+    "description": "Skill 文件只复制到自托管服务的受控数据目录，不读取真实绝对路径，也不会写回你选择的原目录。"
   },
   "createDialog": {
     "initialCandidate": "首次内容候选",
@@ -150,7 +150,7 @@
         "plannedStage": "后续迭代 · 测试运行能力"
       },
       "reports": {
-        "description": "用于汇总版本目录差异、测试点、任务结果和用户标签。",
+        "description": "用于汇总版本目录差异、测试点、任务结果和版本标签。",
         "plannedStage": "后续迭代 · 报告与对比"
       }
     }
@@ -158,7 +158,7 @@
   "overview": {
     "backToHome": "返回工作台首页",
     "eyebrow": "工作台概览",
-    "description": "当前内容来自服务端校验后的完整 Snapshot；初始候选仍需测试通过并由用户手动确认后，才能发布为不可变正式版本。",
+    "description": "当前内容来自服务端校验后的完整 Snapshot；需要留档、测试或对比时，请将工作副本保存为不可变版本。",
     "versionState": "内容状态",
     "publishedWithoutTests": "已发布 · 尚未测试",
     "candidateWithoutTests": "候选已保存 · 尚未测试",
@@ -178,7 +178,7 @@
     "immutableVersionTitle": "正式版本不可编辑。",
     "immutableVersionDescription": "正式版本内容和 Manifest 保持不可变，后续修改必须在新的版本优化周期中进行。",
     "candidateContentTitle": "初始候选不是正式版本。",
-    "candidateContentDescription": "候选可以进入后续改进与测试流程；只有测试通过并经用户手动确认，才会生成不可修改的正式版本。",
+    "candidateContentDescription": "工作副本可以持续编辑；需要留档、测试或对比时，请主动保存为不可变版本。",
     "dashboard": {
       "published": "已发布",
       "draftRevision": "R{{revision}} · 进行中",

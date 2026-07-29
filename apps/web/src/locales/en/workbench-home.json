@@ -150,7 +150,7 @@
         "plannedStage": "Future iteration · test execution capabilities"
       },
       "reports": {
-        "description": "Combine version directory differences, test points, run results, and user labels.",
+        "description": "Combine version directory differences, test points, run results, and version labels.",
         "plannedStage": "Future iteration · reports and comparison"
       }
     }
@@ -158,7 +158,7 @@
   "overview": {
     "backToHome": "Back to workbench home",
     "eyebrow": "Workbench overview",
-    "description": "The current content comes from a complete server-validated Snapshot. An initial candidate becomes an immutable formal version only after tests pass and the user confirms publication.",
+    "description": "The current content comes from a complete server-validated Snapshot. Save the working copy as an immutable version when you need it for testing, comparison, or record keeping.",
     "versionState": "Content state",
     "publishedWithoutTests": "Published · not tested",
     "candidateWithoutTests": "Candidate saved · not tested",
@@ -178,7 +178,7 @@
     "immutableVersionTitle": "Formal versions are immutable.",
     "immutableVersionDescription": "Formal version content and its Manifest remain immutable. Future changes must happen in a new improvement cycle.",
     "candidateContentTitle": "The initial candidate is not a formal version.",
-    "candidateContentDescription": "Candidates can move through improvement and testing. An immutable formal version is created only after tests pass and the user explicitly confirms publication.",
+    "candidateContentDescription": "Keep editing the working copy, then save it as an immutable version when you need it for testing, comparison, or record keeping.",
     "dashboard": {
       "published": "Published",
       "draftRevision": "R{{revision}} · active",
