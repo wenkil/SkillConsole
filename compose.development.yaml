@@ -2,3 +2,7 @@ services:
   postgres:
     ports:
       - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
+
+  server:
+    volumes:
+      - ./workspace/skillconsole:/workspace/var

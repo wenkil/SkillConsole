@@ -15,6 +15,7 @@ coverage/
 
 # Runtime data
 var/
+workspace/
 tmp/
 temp/
 *.log
