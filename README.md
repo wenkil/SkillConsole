@@ -3,7 +3,7 @@
 **English** | [简体中文](./README.zh-CN.md)
 
 <p align="center">
-  <strong>A local-first visual test workspace for Agent Skills.</strong>
+  <strong>An open-source workbench for managing Agent Skills, running tests, and comparing versions.</strong>
 </p>
 
 <p align="center">
@@ -12,7 +12,7 @@
 
 ## What is SkillConsole?
 
-SkillConsole is an open-source, web-based quality workspace for **Agent Skills**.
+SkillConsole is an open-source workbench for managing **Agent Skills**, running tests, and comparing versions.
 
 It gives Skill authors, QA engineers, domain reviewers, AI platform teams, and project owners one place to:
 
@@ -149,9 +149,6 @@ When the containers are healthy, open:
 ```text
 http://localhost:5173
 ```
-
-See [Deployment and local development](./docs/部署与本地开发.md) for additional
-configuration.
 
 ## Contributing
 

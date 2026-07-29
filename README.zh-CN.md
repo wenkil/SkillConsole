@@ -3,7 +3,7 @@
 [English](./README.md) | **简体中文**
 
 <p align="center">
-  <strong>面向 Agent Skills 的 Local First 可视化测试工作台。</strong>
+  <strong>用于管理 Agent Skills、运行测试和对比版本的开源工作台。</strong>
 </p>
 
 <p align="center">
@@ -12,7 +12,7 @@
 
 ## SkillConsole 是什么？
 
-SkillConsole 是一个面向 **Agent Skills** 的开源 Web 可视化质量工作台。
+SkillConsole 是一个用于管理 **Agent Skills**、运行测试和对比版本的开源工作台。
 
 它为 Skill 作者、测试工程师、领域审核人员、AI 平台团队和项目负责人提供统一入口，用于：
 
@@ -147,8 +147,6 @@ docker compose -f compose.yaml -f compose.development.yaml --profile development
 ```text
 http://localhost:5173
 ```
-
-更多配置见[部署与本地开发](./docs/部署与本地开发.md)。
 
 ## 参与贡献
 

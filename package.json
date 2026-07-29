@@ -2,7 +2,7 @@
   "name": "skillconsole",
   "version": "0.0.0",
   "private": true,
-  "description": "A visual workbench for testing Agent Skills.",
+  "description": "An open-source workbench for managing Agent Skills, running tests, and comparing versions.",
   "license": "MIT",
   "type": "module",
   "workspaces": [
