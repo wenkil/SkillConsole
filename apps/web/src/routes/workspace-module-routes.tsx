@@ -2,7 +2,6 @@ import {
   Activity,
   Database,
   FileChartColumn,
-  FlaskConical,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import {
@@ -14,6 +13,7 @@ import {
 
 import { VersionBrowserView } from "@/features/version-browser/components/version-browser-view"
 import { VersionCompareView } from "@/features/version-browser/components/version-compare-view"
+import { EvalsWorkbenchView } from "@/features/evals/components/evals-workbench-view"
 import type { SkillBrowserTarget } from "@/features/version-browser/model/version-browser"
 import { WorkbenchOverview } from "@/features/workbench-home/components/workbench-overview"
 import { ModulePlaceholder } from "@/features/workspace-shell/components/module-placeholder"
@@ -32,6 +32,11 @@ export function WorkbenchOverviewRoute() {
       workspace={workspace}
     />
   )
+}
+
+export function EvalsWorkbenchRoute() {
+  const { workspace, locale } = useWorkspaceRouteContext()
+  return <EvalsWorkbenchView locale={locale} workspace={workspace} />
 }
 
 function getVersionTargetPath(
@@ -87,7 +92,7 @@ export function VersionBrowserRoute({
 interface ModulePlaceholderRouteProps {
   module: Extract<
     WorkspaceModule,
-    "test-cases" | "datasets" | "runs" | "reports"
+    "datasets" | "runs" | "reports"
   >
 }
 
@@ -96,14 +101,6 @@ export function ModulePlaceholderRoute({
 }: ModulePlaceholderRouteProps) {
   const { t } = useTranslation("workbenchHome")
   const definitions = {
-    "test-cases": {
-      icon: FlaskConical,
-      title: t("workspaceShell.navigation.testCases"),
-      description: t("workspaceShell.placeholders.testCases.description"),
-      plannedStage: t(
-        "workspaceShell.placeholders.testCases.plannedStage",
-      ),
-    },
     datasets: {
       icon: Database,
       title: t("workspaceShell.navigation.datasets"),

@@ -351,7 +351,12 @@ export const skillDraftRevisions = pgTable(
     ),
     check(
       "skill_draft_revisions_reason_check",
-      sql`${table.reason} in ('TRIAL', 'PRE_REGRESSION', 'RELEASE_GATE', 'FINALIZE')`,
+      sql`${table.reason} in ('TRIAL', 'PRE_REGRESSION', 'RELEASE_GATE', 'FINALIZE', 'EVAL_GENERATION')`,
+    ),
+    uniqueIndex("skill_draft_revisions_source_reason_unique").on(
+      table.draftId,
+      table.sourceContentRevision,
+      table.reason,
     ),
     uniqueIndex("skill_draft_revisions_snapshot_unique").on(table.snapshotId),
     index("skill_draft_revisions_draft_created_idx").on(

@@ -6,3 +6,4 @@ services:
   server:
     volumes:
       - ./workspace/skillconsole:/workspace/var
+      - ./workspace/claude-logs:/root/.claude/projects

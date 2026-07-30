@@ -8,45 +8,35 @@ import type {
   AgentRuntimeAdapter,
   AgentRuntimeFailure,
   AgentRuntimeSession,
+  AgentSessionError,
   OpenAgentRuntimeSessionInput,
   RuntimeTurnInput,
 } from "../agent-session.domain.js"
 import { AsyncMessageQueue } from "./async-message-queue.js"
+import {
+  classifyClaudeErrorText,
+  classifySdkMessageFailure,
+  createClaudeError,
+} from "./claude-error-classifier.js"
 import { mapSdkMessage } from "./sdk-message.mapper.js"
 
 function classifyRuntimeFailure(error: unknown): AgentRuntimeFailure {
-  const message = error instanceof Error ? error.message.toLowerCase() : ""
-
-  if (
-    message.includes("authentication") ||
-    message.includes("api key") ||
-    message.includes("unauthorized") ||
-    message.includes("oauth")
-  ) {
-    return {
-      code: "CLAUDE_AUTHENTICATION_FAILED",
-      message: "Claude Agent SDK authentication failed.",
-      terminal: true,
-    }
-  }
-
-  if (
-    message.includes("native cli binary") ||
-    message.includes("configuration") ||
-    message.includes("enoent") ||
-    message.includes("not found")
-  ) {
-    return {
-      code: "CLAUDE_CONFIGURATION_INVALID",
-      message: "Claude Agent SDK configuration is invalid.",
-      terminal: true,
-    }
-  }
+  const classified = classifyClaudeErrorText(error)
+  const failure =
+    classified ?? createClaudeError("CLAUDE_PROCESS_FAILED")
+  const terminalCodes = new Set([
+    "CLAUDE_AUTHENTICATION_FAILED",
+    "CLAUDE_ORGANIZATION_NOT_ALLOWED",
+    "CLAUDE_BILLING_ERROR",
+    "CLAUDE_CREDITS_EXHAUSTED",
+    "CLAUDE_INVALID_REQUEST",
+    "CLAUDE_MODEL_NOT_FOUND",
+    "CLAUDE_CONFIGURATION_INVALID",
+  ])
 
   return {
-    code: "CLAUDE_PROCESS_FAILED",
-    message: "The Claude Agent SDK process ended unexpectedly.",
-    terminal: false,
+    ...failure,
+    terminal: terminalCodes.has(failure.code),
   }
 }
 
@@ -55,6 +45,7 @@ class ClaudeAgentSdkSession implements AgentRuntimeSession {
   private readonly abortController = new AbortController()
   private readonly query: Query
   private activeTurnId: string | null = null
+  private failureHint: AgentSessionError | null = null
   private closing = false
 
   constructor(
@@ -66,6 +57,9 @@ class ClaudeAgentSdkSession implements AgentRuntimeSession {
         abortController: this.abortController,
         cwd: input.cwd,
         settingSources: ["project"],
+        ...(input.allowedTools
+          ? { allowedTools: [...input.allowedTools] }
+          : {}),
         ...(input.resumeSessionId
           ? { resume: input.resumeSessionId }
           : {}),
@@ -84,6 +78,7 @@ class ClaudeAgentSdkSession implements AgentRuntimeSession {
     }
 
     this.activeTurnId = input.turnId
+    this.failureHint = null
     this.inputQueue.push({
       type: "user",
       message: {
@@ -113,6 +108,8 @@ class ClaudeAgentSdkSession implements AgentRuntimeSession {
   private async consume(): Promise<void> {
     try {
       for await (const sdkMessage of this.query) {
+        this.failureHint =
+          classifySdkMessageFailure(sdkMessage) ?? this.failureHint
         const runtimeEvents = mapSdkMessage(sdkMessage, {
           redactedValues: [
             this.input.cwd,
@@ -121,6 +118,7 @@ class ClaudeAgentSdkSession implements AgentRuntimeSession {
             process.env.ANTHROPIC_AUTH_TOKEN,
             process.env.CLAUDE_CODE_OAUTH_TOKEN,
           ],
+          priorFailure: this.failureHint,
         })
 
         for (const event of runtimeEvents) {
@@ -130,14 +128,15 @@ class ClaudeAgentSdkSession implements AgentRuntimeSession {
 
           if (event.type === "turn_result") {
             this.activeTurnId = null
+            this.failureHint = null
           }
         }
       }
 
       if (!this.closing) {
+        const failure = createClaudeError("CLAUDE_PROCESS_FAILED")
         await this.input.onFatalError({
-          code: "CLAUDE_PROCESS_FAILED",
-          message: "The Claude Agent SDK process ended unexpectedly.",
+          ...failure,
           terminal: false,
         })
       }

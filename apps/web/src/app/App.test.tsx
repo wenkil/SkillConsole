@@ -108,6 +108,14 @@ vi.mock(
   }),
 )
 
+vi.mock("@/features/evals/components/evals-workbench-view", () => ({
+  EvalsWorkbenchView: () => (
+    <main>
+      <h1>测试用例生成工作台</h1>
+    </main>
+  ),
+}))
+
 function renderRoute(path: string) {
   return render(
     <I18nextProvider i18n={i18n}>
@@ -153,7 +161,6 @@ describe("workspace routes", () => {
   })
 
   it.each([
-    ["test-cases", "测试用例"],
     ["datasets", "数据集"],
     ["runs", "测试任务"],
   ])("renders the %s placeholder without fake actions", (path, title) => {
@@ -167,6 +174,17 @@ describe("workspace routes", () => {
       within(main).getByText("将在后续迭代实现"),
     ).toBeInTheDocument()
     expect(within(main).queryByRole("button")).not.toBeInTheDocument()
+  })
+
+  it("opens the Evals generation workbench from test cases", () => {
+    renderRoute(`/workbenches/${workspace.id}/test-cases`)
+
+    expect(
+      screen.getByRole("heading", { name: "测试用例生成工作台" }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("link", { name: "测试用例" }),
+    ).toHaveAttribute("aria-current", "page")
   })
 
   it.each(["runtime", "unknown-module"])(

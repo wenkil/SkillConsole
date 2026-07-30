@@ -1,0 +1,123 @@
+{
+  "header": {
+    "eyebrow": "EVALS GENERATION LOOP",
+    "title": "Test case generation workbench",
+    "description": "Freeze a Skill target for “{{name}}”, generate cases with Claude and a pinned skill-creator, then review the validated draft before publishing an immutable revision.",
+    "metrics": {
+      "tasks": "Tasks",
+      "review": "Validated",
+      "published": "Published"
+    }
+  },
+  "status": {
+    "PREPARING": "Preparing",
+    "RUNNING": "Generating",
+    "VALIDATING": "Validating",
+    "SUCCEEDED": "Awaiting review",
+    "CANCELING": "Canceling",
+    "CANCELED": "Canceled",
+    "INTERRUPTED": "Interrupted",
+    "FAILED": "Failed"
+  },
+  "tasks": {
+    "eyebrow": "GENERATION HISTORY",
+    "title": "Generation tasks",
+    "empty": "No Evals have been generated. Select a target on the right to begin.",
+    "draftTarget": "Working-copy snapshot",
+    "versionTarget": "Immutable version",
+    "caseLimit": "Up to {{count}} cases"
+  },
+  "progress": {
+    "eyebrow": "CONTROLLED AGENT SESSION",
+    "title": "Building an Evals draft",
+    "endedTitle": "This generation did not produce a reviewable draft",
+    "description": "Target Skill: {{skillName}}. Output must pass path, schema, hash, and sensitive-data gates.",
+    "trace": "Generation events",
+    "waiting": "Waiting for complete Agent events…",
+    "agentThinking": "The Agent completed an analysis message",
+    "toolCompleted": "An Agent tool call completed",
+    "usageUpdated": "Token usage was updated",
+    "toolLabel": "Tool · {{name}}",
+    "toolSucceeded": "Succeeded",
+    "toolFailed": "Failed",
+    "unknownTool": "Unknown tool",
+    "noToolOutput": "The tool returned no output"
+  },
+  "event": {
+    "task": {
+      "created": "Task created",
+      "running": "Controlled Agent Session started",
+      "validating": "Generation finished; server validation started",
+      "succeeded": "Validation passed; draft ready",
+      "canceling": "Cancellation requested",
+      "canceled": "Task canceled",
+      "interrupted": "Task interrupted by server restart",
+      "failed": "Task failed"
+    },
+    "validation": {
+      "succeeded": "Schema and file validation passed"
+    },
+    "draft": {
+      "discarded": "Draft discarded"
+    }
+  },
+  "review": {
+    "eyebrow": "REVIEW BEFORE PUBLISH",
+    "title": "Review Evals draft",
+    "emptyTitle": "Generate reusable Evals first",
+    "emptyDescription": "Generation never publishes automatically. Review every user task, expected result, objective assertion, and input file after validation.",
+    "loadingDraft": "Loading validated draft",
+    "caseCount": "{{count}} cases",
+    "fileCount": "{{count}} input files",
+    "assertionCount": "{{count}} assertions",
+    "prompt": "Real user task",
+    "expectedOutput": "Expected result",
+    "assertions": "Objective verification conditions",
+    "inputFiles": "Input files",
+    "noInputFiles": "This case has no input files"
+  },
+  "controls": {
+    "eyebrow": "GENERATION SETUP",
+    "title": "Generation settings",
+    "target": "Frozen target",
+    "draft": "Working copy",
+    "version": "Skill version",
+    "count": "Maximum cases",
+    "brief": "Additional requirements",
+    "briefPlaceholder": "For example: prioritize scanned documents, missing fields, and multi-currency boundaries.",
+    "freezeHint": "Starting freezes the selected target and copies the Skill, skill-creator, and Claude settings into an isolated workspace. Source files are never written back.",
+    "start": "Generate Evals draft",
+    "cancel": "Cancel generation"
+  },
+  "publish": {
+    "eyebrow": "HUMAN CONFIRMATION GATE",
+    "title": "Publication gate",
+    "noDraft": "Select a successfully validated task to review its draft summary and publication actions.",
+    "cases": "Cases",
+    "files": "Files",
+    "action": "Publish immutable revision",
+    "confirm": "Published Evals revisions cannot be changed. Confirm that every case has been reviewed and publish?",
+    "discard": "Discard this draft",
+    "discardConfirm": "A discarded draft cannot be published, but its task record remains. Discard it?",
+    "status": {
+      "PUBLISHED": "Published as an immutable revision",
+      "DISCARDED": "Draft discarded"
+    }
+  },
+  "revisions": {
+    "title": "Published revisions",
+    "empty": "No Evals revisions have been published.",
+    "sourceSnapshot": "Source snapshot"
+  },
+  "states": {
+    "loading": "Loading Evals workbench",
+    "loadError": "Evals workbench unavailable",
+    "loadErrorDescription": "Make sure the local service and database are running, then retry.",
+    "retry": "Reload",
+    "dismiss": "Dismiss"
+  },
+  "footer": {
+    "snapshotBoundary": "Target Skill and generation dependencies use controlled copies",
+    "publishBoundary": "Only a human-confirmed draft becomes an immutable revision"
+  }
+}

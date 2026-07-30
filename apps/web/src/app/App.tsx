@@ -9,6 +9,7 @@ import { AppLayoutRoute } from "@/routes/app-layout-route"
 import { WorkbenchHomeRoute } from "@/routes/workbench-home-route"
 import {
   ModulePlaceholderRoute,
+  EvalsWorkbenchRoute,
   VersionBrowserRoute,
   WorkbenchOverviewRoute,
   WorkspaceFallbackRoute,
@@ -35,7 +36,7 @@ export function AppRoutes() {
             path="versions/:versionId"
           />
           <Route
-            element={<ModulePlaceholderRoute module="test-cases" />}
+            element={<EvalsWorkbenchRoute />}
             path="test-cases"
           />
           <Route

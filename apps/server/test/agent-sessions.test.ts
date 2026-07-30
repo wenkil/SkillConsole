@@ -11,6 +11,10 @@ import test from "node:test"
 import { fileURLToPath } from "node:url"
 
 import { migrate } from "drizzle-orm/node-postgres/migrator"
+import type {
+  SDKAssistantMessageError,
+  TerminalReason,
+} from "@anthropic-ai/claude-agent-sdk"
 
 import { buildApplication } from "../src/app.js"
 import {
@@ -25,6 +29,10 @@ import type {
   OpenAgentRuntimeSessionInput,
   RuntimeTurnInput,
 } from "../src/modules/agent-sessions/agent-session.domain.js"
+import {
+  classifyClaudeAssistantError,
+  classifyClaudeResult,
+} from "../src/modules/agent-sessions/runtime/claude-error-classifier.js"
 import { mapSdkMessage } from "../src/modules/agent-sessions/runtime/sdk-message.mapper.js"
 import { AgentSessionWorkspaceStore } from "../src/modules/agent-sessions/session-workspace.js"
 
@@ -307,11 +315,181 @@ test("maps only complete Claude SDK messages and tool results", () => {
         },
         error: {
           code: "CLAUDE_AUTHENTICATION_FAILED",
-          message: "Claude Agent SDK authentication failed.",
+          message: "Claude authentication is missing or invalid.",
         },
       },
     ],
   )
+})
+
+test("classifies every Claude SDK assistant error and terminal reason", () => {
+  const assistantCases = {
+    authentication_failed: "CLAUDE_AUTHENTICATION_FAILED",
+    oauth_org_not_allowed: "CLAUDE_ORGANIZATION_NOT_ALLOWED",
+    billing_error: "CLAUDE_BILLING_ERROR",
+    rate_limit: "CLAUDE_RATE_LIMITED",
+    overloaded: "CLAUDE_SERVICE_OVERLOADED",
+    invalid_request: "CLAUDE_INVALID_REQUEST",
+    model_not_found: "CLAUDE_MODEL_NOT_FOUND",
+    server_error: "CLAUDE_SERVER_ERROR",
+    unknown: "CLAUDE_API_ERROR",
+    max_output_tokens: "CLAUDE_MAX_OUTPUT_TOKENS",
+  } satisfies Record<SDKAssistantMessageError, string>
+
+  for (const [error, expectedCode] of Object.entries(assistantCases)) {
+    assert.equal(
+      classifyClaudeAssistantError(error as SDKAssistantMessageError).code,
+      expectedCode,
+    )
+  }
+
+  const terminalCases = {
+    blocking_limit: "CLAUDE_BLOCKING_LIMIT_REACHED",
+    rapid_refill_breaker: "CLAUDE_RAPID_REFILL_BLOCKED",
+    prompt_too_long: "CLAUDE_PROMPT_TOO_LONG",
+    image_error: "CLAUDE_IMAGE_ERROR",
+    model_error: "CLAUDE_MODEL_ERROR",
+    api_error: "CLAUDE_API_ERROR",
+    malformed_tool_use_exhausted: "CLAUDE_MALFORMED_TOOL_USE",
+    aborted_streaming: "CLAUDE_STREAM_ABORTED",
+    aborted_tools: "CLAUDE_TOOLS_ABORTED",
+    stop_hook_prevented: "CLAUDE_HOOK_BLOCKED",
+    hook_stopped: "CLAUDE_HOOK_BLOCKED",
+    tool_deferred: "CLAUDE_TOOL_DEFERRED",
+    max_turns: "CLAUDE_MAX_TURNS_REACHED",
+    background_requested: "CLAUDE_BACKGROUND_TASK_UNSUPPORTED",
+    completed: null,
+    budget_exhausted: "CLAUDE_MAX_BUDGET_EXCEEDED",
+    structured_output_retry_exhausted:
+      "CLAUDE_STRUCTURED_OUTPUT_FAILED",
+    tool_deferred_unavailable: "CLAUDE_TOOL_UNAVAILABLE",
+    turn_setup_failed: "CLAUDE_TURN_SETUP_FAILED",
+  } satisfies Record<TerminalReason, string | null>
+
+  for (const [terminalReason, expectedCode] of Object.entries(
+    terminalCases,
+  )) {
+    const result = classifyClaudeResult({
+      type: "result",
+      subtype: "success",
+      duration_ms: 1,
+      duration_api_ms: 1,
+      is_error: false,
+      num_turns: 1,
+      result: "done",
+      stop_reason: null,
+      total_cost_usd: 0,
+      usage: {
+        input_tokens: 1,
+        output_tokens: 1,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+      },
+      permission_denials: [],
+      terminal_reason: terminalReason,
+    } as never)
+    assert.equal(result?.code ?? null, expectedCode)
+  }
+})
+
+test("maps Claude limits and disguised successful errors to failed turns", () => {
+  const subtypeCases = {
+    error_max_turns: "CLAUDE_MAX_TURNS_REACHED",
+    error_max_budget_usd: "CLAUDE_MAX_BUDGET_EXCEEDED",
+    error_max_structured_output_retries:
+      "CLAUDE_STRUCTURED_OUTPUT_FAILED",
+  } as const
+
+  for (const [subtype, expectedCode] of Object.entries(subtypeCases)) {
+    const result = classifyClaudeResult({
+      type: "result",
+      subtype,
+      duration_ms: 1,
+      duration_api_ms: 1,
+      is_error: true,
+      num_turns: 1,
+      stop_reason: null,
+      total_cost_usd: 0,
+      usage: {
+        input_tokens: 1,
+        output_tokens: 1,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+      },
+      permission_denials: [],
+      errors: [],
+    } as never)
+    assert.equal(result?.code, expectedCode)
+  }
+
+  const disguisedFailure = mapSdkMessage({
+    type: "result",
+    subtype: "success",
+    duration_ms: 1,
+    duration_api_ms: 0,
+    is_error: false,
+    num_turns: 1,
+    result: "Not logged in · Please run /login",
+    stop_reason: null,
+    total_cost_usd: 0,
+    usage: {
+      input_tokens: 0,
+      output_tokens: 0,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 0,
+    },
+    permission_denials: [],
+  } as never)
+  assert.equal(disguisedFailure[0]?.type, "turn_result")
+  assert.equal(
+    disguisedFailure[0]?.type === "turn_result"
+      ? disguisedFailure[0].error?.code
+      : null,
+    "CLAUDE_AUTHENTICATION_FAILED",
+  )
+
+  const hintedFailure = classifyClaudeResult(
+    {
+      type: "result",
+      subtype: "success",
+      duration_ms: 1,
+      duration_api_ms: 0,
+      is_error: false,
+      num_turns: 1,
+      result: "",
+      stop_reason: null,
+      total_cost_usd: 0,
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+      },
+      permission_denials: [],
+    } as never,
+    classifyClaudeAssistantError("billing_error"),
+  )
+  assert.equal(hintedFailure?.code, "CLAUDE_BILLING_ERROR")
+
+  const legitimateAnswer = classifyClaudeResult({
+    type: "result",
+    subtype: "success",
+    duration_ms: 1,
+    duration_api_ms: 1,
+    is_error: false,
+    num_turns: 1,
+    result: "Document the rate limit behavior in the test case.",
+    stop_reason: "end_turn",
+    total_cost_usd: 0,
+    usage: {
+      input_tokens: 10,
+      output_tokens: 10,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 0,
+    },
+    permission_denials: [],
+  } as never)
+  assert.equal(legitimateAnswer, null)
 })
 
 test("copies root Claude settings into an isolated session workspace once", async () => {

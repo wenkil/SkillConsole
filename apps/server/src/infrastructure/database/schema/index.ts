@@ -12,6 +12,29 @@ export {
 } from "./agent-sessions.js"
 
 export {
+  evalGenerationDrafts,
+  evalGenerationDraftStatus,
+  evalGenerationEvents,
+  evalGenerationStatus,
+  evalGenerationTasks,
+  evalRevisionCases,
+  evalRevisionFiles,
+  evalRevisions,
+  evalSuites,
+  evalTargetSourceKind,
+  type EvalGenerationDraftRow,
+  type EvalGenerationEventRow,
+  type EvalGenerationTaskRow,
+  type EvalGenerationStatus,
+  type EvalRevisionCaseRow,
+  type EvalRevisionFileRow,
+  type EvalRevisionRow,
+  type EvalSuiteRow,
+  type StoredEvalCase,
+  type StoredEvalFile,
+} from "./evals.js"
+
+export {
   skillDrafts,
   skillDraftFiles,
   skillDraftStatus,

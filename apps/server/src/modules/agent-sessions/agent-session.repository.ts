@@ -11,14 +11,24 @@ import {
   type AgentSessionTurnRow,
 } from "../../infrastructure/database/schema/index.js"
 import type { Database } from "../../infrastructure/database/index.js"
-import type {
-  AgentRuntimeFailure,
-  AgentRuntimeEvent,
-  AgentSessionEvent,
-  AgentSessionEventType,
-  AgentSessionStatus,
-  AgentSessionView,
+import {
+  claudeErrorCodes,
+  type ClaudeErrorCode,
+  type AgentRuntimeFailure,
+  type AgentRuntimeEvent,
+  type AgentSessionEvent,
+  type AgentSessionEventType,
+  type AgentSessionStatus,
+  type AgentSessionView,
 } from "./agent-session.domain.js"
+
+const claudeErrorCodeSet = new Set<string>(claudeErrorCodes)
+
+function normalizeClaudeErrorCode(value: string): ClaudeErrorCode {
+  return claudeErrorCodeSet.has(value)
+    ? (value as ClaudeErrorCode)
+    : "CLAUDE_EXECUTION_FAILED"
+}
 
 interface AgentSessionExecutionContext {
   readonly sdkSessionId: string | null
@@ -40,7 +50,10 @@ function mapTurn(
     status: row.status,
     error:
       row.errorCode && row.errorMessage
-        ? { code: row.errorCode, message: row.errorMessage }
+        ? {
+            code: normalizeClaudeErrorCode(row.errorCode),
+            message: row.errorMessage,
+          }
         : null,
     startedAt: row.startedAt.toISOString(),
     completedAt: row.completedAt?.toISOString() ?? null,

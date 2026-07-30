@@ -1,4 +1,5 @@
 import path from "node:path"
+import { createHash } from "node:crypto"
 import { constants } from "node:fs"
 import {
   chmod,
@@ -60,12 +61,14 @@ function collectSensitiveSettingValues(
 
 export class AgentSessionWorkspaceStore {
   private readonly sessionsRoot: string
+  private readonly evalGenerationsRoot: string
 
   constructor(
     private readonly dataRoot: string,
     private readonly claudeSettingsPath: string,
   ) {
     this.sessionsRoot = path.resolve(dataRoot, "agent-sessions")
+    this.evalGenerationsRoot = path.resolve(dataRoot, "eval-generations")
   }
 
   getLocator(sessionId: string): string {
@@ -73,14 +76,36 @@ export class AgentSessionWorkspaceStore {
   }
 
   resolve(locator: string): string {
+    const segments = locator.split("/")
+    const isSessionWorkspace =
+      segments.length === 3 &&
+      segments[0] === "agent-sessions" &&
+      segments[2] === "workspace"
+    const isEvalWorkspace =
+      segments.length === 3 &&
+      segments[0] === "eval-generations" &&
+      segments[2] === "workspace"
+    if (
+      (!isSessionWorkspace && !isEvalWorkspace) ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        segments[1] ?? "",
+      )
+    ) {
+      throw new Error("Agent session workspace locator is invalid.")
+    }
+
     const absolutePath = path.resolve(
       this.dataRoot,
-      ...locator.split("/"),
+      ...segments,
     )
-    const relativeToRoot = path.relative(this.sessionsRoot, absolutePath)
+    const controlledRoot = isSessionWorkspace
+      ? this.sessionsRoot
+      : this.evalGenerationsRoot
+    const relativeToRoot = path.relative(controlledRoot, absolutePath)
 
     if (
       relativeToRoot === "" ||
+      relativeToRoot === ".." ||
       relativeToRoot.startsWith(`..${path.sep}`) ||
       path.isAbsolute(relativeToRoot)
     ) {
@@ -136,6 +161,25 @@ export class AgentSessionWorkspaceStore {
       }
 
       return [...new Set(values.filter((value) => value.length > 0))]
+    } catch (error) {
+      throw new AgentSessionWorkspaceConfigurationError({ cause: error })
+    }
+  }
+
+  async assertSettingsFingerprint(
+    absoluteWorkspacePath: string,
+    expectedFingerprint: string,
+  ): Promise<void> {
+    try {
+      const content = await readFile(
+        this.getWorkspaceSettingsPath(absoluteWorkspacePath),
+      )
+      const actualFingerprint = createHash("sha256")
+        .update(content)
+        .digest("hex")
+      if (actualFingerprint !== expectedFingerprint) {
+        throw new Error("Claude settings changed during task preparation.")
+      }
     } catch (error) {
       throw new AgentSessionWorkspaceConfigurationError({ cause: error })
     }

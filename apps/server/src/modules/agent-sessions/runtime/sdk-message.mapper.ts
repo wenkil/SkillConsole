@@ -8,9 +8,11 @@ import type {
   AgentRuntimeEvent,
   AssistantContent,
 } from "../agent-session.domain.js"
+import { classifyClaudeResult } from "./claude-error-classifier.js"
 
 export interface SdkMessageMappingOptions {
   readonly redactedValues?: readonly (string | undefined)[]
+  readonly priorFailure?: AgentSessionError | null
 }
 
 function createSanitizer(options: SdkMessageMappingOptions) {
@@ -91,45 +93,14 @@ function mapToolResults(
   })
 }
 
-function classifyResultError(
+function mapResult(
   message: SDKResultMessage,
-): AgentSessionError | null {
-  if (message.subtype === "success") return null
-  const details = message.errors.join(" ").toLowerCase()
-
-  if (
-    details.includes("authentication") ||
-    details.includes("api key") ||
-    details.includes("unauthorized") ||
-    details.includes("not logged in") ||
-    details.includes("oauth") ||
-    details.includes("credential")
-  ) {
-    return {
-      code: "CLAUDE_AUTHENTICATION_FAILED",
-      message: "Claude Agent SDK authentication failed.",
-    }
-  }
-  if (
-    details.includes("configuration") ||
-    details.includes("invalid setting") ||
-    details.includes("settings.json")
-  ) {
-    return {
-      code: "CLAUDE_CONFIGURATION_INVALID",
-      message: "Claude Agent SDK configuration is invalid.",
-    }
-  }
-  return {
-    code: "CLAUDE_EXECUTION_FAILED",
-    message: `Claude Agent SDK ended with ${message.subtype}.`,
-  }
-}
-
-function mapResult(message: SDKResultMessage): AgentRuntimeEvent {
+  priorFailure: AgentSessionError | null,
+): AgentRuntimeEvent {
+  const error = classifyClaudeResult(message, priorFailure)
   return {
     type: "turn_result",
-    success: message.subtype === "success",
+    success: error === null,
     subtype: message.subtype,
     durationMs: message.duration_ms,
     durationApiMs: message.duration_api_ms,
@@ -142,7 +113,7 @@ function mapResult(message: SDKResultMessage): AgentRuntimeEvent {
         message.usage.cache_creation_input_tokens,
       cacheReadInputTokens: message.usage.cache_read_input_tokens,
     },
-    error: classifyResultError(message),
+    error,
   }
 }
 
@@ -178,7 +149,7 @@ export function mapSdkMessage(
   }
 
   if (message.type === "result") {
-    return [mapResult(message)]
+    return [mapResult(message, options.priorFailure ?? null)]
   }
 
   return []

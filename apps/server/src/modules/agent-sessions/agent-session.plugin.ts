@@ -1,4 +1,5 @@
 import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox"
+import fastifyPlugin from "fastify-plugin"
 import { Type } from "typebox"
 
 import { ErrorResponseSchema } from "../../core/http/error.contract.js"
@@ -28,7 +29,7 @@ function writeSseEvent(
   response.write(`data: ${JSON.stringify(event)}\n\n`)
 }
 
-export const agentSessionPlugin: FastifyPluginAsyncTypebox<
+const agentSessionRoutesPlugin: FastifyPluginAsyncTypebox<
   AgentSessionPluginOptions
 > = async (application, options) => {
   const service = new AgentSessionService({
@@ -39,6 +40,7 @@ export const agentSessionPlugin: FastifyPluginAsyncTypebox<
     logger: application.log,
   })
   await service.initialize()
+  application.decorate("agentSessionService", service)
 
   application.addHook("onClose", async () => {
     await service.shutdown()
@@ -203,3 +205,7 @@ export const agentSessionPlugin: FastifyPluginAsyncTypebox<
     },
   )
 }
+
+export const agentSessionPlugin = fastifyPlugin(agentSessionRoutesPlugin, {
+  name: "agent-sessions",
+})

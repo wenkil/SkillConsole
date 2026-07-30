@@ -31,6 +31,14 @@ export interface AgentSessionServiceOptions {
   readonly logger: AgentSessionLogger
 }
 
+export interface CreateAgentSessionInWorkspaceInput {
+  readonly prompt: string
+  readonly workspaceLocator: string
+  readonly expectedConfigurationFingerprint: string
+  readonly allowedTools?: readonly string[]
+  readonly additionalRedactedValues?: readonly string[]
+}
+
 export class AgentSessionService {
   private readonly repository: AgentSessionRepository
   private readonly workspaces: AgentSessionWorkspaceStore
@@ -81,6 +89,36 @@ export class AgentSessionService {
           "The Claude Agent SDK process could not start.",
         ),
       )
+    }
+  }
+
+  async createInWorkspace(
+    input: CreateAgentSessionInWorkspaceInput,
+  ): Promise<AgentSessionView> {
+    const sessionId = randomUUID()
+    const cwd = this.workspaces.resolve(input.workspaceLocator)
+    try {
+      const settingsValues = await this.workspaces.installSettings(cwd)
+      await this.workspaces.assertSettingsFingerprint(
+        cwd,
+        input.expectedConfigurationFingerprint,
+      )
+      return this.startSession({
+        sessionId,
+        prompt: input.prompt,
+        workspaceLocator: input.workspaceLocator,
+        cwd,
+        ...(input.allowedTools
+          ? { allowedTools: input.allowedTools }
+          : {}),
+        redactedValues: [
+          ...settingsValues,
+          cwd,
+          ...(input.additionalRedactedValues ?? []),
+        ],
+      })
+    } catch (error) {
+      throw this.classifyWorkspacePreparationFailure(error)
     }
   }
 
@@ -169,6 +207,28 @@ export class AgentSessionService {
     return this.eventBus.subscribe(sessionId, listener)
   }
 
+  async getWorkspaceSensitiveValues(
+    workspaceLocator: string,
+  ): Promise<readonly string[]> {
+    const workspace = this.workspaces.resolve(workspaceLocator)
+    return this.workspaces.readRedactedValues(workspace)
+  }
+
+  async assertWorkspaceConfigurationFingerprint(
+    workspaceLocator: string,
+    expectedFingerprint: string,
+  ): Promise<void> {
+    const workspace = this.workspaces.resolve(workspaceLocator)
+    await this.workspaces.assertSettingsFingerprint(
+      workspace,
+      expectedFingerprint,
+    )
+  }
+
+  release(sessionId: string): void {
+    this.registry.closeAndDelete(sessionId)
+  }
+
   async shutdown(): Promise<void> {
     if (this.shuttingDown) return
     this.shuttingDown = true
@@ -180,6 +240,7 @@ export class AgentSessionService {
     readonly sessionId: string
     readonly cwd: string
     readonly sdkSessionId: string | null
+    readonly allowedTools?: readonly string[]
     readonly redactedValues: readonly string[]
   }): AgentRuntimeSession {
     if (this.shuttingDown) {
@@ -190,6 +251,9 @@ export class AgentSessionService {
     runtime = this.options.runtimeAdapter.open({
       cwd: input.cwd,
       redactedValues: input.redactedValues,
+      ...(input.allowedTools
+        ? { allowedTools: input.allowedTools }
+        : {}),
       ...(input.sdkSessionId
         ? { resumeSessionId: input.sdkSessionId }
         : {}),
@@ -242,6 +306,45 @@ export class AgentSessionService {
     return runtime
   }
 
+  private async startSession(input: {
+    readonly sessionId: string
+    readonly prompt: string
+    readonly workspaceLocator: string
+    readonly cwd: string
+    readonly allowedTools?: readonly string[]
+    readonly redactedValues: readonly string[]
+  }): Promise<AgentSessionView> {
+    const turnId = randomUUID()
+    const created = await this.repository.create(
+      input.sessionId,
+      input.workspaceLocator,
+      turnId,
+    )
+    this.publish(created.events)
+
+    try {
+      const runtime = this.openRuntime({
+        sessionId: input.sessionId,
+        cwd: input.cwd,
+        sdkSessionId: null,
+        redactedValues: [...new Set(input.redactedValues)],
+        ...(input.allowedTools
+          ? { allowedTools: input.allowedTools }
+          : {}),
+      })
+      await runtime.send({ turnId, prompt: input.prompt })
+      return created.session
+    } catch (error) {
+      return this.handleRuntimeFailure(
+        input.sessionId,
+        this.classifyOperationFailure(
+          error,
+          "The Claude Agent SDK process could not start.",
+        ),
+      )
+    }
+  }
+
   private async handleRuntimeFailure(
     sessionId: string,
     failure: AgentRuntimeFailure,
@@ -275,6 +378,13 @@ export class AgentSessionService {
       message: processMessage,
       terminal: false,
     }
+  }
+
+  private classifyWorkspacePreparationFailure(error: unknown): Error {
+    if (error instanceof AgentSessionWorkspaceConfigurationError) {
+      return error
+    }
+    return new AgentSessionWorkspaceConfigurationError({ cause: error })
   }
 
   private publish(events: readonly AgentSessionEvent[]): void {

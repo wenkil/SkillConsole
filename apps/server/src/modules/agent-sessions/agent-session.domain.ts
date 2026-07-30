@@ -28,14 +28,53 @@ export const agentSessionEventTypes = [
   "session.failed",
 ] as const
 
+export const claudeErrorCodes = [
+  "CLAUDE_AUTHENTICATION_FAILED",
+  "CLAUDE_ORGANIZATION_NOT_ALLOWED",
+  "CLAUDE_BILLING_ERROR",
+  "CLAUDE_CREDITS_EXHAUSTED",
+  "CLAUDE_RATE_LIMITED",
+  "CLAUDE_SERVICE_OVERLOADED",
+  "CLAUDE_INVALID_REQUEST",
+  "CLAUDE_MODEL_NOT_FOUND",
+  "CLAUDE_SERVER_ERROR",
+  "CLAUDE_API_ERROR",
+  "CLAUDE_MAX_OUTPUT_TOKENS",
+  "CLAUDE_PERMISSION_DENIED",
+  "CLAUDE_MAX_TURNS_REACHED",
+  "CLAUDE_MAX_BUDGET_EXCEEDED",
+  "CLAUDE_STRUCTURED_OUTPUT_FAILED",
+  "CLAUDE_BLOCKING_LIMIT_REACHED",
+  "CLAUDE_RAPID_REFILL_BLOCKED",
+  "CLAUDE_PROMPT_TOO_LONG",
+  "CLAUDE_IMAGE_ERROR",
+  "CLAUDE_MODEL_ERROR",
+  "CLAUDE_MALFORMED_TOOL_USE",
+  "CLAUDE_STREAM_ABORTED",
+  "CLAUDE_TOOLS_ABORTED",
+  "CLAUDE_HOOK_BLOCKED",
+  "CLAUDE_TOOL_DEFERRED",
+  "CLAUDE_TOOL_UNAVAILABLE",
+  "CLAUDE_TURN_SETUP_FAILED",
+  "CLAUDE_BACKGROUND_TASK_UNSUPPORTED",
+  "CLAUDE_MODEL_REFUSED",
+  "CLAUDE_NETWORK_ERROR",
+  "CLAUDE_REQUEST_TIMEOUT",
+  "CLAUDE_CONFIGURATION_INVALID",
+  "CLAUDE_PROCESS_FAILED",
+  "CLAUDE_RUNTIME_INTERRUPTED",
+  "CLAUDE_EXECUTION_FAILED",
+] as const
+
 export type AgentSessionStatus = (typeof agentSessionStatuses)[number]
 export type AgentSessionTurnStatus =
   (typeof agentSessionTurnStatuses)[number]
 export type AgentSessionEventType =
   (typeof agentSessionEventTypes)[number]
+export type ClaudeErrorCode = (typeof claudeErrorCodes)[number]
 
 export interface AgentSessionError {
-  readonly code: string
+  readonly code: ClaudeErrorCode
   readonly message: string
 }
 
@@ -120,6 +159,7 @@ export interface RuntimeTurnInput {
 export interface OpenAgentRuntimeSessionInput {
   readonly cwd: string
   readonly resumeSessionId?: string
+  readonly allowedTools?: readonly string[]
   readonly redactedValues: readonly string[]
   readonly onEvent: (
     turnId: string | null,
@@ -129,10 +169,7 @@ export interface OpenAgentRuntimeSessionInput {
 }
 
 export interface AgentRuntimeFailure {
-  readonly code:
-    | "CLAUDE_AUTHENTICATION_FAILED"
-    | "CLAUDE_CONFIGURATION_INVALID"
-    | "CLAUDE_PROCESS_FAILED"
+  readonly code: ClaudeErrorCode
   readonly message: string
   readonly terminal: boolean
 }

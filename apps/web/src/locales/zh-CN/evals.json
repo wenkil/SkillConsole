@@ -1,0 +1,123 @@
+{
+  "header": {
+    "eyebrow": "EVALS GENERATION LOOP · 生成闭环",
+    "title": "测试用例生成工作台",
+    "description": "为「{{name}}」冻结一个 Skill 目标，由 Claude 与固定版本 skill-creator 生成用例；校验通过后先人工审阅，再发布为不可变修订。",
+    "metrics": {
+      "tasks": "生成任务",
+      "review": "校验通过",
+      "published": "已发布"
+    }
+  },
+  "status": {
+    "PREPARING": "准备工作区",
+    "RUNNING": "正在生成",
+    "VALIDATING": "服务端校验",
+    "SUCCEEDED": "等待确认",
+    "CANCELING": "正在取消",
+    "CANCELED": "已取消",
+    "INTERRUPTED": "已中断",
+    "FAILED": "生成失败"
+  },
+  "tasks": {
+    "eyebrow": "GENERATION HISTORY",
+    "title": "生成任务",
+    "empty": "尚未生成 Evals。请在右侧选择目标并启动任务。",
+    "draftTarget": "工作副本快照",
+    "versionTarget": "不可变版本",
+    "caseLimit": "上限 {{count}} 项"
+  },
+  "progress": {
+    "eyebrow": "CONTROLLED AGENT SESSION",
+    "title": "正在构建 Evals 草稿",
+    "endedTitle": "本次生成未形成可审阅草稿",
+    "description": "目标 Skill：{{skillName}}。生成产物必须通过路径、结构、哈希和敏感信息门禁。",
+    "trace": "生成事件",
+    "waiting": "等待 Agent 返回完整事件…",
+    "agentThinking": "Agent 已提交一段完整分析",
+    "toolCompleted": "Agent 工具调用已完成",
+    "usageUpdated": "Token 使用量已更新",
+    "toolLabel": "工具 · {{name}}",
+    "toolSucceeded": "成功",
+    "toolFailed": "失败",
+    "unknownTool": "未知工具",
+    "noToolOutput": "工具未返回输出"
+  },
+  "event": {
+    "task": {
+      "created": "任务已创建",
+      "running": "受控 Agent Session 已启动",
+      "validating": "生成完成，正在执行服务端校验",
+      "succeeded": "校验通过，草稿已就绪",
+      "canceling": "正在请求取消",
+      "canceled": "任务已取消",
+      "interrupted": "任务被服务重启中断",
+      "failed": "任务执行失败"
+    },
+    "validation": {
+      "succeeded": "结构与文件校验通过"
+    },
+    "draft": {
+      "discarded": "草稿已丢弃"
+    }
+  },
+  "review": {
+    "eyebrow": "REVIEW BEFORE PUBLISH",
+    "title": "Evals 草稿审阅",
+    "emptyTitle": "先生成一组可复用 Evals",
+    "emptyDescription": "生成任务不会自动发布。校验通过后，你可以逐条检查用户任务、预期结果、客观断言和输入文件。",
+    "loadingDraft": "正在读取已校验草稿",
+    "caseCount": "{{count}} 个用例",
+    "fileCount": "{{count}} 个输入文件",
+    "assertionCount": "{{count}} 项断言",
+    "prompt": "真实用户任务",
+    "expectedOutput": "预期结果",
+    "assertions": "客观验证条件",
+    "inputFiles": "输入文件",
+    "noInputFiles": "本用例不需要输入文件"
+  },
+  "controls": {
+    "eyebrow": "GENERATION SETUP",
+    "title": "生成设置",
+    "target": "冻结目标",
+    "draft": "工作副本",
+    "version": "Skill 版本",
+    "count": "最多生成用例数",
+    "brief": "补充要求",
+    "briefPlaceholder": "例如：重点覆盖扫描件、字段缺失和多币种边界；不需要重复正常路径。",
+    "freezeHint": "启动时会冻结当前目标，并把 Skill、skill-creator 与 Claude 配置复制到隔离工作区。源文件不会被写回。",
+    "start": "生成 Evals 草稿",
+    "cancel": "取消当前生成"
+  },
+  "publish": {
+    "eyebrow": "HUMAN CONFIRMATION GATE",
+    "title": "发布门禁",
+    "noDraft": "选择一个校验成功的任务后，这里会显示草稿摘要与发布操作。",
+    "cases": "用例",
+    "files": "文件",
+    "action": "确认发布不可变修订",
+    "confirm": "发布后该 Evals 修订不可修改。确认已审阅所有用例并继续发布？",
+    "discard": "丢弃此草稿",
+    "discardConfirm": "丢弃后不能发布此草稿，但任务记录仍会保留。确认丢弃？",
+    "status": {
+      "PUBLISHED": "已发布为不可变修订",
+      "DISCARDED": "草稿已丢弃"
+    }
+  },
+  "revisions": {
+    "title": "已发布修订",
+    "empty": "尚无已发布 Evals 修订。",
+    "sourceSnapshot": "来源快照"
+  },
+  "states": {
+    "loading": "正在读取 Evals 工作台",
+    "loadError": "无法读取 Evals 工作台",
+    "loadErrorDescription": "请确认本地服务与数据库已启动，然后重试。",
+    "retry": "重新加载",
+    "dismiss": "关闭"
+  },
+  "footer": {
+    "snapshotBoundary": "目标 Skill 与生成依赖均使用受控副本",
+    "publishBoundary": "草稿经人工确认后才成为不可变修订"
+  }
+}
