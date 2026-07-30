@@ -11,14 +11,15 @@ import {
   getEvalGeneration,
   getEvalGenerationDraft,
   listEvalGenerations,
-  listEvalRevisions,
   publishEvalGeneration,
   startEvalGeneration,
   subscribeToEvalGeneration,
 } from "@/features/evals/api/evals-api"
 import {
   isActiveEvalGeneration,
+  type EvalGenerationDraft,
   type EvalGenerationEvent,
+  type EvalGenerationTaskPage,
   type EvalGenerationTarget,
   type EvalGenerationTask,
 } from "@/features/evals/model/evals"
@@ -27,12 +28,12 @@ import type { SkillWorkspace } from "@/features/workbench-home/model/workbench"
 
 const maxVisibleEvents = 80
 
-function taskListKey(workspaceId: string) {
+function taskListRootKey(workspaceId: string) {
   return ["skill-workspaces", workspaceId, "eval-generations"] as const
 }
 
-function revisionListKey(workspaceId: string) {
-  return ["skill-workspaces", workspaceId, "eval-revisions"] as const
+function taskListKey(workspaceId: string, page: number, pageSize: number) {
+  return [...taskListRootKey(workspaceId), { page, pageSize }] as const
 }
 
 function getTargetKey(target: EvalGenerationTarget): string {
@@ -46,6 +47,8 @@ export function useEvalsController(workspace: SkillWorkspace) {
   const [requestedTaskId, setRequestedTaskId] = useState<string | null>(
     null,
   )
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const [requestedTargetKey, setRequestedTargetKey] = useState("")
   const [maxEvalCount, setMaxEvalCount] = useState(5)
   const [generationBrief, setGenerationBrief] = useState("")
@@ -59,23 +62,15 @@ export function useEvalsController(workspace: SkillWorkspace) {
   } | null>(null)
 
   const tasksQuery = useQuery({
-    queryKey: taskListKey(workspace.id),
-    queryFn: () => listEvalGenerations(workspace.id),
-  })
-  const revisionsQuery = useQuery({
-    queryKey: revisionListKey(workspace.id),
-    queryFn: () => listEvalRevisions(workspace.id),
+    queryKey: taskListKey(workspace.id, page, pageSize),
+    queryFn: () => listEvalGenerations(workspace.id, page, pageSize),
   })
   const versionsQuery = useQuery({
     queryKey: ["skill-workspaces", workspace.id, "versions"],
     queryFn: () => listSkillVersions(workspace.id),
   })
-  const tasks = tasksQuery.data ?? []
-  const selectedTaskId =
-    tasks.find((task) => task.id === requestedTaskId)?.id ??
-    tasks.find((task) => isActiveEvalGeneration(task.status))?.id ??
-    tasks[0]?.id ??
-    null
+  const tasks = tasksQuery.data?.items ?? []
+  const selectedTaskId = requestedTaskId
   const taskFromList =
     tasks.find((task) => task.id === selectedTaskId) ?? null
   const selectedTaskQuery = useQuery({
@@ -168,7 +163,7 @@ export function useEvalsController(workspace: SkillWorkspace) {
             queryKey: ["eval-generations", taskId],
           })
           void queryClient.invalidateQueries({
-            queryKey: taskListKey(workspace.id),
+            queryKey: taskListRootKey(workspace.id),
           })
         }
         if (
@@ -217,13 +212,14 @@ export function useEvalsController(workspace: SkillWorkspace) {
     },
     onSuccess: (task) => {
       startAttempt.current = null
-      queryClient.setQueryData<EvalGenerationTask[]>(
-        taskListKey(workspace.id),
-        (current = []) => [
-          task,
-          ...current.filter((item) => item.id !== task.id),
-        ],
+      queryClient.setQueryData<EvalGenerationTask>(
+        ["eval-generations", task.id],
+        task,
       )
+      setPage(1)
+      void queryClient.invalidateQueries({
+        queryKey: taskListRootKey(workspace.id),
+      })
       setRequestedTaskId(task.id)
       setEventState({ taskId: task.id, events: [] })
     },
@@ -233,19 +229,66 @@ export function useEvalsController(workspace: SkillWorkspace) {
     onSuccess: (task) => {
       queryClient.setQueryData(["eval-generations", task.id], task)
       void queryClient.invalidateQueries({
-        queryKey: taskListKey(workspace.id),
+        queryKey: taskListRootKey(workspace.id),
       })
     },
   })
   const publishMutation = useMutation({
     mutationFn: (taskId: string) => publishEvalGeneration(taskId),
-    onSuccess: (_result, taskId) => {
+    onSuccess: (result, taskId) => {
+      queryClient.setQueriesData<EvalGenerationTaskPage>(
+        { queryKey: taskListRootKey(workspace.id) },
+        (current) => {
+          if (!current) return current
+          const publishedTask = current.items.find(
+            (task) => task.id === taskId && task.draftStatus === "READY",
+          )
+          return {
+            ...current,
+            items: current.items.map((task) =>
+              task.id === taskId
+                ? {
+                    ...task,
+                    draftStatus: "PUBLISHED" as const,
+                    revisionNumber: result.revision.sequenceNumber,
+                  }
+                : task,
+            ),
+            summary: publishedTask
+              ? {
+                  ...current.summary,
+                  awaitingReview: Math.max(
+                    0,
+                    current.summary.awaitingReview - 1,
+                  ),
+                  published: current.summary.published + 1,
+                }
+              : current.summary,
+          }
+        },
+      )
+      queryClient.setQueryData<EvalGenerationDraft | undefined>(
+        ["eval-generations", taskId, "draft"],
+        (current) =>
+          current ? { ...current, status: "PUBLISHED" } : current,
+      )
+      queryClient.setQueryData<EvalGenerationTask | undefined>(
+        ["eval-generations", taskId],
+        (current) =>
+          current
+            ? {
+                ...current,
+                draftStatus: "PUBLISHED",
+                revisionNumber: result.revision.sequenceNumber,
+              }
+            : current,
+      )
       void Promise.all([
         queryClient.invalidateQueries({
-          queryKey: ["eval-generations", taskId, "draft"],
+          queryKey: taskListRootKey(workspace.id),
         }),
         queryClient.invalidateQueries({
-          queryKey: revisionListKey(workspace.id),
+          queryKey: ["eval-generations", taskId, "draft"],
         }),
       ])
     },
@@ -258,11 +301,45 @@ export function useEvalsController(workspace: SkillWorkspace) {
         ["eval-generations", taskId, "draft"],
         draft,
       )
+      queryClient.setQueryData<EvalGenerationTask | undefined>(
+        ["eval-generations", taskId],
+        (current) =>
+          current ? { ...current, draftStatus: "DISCARDED" } : current,
+      )
+      queryClient.setQueriesData<EvalGenerationTaskPage>(
+        { queryKey: taskListRootKey(workspace.id) },
+        (current) => {
+          if (!current) return current
+          const discardedTask = current.items.find(
+            (task) => task.id === taskId && task.draftStatus === "READY",
+          )
+          return {
+            ...current,
+            items: current.items.map((task) =>
+              task.id === taskId
+                ? { ...task, draftStatus: "DISCARDED" as const }
+                : task,
+            ),
+            summary: discardedTask
+              ? {
+                  ...current.summary,
+                  awaitingReview: Math.max(
+                    0,
+                    current.summary.awaitingReview - 1,
+                  ),
+                }
+              : current.summary,
+          }
+        },
+      )
+      void queryClient.invalidateQueries({
+        queryKey: taskListRootKey(workspace.id),
+      })
     },
   })
 
   const activeTask =
-    tasksQuery.data?.find((task) =>
+    tasksQuery.data?.items.find((task) =>
       isActiveEvalGeneration(task.status),
     ) ?? null
   const mutationError =
@@ -273,7 +350,19 @@ export function useEvalsController(workspace: SkillWorkspace) {
 
   return {
     tasks,
-    revisions: revisionsQuery.data ?? [],
+    taskPagination: tasksQuery.data?.pagination ?? {
+      page,
+      pageSize,
+      total: 0,
+      pageCount: 0,
+    },
+    taskSummary: tasksQuery.data?.summary ?? {
+      total: 0,
+      running: 0,
+      awaitingReview: 0,
+      published: 0,
+      failed: 0,
+    },
     selectedTask,
     selectedDraft: draftQuery.data ?? null,
     events:
@@ -285,11 +374,9 @@ export function useEvalsController(workspace: SkillWorkspace) {
     activeTask,
     loading:
       tasksQuery.isPending ||
-      revisionsQuery.isPending ||
       versionsQuery.isPending,
     error:
       tasksQuery.isError ||
-      revisionsQuery.isError ||
       versionsQuery.isError,
     mutationPending:
       startMutation.isPending ||
@@ -301,6 +388,11 @@ export function useEvalsController(workspace: SkillWorkspace) {
       mutationError instanceof Error ? mutationError.message : null,
     actions: {
       selectTask: setRequestedTaskId,
+      setPage,
+      setPageSize: (nextPageSize: number) => {
+        setPageSize(nextPageSize)
+        setPage(1)
+      },
       selectTarget: setRequestedTargetKey,
       setMaxEvalCount,
       setGenerationBrief,
@@ -311,7 +403,6 @@ export function useEvalsController(workspace: SkillWorkspace) {
       retry: () => {
         void Promise.all([
           tasksQuery.refetch(),
-          revisionsQuery.refetch(),
           versionsQuery.refetch(),
         ])
       },

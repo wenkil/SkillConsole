@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   Check,
+  Clock3,
   FileInput,
   FlaskConical,
   LoaderCircle,
@@ -27,7 +28,7 @@ function eventSummary(event: EvalGenerationEvent, t: TFunction<"evals">) {
   return t(`event.${event.type}`, { defaultValue: event.type })
 }
 
-function ProgressView({
+export function EvalGenerationProgress({
   task,
   events,
   t,
@@ -47,29 +48,30 @@ function ProgressView({
     "INTERRUPTED",
     "CANCELED",
   ].includes(task.status)
+  const generationSucceeded = task.status === "SUCCEEDED"
   const traceEntries = buildEvalTraceEntries(events)
 
   return (
-    <div className="mx-auto flex h-full min-h-0 max-w-3xl flex-col px-8 py-8">
-      <div className="border-b border-foreground pb-5">
+    <div className="flex h-full min-h-0 w-full flex-col px-5 py-4">
+      <div className="border-b border-foreground pb-3">
         <div className="technical-heading text-[10px] text-signal-dark">
           {t("progress.eyebrow")}
         </div>
-        <h2 className="mt-1.5 text-2xl font-[780] tracking-[-0.03em]">
+        <h2 className="mt-1 text-lg font-[780] tracking-[-0.02em]">
           {terminalWithoutDraft
             ? t("progress.endedTitle")
             : t("progress.title")}
         </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
           {t("progress.description", { skillName: task.target.skillName })}
         </p>
       </div>
 
-      <ol className="mt-6 grid grid-cols-4 border border-foreground bg-paper-raised">
+      <ol className="mt-3 grid grid-cols-4 border border-foreground bg-paper-raised">
         {stages.map((stage, index) => (
           <li
             className={cn(
-              "relative border-r border-rule-soft p-3 last:border-r-0",
+              "relative border-r border-rule-soft px-3 py-2 last:border-r-0",
               index <= currentIndex && "bg-technical/6",
             )}
             key={stage}
@@ -77,8 +79,9 @@ function ProgressView({
             <div className="font-mono text-[9px] text-muted-foreground">
               {String(index + 1).padStart(2, "0")}
             </div>
-            <div className="mt-2 flex items-center gap-1.5 text-xs font-bold">
-              {index < currentIndex ? (
+            <div className="mt-1 flex items-center gap-1.5 text-[11px] font-bold">
+              {index < currentIndex ||
+              (generationSucceeded && index === currentIndex) ? (
                 <Check className="size-3.5 text-status-passed" />
               ) : index === currentIndex && !terminalWithoutDraft ? (
                 <LoaderCircle className="size-3.5 animate-spin text-status-running" />
@@ -105,7 +108,7 @@ function ProgressView({
         </div>
       ) : null}
 
-      <div className="mt-5 flex min-h-0 flex-1 flex-col overflow-hidden border border-foreground bg-trace text-trace-foreground">
+      <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden border border-foreground bg-trace text-trace-foreground">
         <div className="flex shrink-0 items-center justify-between border-b border-white/15 px-4 py-2.5">
           <span className="technical-heading text-[10px]">
             {t("progress.trace")}
@@ -260,13 +263,11 @@ function CaseDetail({
 export function EvalDraftReview({
   task,
   draft,
-  events,
   loading,
   t,
 }: {
   task: EvalGenerationTask | null
   draft: EvalGenerationDraft | null
-  events: readonly EvalGenerationEvent[]
   loading: boolean
   t: TFunction<"evals">
 }) {
@@ -300,7 +301,19 @@ export function EvalDraftReview({
         </div>
       )
     }
-    return <ProgressView events={events} task={task} t={t} />
+    return (
+      <section className="flex h-full items-center justify-center px-8 text-center">
+        <div className="max-w-sm">
+          <Clock3 className="mx-auto size-8 text-muted-foreground" />
+          <h2 className="mt-4 text-lg font-[760]">
+            {t("review.resultPendingTitle")}
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            {t("review.resultPendingDescription")}
+          </p>
+        </div>
+      </section>
+    )
   }
 
   return (

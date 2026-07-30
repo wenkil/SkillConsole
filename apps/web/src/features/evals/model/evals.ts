@@ -19,6 +19,7 @@ export interface EvalGenerationTask {
     versionId: string | null
     draftRevisionId: string | null
     skillName: string
+    displayVersion: string
   }
   maxEvalCount: number
   generationBrief: string | null
@@ -29,10 +30,31 @@ export interface EvalGenerationTask {
   } | null
   usage: Record<string, number> | null
   draftId: string | null
+  draftStatus: "READY" | "PUBLISHED" | "DISCARDED" | null
+  evalCount: number | null
+  fileCount: number | null
+  revisionNumber: number | null
   createdAt: string
   updatedAt: string
   startedAt: string | null
   completedAt: string | null
+}
+
+export interface EvalGenerationTaskPage {
+  items: EvalGenerationTask[]
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    pageCount: number
+  }
+  summary: {
+    total: number
+    running: number
+    awaitingReview: number
+    published: number
+    failed: number
+  }
 }
 
 export interface EvalCase {

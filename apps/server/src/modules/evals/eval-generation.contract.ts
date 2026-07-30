@@ -75,7 +75,10 @@ export const EvalGenerationParamsSchema = Type.Object(
 
 export const EvalGenerationListQuerySchema = Type.Object(
   {
-    limit: Type.Optional(
+    page: Type.Optional(
+      Type.Integer({ minimum: 1 }),
+    ),
+    pageSize: Type.Optional(
       Type.Integer({ minimum: 1, maximum: 100 }),
     ),
   },
@@ -92,6 +95,7 @@ const EvalGenerationTargetSchema = Type.Object(
     versionId: NullableUuidSchema,
     draftRevisionId: NullableUuidSchema,
     skillName: Type.String({ minLength: 1, maxLength: 64 }),
+    displayVersion: Type.String({ minLength: 1 }),
   },
   { additionalProperties: false },
 )
@@ -126,6 +130,24 @@ export const EvalGenerationTaskSchema = Type.Object(
       Type.Null(),
     ]),
     draftId: NullableUuidSchema,
+    draftStatus: Type.Union([
+      Type.Literal("READY"),
+      Type.Literal("PUBLISHED"),
+      Type.Literal("DISCARDED"),
+      Type.Null(),
+    ]),
+    evalCount: Type.Union([
+      Type.Integer({ minimum: 0 }),
+      Type.Null(),
+    ]),
+    fileCount: Type.Union([
+      Type.Integer({ minimum: 0 }),
+      Type.Null(),
+    ]),
+    revisionNumber: Type.Union([
+      Type.Integer({ minimum: 1 }),
+      Type.Null(),
+    ]),
     createdAt: Type.String({ format: "date-time" }),
     updatedAt: Type.String({ format: "date-time" }),
     startedAt: Type.Union([
@@ -140,8 +162,30 @@ export const EvalGenerationTaskSchema = Type.Object(
   { additionalProperties: false },
 )
 
-export const EvalGenerationTaskListSchema = Type.Array(
-  EvalGenerationTaskSchema,
+export const EvalGenerationTaskPageSchema = Type.Object(
+  {
+    items: Type.Array(EvalGenerationTaskSchema),
+    pagination: Type.Object(
+      {
+        page: Type.Integer({ minimum: 1 }),
+        pageSize: Type.Integer({ minimum: 1, maximum: 100 }),
+        total: Type.Integer({ minimum: 0 }),
+        pageCount: Type.Integer({ minimum: 0 }),
+      },
+      { additionalProperties: false },
+    ),
+    summary: Type.Object(
+      {
+        total: Type.Integer({ minimum: 0 }),
+        running: Type.Integer({ minimum: 0 }),
+        awaitingReview: Type.Integer({ minimum: 0 }),
+        published: Type.Integer({ minimum: 0 }),
+        failed: Type.Integer({ minimum: 0 }),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  { additionalProperties: false },
 )
 
 const StoredEvalCaseSchema = Type.Object(

@@ -9,7 +9,7 @@ import {
   EvalGenerationListQuerySchema,
   EvalGenerationParamsSchema,
   EvalGenerationStartHeadersSchema,
-  EvalGenerationTaskListSchema,
+  EvalGenerationTaskPageSchema,
   EvalGenerationTaskSchema,
   EvalRevisionListSchema,
   PublishEvalRevisionResponseSchema,
@@ -53,22 +53,21 @@ export const evalGenerationRoutes: FastifyPluginAsyncTypebox = async (
         params: WorkspaceEvalParamsSchema,
         querystring: EvalGenerationListQuerySchema,
         response: {
-          200: EvalGenerationTaskListSchema,
+          200: EvalGenerationTaskPageSchema,
           400: ErrorResponseSchema,
         },
       },
     },
-    async (request, reply) =>
-      reply
+    async (request, reply) => {
+      const result = await service.list(
+        request.params.workspaceId,
+        request.query.page ?? 1,
+        request.query.pageSize ?? 20,
+      )
+      return reply
         .header("Cache-Control", "private, no-store")
-        .send(
-          [
-            ...(await service.list(
-              request.params.workspaceId,
-              request.query.limit ?? 20,
-            )),
-          ],
-        ),
+        .send({ ...result, items: [...result.items] })
+    },
   )
 
   application.post(

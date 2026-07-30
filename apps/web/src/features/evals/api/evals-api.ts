@@ -2,6 +2,7 @@ import type {
   EvalGenerationDraft,
   EvalGenerationEvent,
   EvalGenerationTask,
+  EvalGenerationTaskPage,
   EvalRevision,
   PublishEvalRevisionResult,
   StartEvalGenerationInput,
@@ -28,9 +29,11 @@ function taskBaseUrl(taskId: string): string {
 
 export function listEvalGenerations(
   workspaceId: string,
-): Promise<EvalGenerationTask[]> {
+  page: number,
+  pageSize: number,
+): Promise<EvalGenerationTaskPage> {
   return readJson(
-    `/api/skill-workspaces/${encodeURIComponent(workspaceId)}/eval-generations?limit=50`,
+    `/api/skill-workspaces/${encodeURIComponent(workspaceId)}/eval-generations?page=${page}&pageSize=${pageSize}`,
   )
 }
 

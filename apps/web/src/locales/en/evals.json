@@ -5,7 +5,7 @@
     "description": "Freeze a Skill target for “{{name}}”, generate cases with Claude and a pinned skill-creator, then review the validated draft before publishing an immutable revision.",
     "metrics": {
       "tasks": "Tasks",
-      "review": "Validated",
+      "review": "Awaiting review",
       "published": "Published"
     }
   },
@@ -13,7 +13,7 @@
     "PREPARING": "Preparing",
     "RUNNING": "Generating",
     "VALIDATING": "Validating",
-    "SUCCEEDED": "Awaiting review",
+    "SUCCEEDED": "Generation succeeded",
     "CANCELING": "Canceling",
     "CANCELED": "Canceled",
     "INTERRUPTED": "Interrupted",
@@ -22,10 +22,56 @@
   "tasks": {
     "eyebrow": "GENERATION HISTORY",
     "title": "Generation tasks",
-    "empty": "No Evals have been generated. Select a target on the right to begin.",
+    "empty": "No Evals have been generated. Use the generate button to configure a target and begin.",
     "draftTarget": "Working-copy snapshot",
     "versionTarget": "Immutable version",
     "caseLimit": "Up to {{count}} cases"
+  },
+  "table": {
+    "generate": "Generate Evals",
+    "columns": {
+      "status": "Generation status",
+      "skillVersion": "Skill version",
+      "result": "Result",
+      "createdAt": "Created",
+      "duration": "Duration",
+      "reviewStatus": "Review status",
+      "actions": "Actions"
+    },
+    "draftVersion": "Working copy {{version}}",
+    "resultSummary": "{{cases}} cases · {{files}} files",
+    "runningDuration": "In progress",
+    "durationSeconds": "{{count}} sec",
+    "durationMinutes": "{{minutes}} min {{seconds}} sec",
+    "reviewStatus": {
+      "READY": "Awaiting review",
+      "PUBLISHED": "Published",
+      "DISCARDED": "Discarded"
+    },
+    "viewDetails": "View details",
+    "total": "{{count}} total",
+    "pageSize": "Per page",
+    "page": "Page {{page}} of {{pageCount}}",
+    "previous": "Previous page",
+    "next": "Next page"
+  },
+  "drawer": {
+    "createEyebrow": "NEW EVALS GENERATION",
+    "detailEyebrow": "EVALS TASK DETAIL",
+    "createTitle": "Generate an Evals draft",
+    "createDescription": "Configure the frozen target and start generation. Closing the drawer does not cancel a running task.",
+    "detailDescription": "Inspect the controlled Agent process, validated result, and human publication state.",
+    "activeTaskHint": "A generation task is already running. Wait for it to finish, or open that task and cancel it.",
+    "tabsLabel": "Task details",
+    "tabs": {
+      "process": "Generation process",
+      "result": "Generation result"
+    },
+    "resultReady": "Ready",
+    "publishedRevision": "Published as EVALS R{{revision}}",
+    "reviewBeforePublish": "Review the cases before publishing an immutable revision.",
+    "closeHint": "Closing the drawer does not affect task execution.",
+    "loadingTask": "Loading task details"
   },
   "progress": {
     "eyebrow": "CONTROLLED AGENT SESSION",
@@ -67,6 +113,8 @@
     "emptyTitle": "Generate reusable Evals first",
     "emptyDescription": "Generation never publishes automatically. Review every user task, expected result, objective assertion, and input file after validation.",
     "loadingDraft": "Loading validated draft",
+    "resultPendingTitle": "The generation result is not ready",
+    "resultPendingDescription": "The complete cases will be available here after the Agent finishes and server validation succeeds.",
     "caseCount": "{{count}} cases",
     "fileCount": "{{count}} input files",
     "assertionCount": "{{count}} assertions",

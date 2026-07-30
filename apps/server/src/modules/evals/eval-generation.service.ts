@@ -9,6 +9,7 @@ import { EvalTargetService } from "../skill-workspaces/eval-target.service.js"
 import type {
   EvalGenerationDraftView,
   EvalGenerationEvent,
+  EvalGenerationTaskPage,
   EvalGenerationTaskView,
   PublishEvalRevisionResult,
   EvalRevisionView,
@@ -225,9 +226,10 @@ export class EvalGenerationService {
 
   async list(
     workspaceId: string,
-    limit: number,
-  ): Promise<readonly EvalGenerationTaskView[]> {
-    return this.repository.list(workspaceId, limit)
+    page: number,
+    pageSize: number,
+  ): Promise<EvalGenerationTaskPage> {
+    return this.repository.list(workspaceId, page, pageSize)
   }
 
   async getDraft(taskId: string): Promise<EvalGenerationDraftView> {

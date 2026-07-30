@@ -6,11 +6,11 @@ import {
   RotateCcw,
   Sparkles,
 } from "lucide-react"
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 
-import { EvalControlPanel } from "@/features/evals/components/eval-control-panel"
-import { EvalDraftReview } from "@/features/evals/components/eval-draft-review"
-import { EvalTaskRail } from "@/features/evals/components/eval-task-rail"
+import { EvalTaskDrawer } from "@/features/evals/components/eval-task-drawer"
+import { EvalTaskTable } from "@/features/evals/components/eval-task-table"
 import { useEvalsController } from "@/features/evals/hooks/use-evals-controller"
 import type { SkillWorkspace } from "@/features/workbench-home/model/workbench"
 import { Button } from "@/shared/components/ui/button"
@@ -24,9 +24,9 @@ export function EvalsWorkbenchView({
 }) {
   const { t } = useTranslation("evals")
   const controller = useEvalsController(workspace)
-  const readyDraftCount = controller.tasks.filter(
-    (task) => task.status === "SUCCEEDED" && task.draftId,
-  ).length
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [drawerTab, setDrawerTab] = useState<"process" | "result">("process")
 
   if (controller.loading) {
     return (
@@ -83,7 +83,7 @@ export function EvalsWorkbenchView({
                 {t("header.metrics.tasks")}
               </span>
               <strong className="mt-0.5 block text-lg">
-                {controller.tasks.length}
+                {controller.taskSummary.total}
               </strong>
             </div>
             <div className="min-w-24 bg-background px-3 py-2">
@@ -91,7 +91,7 @@ export function EvalsWorkbenchView({
                 {t("header.metrics.review")}
               </span>
               <strong className="mt-0.5 block text-lg">
-                {readyDraftCount}
+                {controller.taskSummary.awaitingReview}
               </strong>
             </div>
             <div className="min-w-24 bg-background px-3 py-2">
@@ -99,7 +99,7 @@ export function EvalsWorkbenchView({
                 {t("header.metrics.published")}
               </span>
               <strong className="mt-0.5 block text-lg">
-                {controller.revisions.length}
+                {controller.taskSummary.published}
               </strong>
             </div>
           </div>
@@ -125,51 +125,61 @@ export function EvalsWorkbenchView({
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[16rem_minmax(32rem,1fr)_19rem] overflow-hidden">
-        <EvalTaskRail
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <EvalTaskTable
           locale={locale}
-          onSelect={controller.actions.selectTask}
-          selectedTaskId={controller.selectedTask?.id ?? null}
+          onGenerate={() => {
+            setCreating(true)
+            setDrawerTab("process")
+            setDrawerOpen(true)
+          }}
+          onOpen={(taskId) => {
+            const task = controller.tasks.find((item) => item.id === taskId)
+            controller.actions.selectTask(taskId)
+            setCreating(false)
+            setDrawerTab(task?.draftId ? "result" : "process")
+            setDrawerOpen(true)
+          }}
+          onPageChange={controller.actions.setPage}
+          onPageSizeChange={controller.actions.setPageSize}
+          page={controller.taskPagination.page}
+          pageCount={controller.taskPagination.pageCount}
+          pageSize={controller.taskPagination.pageSize}
           t={t}
           tasks={controller.tasks}
-        />
-        <div className="min-h-0 min-w-0 bg-background">
-          <EvalDraftReview
-            draft={controller.selectedDraft}
-            events={controller.events}
-            loading={controller.draftLoading}
-            t={t}
-            task={controller.selectedTask}
-          />
-        </div>
-        <EvalControlPanel
-          activeTask={controller.activeTask}
-          draft={controller.selectedDraft}
-          generationBrief={controller.generationBrief}
-          maxEvalCount={controller.maxEvalCount}
-          onBriefChange={controller.actions.setGenerationBrief}
-          onCancel={(taskId) => {
-            void controller.actions.cancel(taskId).catch(() => undefined)
-          }}
-          onCountChange={controller.actions.setMaxEvalCount}
-          onDiscard={(taskId) => {
-            void controller.actions.discard(taskId).catch(() => undefined)
-          }}
-          onPublish={(taskId) => {
-            void controller.actions.publish(taskId).catch(() => undefined)
-          }}
-          onStart={() => {
-            void controller.actions.start().catch(() => undefined)
-          }}
-          onTargetChange={controller.actions.selectTarget}
-          pending={controller.mutationPending}
-          revisions={controller.revisions}
-          selectedTargetKey={controller.selectedTargetKey}
-          selectedTask={controller.selectedTask}
-          t={t}
-          targetOptions={controller.targetOptions}
+          total={controller.taskPagination.total}
         />
       </div>
+
+      <EvalTaskDrawer
+        creating={creating}
+        draft={controller.selectedDraft}
+        draftLoading={controller.draftLoading}
+        events={controller.events}
+        generationBlocked={controller.taskSummary.running > 0}
+        generationBrief={controller.generationBrief}
+        maxEvalCount={controller.maxEvalCount}
+        onBriefChange={controller.actions.setGenerationBrief}
+        onCancel={controller.actions.cancel}
+        onCountChange={controller.actions.setMaxEvalCount}
+        onDiscard={controller.actions.discard}
+        onOpenChange={setDrawerOpen}
+        onPublish={controller.actions.publish}
+        onStart={async () => {
+          const task = await controller.actions.start()
+          setCreating(false)
+          return task
+        }}
+        onTargetChange={controller.actions.selectTarget}
+        open={drawerOpen}
+        pending={controller.mutationPending}
+        selectedTargetKey={controller.selectedTargetKey}
+        tab={drawerTab}
+        t={t}
+        targetOptions={controller.targetOptions}
+        task={controller.selectedTask}
+        onTabChange={setDrawerTab}
+      />
 
       <footer className="flex h-7 shrink-0 items-center justify-between border-t border-foreground bg-paper-muted px-5 font-mono text-[9px] text-muted-foreground uppercase">
         <span className="flex items-center gap-1.5">

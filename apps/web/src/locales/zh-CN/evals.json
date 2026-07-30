@@ -5,7 +5,7 @@
     "description": "为「{{name}}」冻结一个 Skill 目标，由 Claude 与固定版本 skill-creator 生成用例；校验通过后先人工审阅，再发布为不可变修订。",
     "metrics": {
       "tasks": "生成任务",
-      "review": "校验通过",
+      "review": "待审阅",
       "published": "已发布"
     }
   },
@@ -13,7 +13,7 @@
     "PREPARING": "准备工作区",
     "RUNNING": "正在生成",
     "VALIDATING": "服务端校验",
-    "SUCCEEDED": "等待确认",
+    "SUCCEEDED": "生成成功",
     "CANCELING": "正在取消",
     "CANCELED": "已取消",
     "INTERRUPTED": "已中断",
@@ -22,10 +22,56 @@
   "tasks": {
     "eyebrow": "GENERATION HISTORY",
     "title": "生成任务",
-    "empty": "尚未生成 Evals。请在右侧选择目标并启动任务。",
+    "empty": "尚未生成 Evals。请点击生成按钮配置目标并启动任务。",
     "draftTarget": "工作副本快照",
     "versionTarget": "不可变版本",
     "caseLimit": "上限 {{count}} 项"
+  },
+  "table": {
+    "generate": "生成 Evals",
+    "columns": {
+      "status": "生成状态",
+      "skillVersion": "Skill 版本",
+      "result": "生成结果",
+      "createdAt": "创建时间",
+      "duration": "耗时",
+      "reviewStatus": "审阅状态",
+      "actions": "操作"
+    },
+    "draftVersion": "工作副本 {{version}}",
+    "resultSummary": "{{cases}} 用例 · {{files}} 文件",
+    "runningDuration": "进行中",
+    "durationSeconds": "{{count}} 秒",
+    "durationMinutes": "{{minutes}} 分 {{seconds}} 秒",
+    "reviewStatus": {
+      "READY": "等待确认",
+      "PUBLISHED": "已发布",
+      "DISCARDED": "已丢弃"
+    },
+    "viewDetails": "查看详情",
+    "total": "共 {{count}} 条",
+    "pageSize": "每页",
+    "page": "第 {{page}} / {{pageCount}} 页",
+    "previous": "上一页",
+    "next": "下一页"
+  },
+  "drawer": {
+    "createEyebrow": "NEW EVALS GENERATION",
+    "detailEyebrow": "EVALS TASK DETAIL",
+    "createTitle": "生成 Evals 草稿",
+    "createDescription": "配置冻结目标并启动生成。关闭抽屉不会取消正在执行的任务。",
+    "detailDescription": "查看受控 Agent 生成过程、校验结果和人工发布状态。",
+    "activeTaskHint": "当前已有生成任务正在运行。请等待任务结束，或打开该任务详情后取消。",
+    "tabsLabel": "任务详情",
+    "tabs": {
+      "process": "生成过程",
+      "result": "生成结果"
+    },
+    "resultReady": "已就绪",
+    "publishedRevision": "已发布为 EVALS R{{revision}}",
+    "reviewBeforePublish": "请确认用例内容后再发布不可变修订。",
+    "closeHint": "关闭抽屉不会影响任务执行。",
+    "loadingTask": "正在读取任务详情"
   },
   "progress": {
     "eyebrow": "CONTROLLED AGENT SESSION",
@@ -67,6 +113,8 @@
     "emptyTitle": "先生成一组可复用 Evals",
     "emptyDescription": "生成任务不会自动发布。校验通过后，你可以逐条检查用户任务、预期结果、客观断言和输入文件。",
     "loadingDraft": "正在读取已校验草稿",
+    "resultPendingTitle": "生成结果尚未就绪",
+    "resultPendingDescription": "Agent 完成生成并通过服务端校验后，可在这里审阅完整用例。",
     "caseCount": "{{count}} 个用例",
     "fileCount": "{{count}} 个输入文件",
     "assertionCount": "{{count}} 项断言",

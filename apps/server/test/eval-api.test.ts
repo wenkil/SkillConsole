@@ -32,12 +32,17 @@ function createTask(
       versionId: randomUUID(),
       draftRevisionId: null,
       skillName: "sample-skill",
+      displayVersion: "V1",
     },
     maxEvalCount: 5,
     generationBrief: null,
     error: null,
     usage: null,
     draftId: null,
+    draftStatus: null,
+    evalCount: null,
+    fileCount: null,
+    revisionNumber: null,
     createdAt: now,
     updatedAt: now,
     startedAt: now,
@@ -49,12 +54,26 @@ test("Evals API enforces idempotency and hides runtime internals", async () => {
   const workspaceId = randomUUID()
   const task = createTask(workspaceId)
   let capturedInput: unknown
+  let capturedListInput: unknown
   const fakeService = {
     start: async (input: unknown) => {
       capturedInput = input
       return task
     },
-    list: async () => [task],
+    list: async (requestedWorkspaceId: string, page: number, pageSize: number) => {
+      capturedListInput = { requestedWorkspaceId, page, pageSize }
+      return {
+        items: [task],
+        pagination: { page, pageSize, total: 1, pageCount: 1 },
+        summary: {
+          total: 1,
+          running: 1,
+          awaitingReview: 0,
+          published: 0,
+          failed: 0,
+        },
+      }
+    },
     listRevisions: async () => [],
   } as unknown as EvalGenerationService
   const application = Fastify({
@@ -96,6 +115,21 @@ test("Evals API enforces idempotency and hides runtime internals", async () => {
     assert.equal("agentSessionId" in body, false)
     assert.equal("configurationFingerprint" in body, false)
     assert.equal(JSON.stringify(body).includes("\\workspace"), false)
+
+    const listResponse = await application.inject({
+      method: "GET",
+      url: `/api/skill-workspaces/${workspaceId}/eval-generations?page=2&pageSize=50`,
+    })
+    assert.equal(listResponse.statusCode, 200)
+    assert.deepEqual(capturedListInput, {
+      requestedWorkspaceId: workspaceId,
+      page: 2,
+      pageSize: 50,
+    })
+    assert.equal(
+      listResponse.json<{ pagination: { total: number } }>().pagination.total,
+      1,
+    )
   } finally {
     await application.close()
   }

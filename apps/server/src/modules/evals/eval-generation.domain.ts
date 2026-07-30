@@ -23,6 +23,7 @@ export interface EvalGenerationTaskView {
     readonly versionId: string | null
     readonly draftRevisionId: string | null
     readonly skillName: string
+    readonly displayVersion: string
   }
   readonly maxEvalCount: number
   readonly generationBrief: string | null
@@ -33,10 +34,31 @@ export interface EvalGenerationTaskView {
   } | null
   readonly usage: Readonly<Record<string, number>> | null
   readonly draftId: string | null
+  readonly draftStatus: "READY" | "PUBLISHED" | "DISCARDED" | null
+  readonly evalCount: number | null
+  readonly fileCount: number | null
+  readonly revisionNumber: number | null
   readonly createdAt: string
   readonly updatedAt: string
   readonly startedAt: string | null
   readonly completedAt: string | null
+}
+
+export interface EvalGenerationTaskPage {
+  readonly items: readonly EvalGenerationTaskView[]
+  readonly pagination: {
+    readonly page: number
+    readonly pageSize: number
+    readonly total: number
+    readonly pageCount: number
+  }
+  readonly summary: {
+    readonly total: number
+    readonly running: number
+    readonly awaitingReview: number
+    readonly published: number
+    readonly failed: number
+  }
 }
 
 export interface EvalGenerationDraftView {

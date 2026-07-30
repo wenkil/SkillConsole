@@ -2,11 +2,13 @@ import { randomUUID } from "node:crypto"
 
 import {
   and,
+  count,
   desc,
   eq,
   gt,
   inArray,
   max,
+  sql,
 } from "drizzle-orm"
 
 import { DomainError } from "../../core/errors/domain-error.js"
@@ -14,7 +16,10 @@ import {
   evalGenerationDrafts,
   evalGenerationEvents,
   evalGenerationTasks,
+  evalRevisions,
   evalSuites,
+  skillDraftRevisions,
+  skillVersions,
   type Database,
   type EvalGenerationDraftRow,
   type EvalGenerationStatus,
@@ -26,6 +31,7 @@ import type { FrozenEvalTarget } from "../skill-workspaces/eval-target.domain.js
 import type {
   EvalGenerationDraftView,
   EvalGenerationEvent,
+  EvalGenerationTaskPage,
   EvalGenerationTaskView,
 } from "./eval-generation.domain.js"
 
@@ -137,7 +143,7 @@ export class EvalGenerationRepository {
     input: CreateTaskInput,
   ): Promise<EvalGenerationTaskView> {
     try {
-      return await this.database.transaction(async (transaction) => {
+      const taskId = await this.database.transaction(async (transaction) => {
         const [task] = await transaction
           .insert(evalGenerationTasks)
           .values({
@@ -166,8 +172,9 @@ export class EvalGenerationRepository {
           schemaVersion: 1,
           status: task.status,
         })
-        return this.mapTask(task, input.workspaceId, null)
+        return task.id
       })
+      return this.get(taskId)
     } catch (error) {
       if (this.isUniqueViolation(error)) {
         const existing = await this.findByIdempotencyKey(
@@ -202,6 +209,12 @@ export class EvalGenerationRepository {
         task: evalGenerationTasks,
         workspaceId: evalSuites.workspaceId,
         draftId: evalGenerationDrafts.id,
+        draftStatus: evalGenerationDrafts.status,
+        evalCount: evalGenerationDrafts.evalCount,
+        fileCount: evalGenerationDrafts.fileCount,
+        revisionNumber: evalRevisions.sequenceNumber,
+        versionName: skillVersions.name,
+        draftSourceRevision: skillDraftRevisions.sourceContentRevision,
       })
       .from(evalGenerationTasks)
       .innerJoin(evalSuites, eq(evalSuites.id, evalGenerationTasks.suiteId))
@@ -209,21 +222,88 @@ export class EvalGenerationRepository {
         evalGenerationDrafts,
         eq(evalGenerationDrafts.taskId, evalGenerationTasks.id),
       )
+      .leftJoin(
+        skillVersions,
+        eq(skillVersions.id, evalGenerationTasks.targetVersionId),
+      )
+      .leftJoin(
+        skillDraftRevisions,
+        eq(
+          skillDraftRevisions.id,
+          evalGenerationTasks.targetDraftRevisionId,
+        ),
+      )
+      .leftJoin(
+        evalRevisions,
+        eq(evalRevisions.sourceGenerationTaskId, evalGenerationTasks.id),
+      )
       .where(eq(evalGenerationTasks.id, taskId))
       .limit(1)
     if (!record) throw notFound(taskId)
-    return this.mapTask(record.task, record.workspaceId, record.draftId)
+    return this.mapTask(record.task, record.workspaceId, record)
   }
 
   async list(
     workspaceId: string,
-    limit: number,
-  ): Promise<readonly EvalGenerationTaskView[]> {
+    page: number,
+    pageSize: number,
+  ): Promise<EvalGenerationTaskPage> {
     const records = await this.database
       .select({
         task: evalGenerationTasks,
         workspaceId: evalSuites.workspaceId,
         draftId: evalGenerationDrafts.id,
+        draftStatus: evalGenerationDrafts.status,
+        evalCount: evalGenerationDrafts.evalCount,
+        fileCount: evalGenerationDrafts.fileCount,
+        revisionNumber: evalRevisions.sequenceNumber,
+        versionName: skillVersions.name,
+        draftSourceRevision: skillDraftRevisions.sourceContentRevision,
+      })
+      .from(evalGenerationTasks)
+      .innerJoin(evalSuites, eq(evalSuites.id, evalGenerationTasks.suiteId))
+      .leftJoin(
+        evalGenerationDrafts,
+        eq(evalGenerationDrafts.taskId, evalGenerationTasks.id),
+      )
+      .leftJoin(
+        skillVersions,
+        eq(skillVersions.id, evalGenerationTasks.targetVersionId),
+      )
+      .leftJoin(
+        skillDraftRevisions,
+        eq(
+          skillDraftRevisions.id,
+          evalGenerationTasks.targetDraftRevisionId,
+        ),
+      )
+      .leftJoin(
+        evalRevisions,
+        eq(evalRevisions.sourceGenerationTaskId, evalGenerationTasks.id),
+      )
+      .where(eq(evalSuites.workspaceId, workspaceId))
+      .orderBy(
+        desc(evalGenerationTasks.createdAt),
+        desc(evalGenerationTasks.id),
+      )
+      .limit(pageSize)
+      .offset((page - 1) * pageSize)
+
+    const [summary] = await this.database
+      .select({
+        total: count(),
+        running: count(
+          sql`case when ${evalGenerationTasks.status} in ('PREPARING', 'RUNNING', 'VALIDATING', 'CANCELING') then 1 end`,
+        ),
+        awaitingReview: count(
+          sql`case when ${evalGenerationDrafts.status} = 'READY' then 1 end`,
+        ),
+        published: count(
+          sql`case when ${evalGenerationDrafts.status} = 'PUBLISHED' then 1 end`,
+        ),
+        failed: count(
+          sql`case when ${evalGenerationTasks.status} = 'FAILED' then 1 end`,
+        ),
       })
       .from(evalGenerationTasks)
       .innerJoin(evalSuites, eq(evalSuites.id, evalGenerationTasks.suiteId))
@@ -232,11 +312,26 @@ export class EvalGenerationRepository {
         eq(evalGenerationDrafts.taskId, evalGenerationTasks.id),
       )
       .where(eq(evalSuites.workspaceId, workspaceId))
-      .orderBy(desc(evalGenerationTasks.createdAt))
-      .limit(limit)
-    return records.map((record) =>
-      this.mapTask(record.task, record.workspaceId, record.draftId),
-    )
+
+    const total = summary?.total ?? 0
+    return {
+      items: records.map((record) =>
+        this.mapTask(record.task, record.workspaceId, record),
+      ),
+      pagination: {
+        page,
+        pageSize,
+        total,
+        pageCount: Math.ceil(total / pageSize),
+      },
+      summary: {
+        total,
+        running: summary?.running ?? 0,
+        awaitingReview: summary?.awaitingReview ?? 0,
+        published: summary?.published ?? 0,
+        failed: summary?.failed ?? 0,
+      },
+    }
   }
 
   async getRow(taskId: string): Promise<EvalGenerationTaskRow> {
@@ -626,7 +721,15 @@ export class EvalGenerationRepository {
   private mapTask(
     task: EvalGenerationTaskRow,
     workspaceId: string,
-    draftId: string | null,
+    related: {
+      readonly draftId: string | null
+      readonly draftStatus: "READY" | "PUBLISHED" | "DISCARDED" | null
+      readonly evalCount: number | null
+      readonly fileCount: number | null
+      readonly revisionNumber: number | null
+      readonly versionName: string | null
+      readonly draftSourceRevision: number | null
+    },
   ): EvalGenerationTaskView {
     return {
       id: task.id,
@@ -639,6 +742,10 @@ export class EvalGenerationRepository {
         versionId: task.targetVersionId,
         draftRevisionId: task.targetDraftRevisionId,
         skillName: task.skillName,
+        displayVersion:
+          task.targetSourceKind === "SKILL_VERSION"
+            ? related.versionName ?? task.targetVersionId ?? task.targetSnapshotId
+            : `R${related.draftSourceRevision ?? "?"}`,
       },
       maxEvalCount: task.maxEvalCount,
       generationBrief: task.generationBrief,
@@ -651,7 +758,11 @@ export class EvalGenerationRepository {
             }
           : null,
       usage: task.usage,
-      draftId,
+      draftId: related.draftId,
+      draftStatus: related.draftStatus,
+      evalCount: related.evalCount,
+      fileCount: related.fileCount,
+      revisionNumber: related.revisionNumber,
       createdAt: task.createdAt.toISOString(),
       updatedAt: task.updatedAt.toISOString(),
       startedAt: task.startedAt?.toISOString() ?? null,
