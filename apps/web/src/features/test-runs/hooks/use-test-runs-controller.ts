@@ -18,7 +18,6 @@ import type {
   TestRunDetail,
   TestRunEvent,
 } from "@/features/test-runs/model/test-run"
-import { listSkillVersions } from "@/features/version-browser/api/version-browser-api"
 import type { SkillWorkspace } from "@/features/workbench-home/model/workbench"
 
 const maxVisibleEvents = 300
@@ -38,7 +37,6 @@ export function useTestRunsListController(
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const [requestedVersionId, setRequestedVersionId] = useState("")
   const [requestedRevisionId, setRequestedRevisionId] = useState(
     initialEvalRevisionId ?? "",
   )
@@ -51,27 +49,14 @@ export function useTestRunsListController(
     queryKey: runListKey(workspace.id, page, pageSize),
     queryFn: () => listTestRuns(workspace.id, page, pageSize),
   })
-  const versionsQuery = useQuery({
-    queryKey: ["skill-workspaces", workspace.id, "versions"],
-    queryFn: () => listSkillVersions(workspace.id),
-  })
   const revisionsQuery = useQuery({
     queryKey: ["skill-workspaces", workspace.id, "eval-revisions"],
     queryFn: () => listEvalRevisions(workspace.id),
   })
-  const versions = useMemo(
-    () => versionsQuery.data ?? [],
-    [versionsQuery.data],
-  )
   const revisions = useMemo(
     () => revisionsQuery.data ?? [],
     [revisionsQuery.data],
   )
-  const selectedVersionId =
-    versions.find((version) => version.id === requestedVersionId)?.id ??
-    versions.find((version) => version.isOnline)?.id ??
-    versions[0]?.id ??
-    ""
   const selectedRevisionId =
     revisions.find((revision) => revision.id === requestedRevisionId)?.id ??
     ""
@@ -82,22 +67,19 @@ export function useTestRunsListController(
       null,
     [revisions, selectedRevisionId],
   )
-  const selectedVersion = useMemo(
-    () =>
-      versions.find((version) => version.id === selectedVersionId) ?? null,
-    [selectedVersionId, versions],
-  )
+  const draft = workspace.activeDraft
   const hasActiveRun = (runsQuery.data?.summary.active ?? 0) > 0
 
   const startMutation = useMutation({
     mutationFn: () => {
-      if (!selectedVersionId || !selectedRevisionId) {
+      if (!draft || !selectedRevisionId) {
         throw new Error(
-          "A Skill version and published Evals revision must be selected.",
+          "The current Skill working copy and a published Evals revision are required.",
         )
       }
       const input = {
-        skillVersionId: selectedVersionId,
+        draftId: draft.id,
+        draftContentRevision: draft.contentRevision,
         evalRevisionId: selectedRevisionId,
         mode: "target_vs_no_skill" as const,
       }
@@ -141,21 +123,13 @@ export function useTestRunsListController(
       interrupted: 0,
       failed: 0,
     },
-    versions,
+    draft,
     revisions,
-    selectedVersion,
     selectedRevision,
-    selectedVersionId,
     selectedRevisionId,
     hasActiveRun,
-    loading:
-      runsQuery.isPending ||
-      versionsQuery.isPending ||
-      revisionsQuery.isPending,
-    error:
-      runsQuery.isError ||
-      versionsQuery.isError ||
-      revisionsQuery.isError,
+    loading: runsQuery.isPending || revisionsQuery.isPending,
+    error: runsQuery.isError || revisionsQuery.isError,
     mutationPending: startMutation.isPending,
     mutationError:
       startMutation.error instanceof Error
@@ -167,13 +141,11 @@ export function useTestRunsListController(
         setPageSize(nextPageSize)
         setPage(1)
       },
-      selectVersion: setRequestedVersionId,
       selectRevision: setRequestedRevisionId,
       start: () => startMutation.mutateAsync(),
       retry: () => {
         void Promise.all([
           runsQuery.refetch(),
-          versionsQuery.refetch(),
           revisionsQuery.refetch(),
         ])
       },

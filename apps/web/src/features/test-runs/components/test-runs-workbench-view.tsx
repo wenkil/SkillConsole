@@ -209,8 +209,18 @@ export function TestRunsWorkbenchView({
                     </td>
                     <td className="px-4 py-3.5">
                       <strong className="block text-xs">
-                        {run.target.skillVersionName}
+                        {run.target.draftContentRevision
+                          ? t("list.draftRevision", {
+                              revision:
+                                run.target.draftContentRevision,
+                            })
+                          : (run.target.skillVersionName ?? "—")}
                       </strong>
+                      <span className="mt-1 block font-mono text-[9px] text-muted-foreground">
+                        {t("list.confirmedVersion")}: {run.target.skillVersionName
+                          ? `${run.target.skillVersionName} · #${run.target.skillVersionNumber}`
+                          : "—"}
+                      </span>
                       <span className="mt-1 block font-mono text-[9px] text-muted-foreground">
                         EVALS R{run.target.evalRevisionNumber} ·{" "}
                         {t("list.evalCount", {
@@ -340,16 +350,13 @@ export function TestRunsWorkbenchView({
           navigate(`/workbenches/${workspace.id}/runs/${run.id}`)
           return run
         }}
-        onVersionChange={controller.actions.selectVersion}
         open={dialogOpen}
         pending={controller.mutationPending}
         revisions={controller.revisions}
         selectedRevision={controller.selectedRevision}
         selectedRevisionId={controller.selectedRevisionId}
-        selectedVersion={controller.selectedVersion}
-        selectedVersionId={controller.selectedVersionId}
         t={t}
-        versions={controller.versions}
+        draft={controller.draft}
       />
     </main>
   )

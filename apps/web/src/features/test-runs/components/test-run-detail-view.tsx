@@ -285,13 +285,22 @@ export function TestRunDetailView({
             </button>
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <h1 className="text-2xl font-[790] tracking-[-0.035em]">
-                {run.target.skillVersionName} × EVALS R
+                {run.target.draftContentRevision
+                  ? t("detail.draftRevision", {
+                      revision: run.target.draftContentRevision,
+                    })
+                  : (run.target.skillVersionName ?? "—")} × EVALS R
                 {run.target.evalRevisionNumber}
               </h1>
               <TestRunStatusBadge status={run.status} t={t} />
             </div>
             <p className="mt-1.5 font-mono text-[9px] text-muted-foreground">
               RUN {run.id}
+            </p>
+            <p className="mt-1 font-mono text-[9px] text-muted-foreground">
+              {t("detail.confirmedVersion")}: {run.target.skillVersionName
+                ? `${run.target.skillVersionName} · #${run.target.skillVersionNumber}`
+                : "—"}
             </p>
           </div>
           {isActiveTestRun(run.status) ? (

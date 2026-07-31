@@ -60,9 +60,12 @@ export interface TestRunView {
   mode: "target_vs_no_skill"
   status: TestRunStatus
   target: {
-    skillVersionId: string
-    skillVersionName: string
-    skillVersionNumber: number
+    draftId: string | null
+    draftRevisionId: string | null
+    draftContentRevision: number | null
+    skillVersionId: string | null
+    skillVersionName: string | null
+    skillVersionNumber: number | null
     skillSnapshotId: string
     evalRevisionId: string
     evalRevisionNumber: number
@@ -180,7 +183,8 @@ export interface TestRunEvent {
 }
 
 export interface StartTestRunInput {
-  skillVersionId: string
+  draftId: string
+  draftContentRevision: number
   evalRevisionId: string
   mode: "target_vs_no_skill"
 }

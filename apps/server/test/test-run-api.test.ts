@@ -24,9 +24,12 @@ function createRun(
     mode: "target_vs_no_skill",
     status: "PREPARING",
     target: {
-      skillVersionId: randomUUID(),
-      skillVersionName: "V1",
-      skillVersionNumber: 1,
+      draftId: randomUUID(),
+      draftRevisionId: randomUUID(),
+      draftContentRevision: 3,
+      skillVersionId: null,
+      skillVersionName: null,
+      skillVersionNumber: null,
       skillSnapshotId: randomUUID(),
       evalRevisionId: randomUUID(),
       evalRevisionNumber: 2,
@@ -55,7 +58,7 @@ function createRun(
   }
 }
 
-test("test run API requires an explicit immutable selection and hides runtime internals", async () => {
+test("test run API requires the current draft revision and hides runtime internals", async () => {
   const workspaceId = randomUUID()
   const run = createRun(workspaceId)
   let capturedStart: unknown
@@ -93,7 +96,8 @@ test("test run API requires an explicit immutable selection and hides runtime in
 
   try {
     const payload = {
-      skillVersionId: run.target.skillVersionId,
+      draftId: run.target.draftId,
+      draftContentRevision: run.target.draftContentRevision,
       evalRevisionId: run.target.evalRevisionId,
       mode: "target_vs_no_skill",
     }

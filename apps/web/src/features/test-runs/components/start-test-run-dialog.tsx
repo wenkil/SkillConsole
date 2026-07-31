@@ -3,7 +3,7 @@ import { useState } from "react"
 import type { TFunction } from "i18next"
 
 import type { EvalRevision } from "@/features/evals/model/evals"
-import type { SkillVersionBrowser } from "@/features/version-browser/model/version-browser"
+import type { SkillDraftSummary } from "@/features/workbench-home/model/workbench"
 import { Button } from "@/shared/components/ui/button"
 import {
   Dialog,
@@ -16,36 +16,30 @@ import {
 
 export function StartTestRunDialog({
   open,
-  versions,
+  draft,
   revisions,
-  selectedVersionId,
   selectedRevisionId,
-  selectedVersion,
   selectedRevision,
   blocked,
   pending,
   onOpenChange,
-  onVersionChange,
   onRevisionChange,
   onStart,
   t,
 }: {
   open: boolean
-  versions: readonly SkillVersionBrowser[]
+  draft: SkillDraftSummary | null
   revisions: readonly EvalRevision[]
-  selectedVersionId: string
   selectedRevisionId: string
-  selectedVersion: SkillVersionBrowser | null
   selectedRevision: EvalRevision | null
   blocked: boolean
   pending: boolean
   onOpenChange: (open: boolean) => void
-  onVersionChange: (versionId: string) => void
   onRevisionChange: (revisionId: string) => void
   onStart: () => Promise<unknown>
   t: TFunction<"testRuns">
 }) {
-  const selectionSignature = `${selectedVersionId}:${selectedRevisionId}`
+  const selectionSignature = `${draft?.id ?? ""}:${draft?.contentRevision ?? ""}:${selectedRevisionId}`
   const [confirmedSelection, setConfirmedSelection] = useState<string | null>(
     null,
   )
@@ -71,25 +65,17 @@ export function StartTestRunDialog({
         </DialogHeader>
 
         <div className="grid gap-5 px-6 py-5">
-          <label className="grid gap-1.5 text-xs font-semibold">
-            {t("start.skillVersion")}
-            <select
-              className="h-10 border border-foreground bg-background px-3 font-mono text-[11px] outline-none focus:border-primary"
-              disabled={blocked || pending}
-              onChange={(event) => {
-                setConfirmedSelection(null)
-                onVersionChange(event.target.value)
-              }}
-              value={selectedVersionId}
-            >
-              {versions.map((version) => (
-                <option key={version.id} value={version.id}>
-                  {version.name} · #{version.sequenceNumber}
-                  {version.isOnline ? ` · ${t("start.online")}` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="grid gap-1.5 text-xs font-semibold">
+            {t("start.skillDraft")}
+            <div className="min-h-10 border border-foreground bg-background px-3 py-2.5 font-mono text-[11px]">
+              {draft
+                ? t("start.draftSelection", {
+                    revision: draft.contentRevision,
+                    source: draft.sourceName,
+                  })
+                : t("start.noDraft")}
+            </div>
+          </div>
 
           <label className="grid gap-1.5 text-xs font-semibold">
             {t("start.evalRevision")}
@@ -112,18 +98,20 @@ export function StartTestRunDialog({
             </select>
           </label>
 
-          {selectedVersion && selectedRevision ? (
+          {draft && selectedRevision ? (
             <div className="grid grid-cols-2 gap-px border border-foreground bg-rule">
               <div className="bg-background p-3">
                 <span className="font-mono text-[9px] text-muted-foreground uppercase">
                   {t("start.frozenSkill")}
                 </span>
                 <strong className="mt-1 block text-sm">
-                  {selectedVersion.name}
+                  {t("start.draftRevision", {
+                    revision: draft.contentRevision,
+                  })}
                 </strong>
-                <code className="mt-1 block truncate font-mono text-[9px] text-muted-foreground">
-                  {selectedVersion.snapshot.manifestHash}
-                </code>
+                <span className="mt-1 block truncate font-mono text-[9px] text-muted-foreground">
+                  {t("start.freezeOnStart")}
+                </span>
               </div>
               <div className="bg-background p-3">
                 <span className="font-mono text-[9px] text-muted-foreground uppercase">
@@ -153,7 +141,7 @@ export function StartTestRunDialog({
             <input
               checked={confirmed}
               className="mt-1"
-              disabled={!selectedRevision || blocked || pending}
+              disabled={!draft || !selectedRevision || blocked || pending}
               onChange={(event) =>
                 setConfirmedSelection(
                   event.target.checked ? selectionSignature : null,
@@ -191,7 +179,7 @@ export function StartTestRunDialog({
             disabled={
               blocked ||
               pending ||
-              !selectedVersionId ||
+              !draft ||
               !selectedRevisionId ||
               !confirmed
             }

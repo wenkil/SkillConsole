@@ -87,7 +87,8 @@ export const TestRunStartHeadersSchema = Type.Object(
 
 export const StartTestRunBodySchema = Type.Object(
   {
-    skillVersionId: Type.String({ format: "uuid" }),
+    draftId: Type.String({ format: "uuid" }),
+    draftContentRevision: Type.Integer({ minimum: 1 }),
     evalRevisionId: Type.String({ format: "uuid" }),
     mode: Type.Literal("target_vs_no_skill"),
   },
@@ -108,9 +109,27 @@ const TestRunErrorSchema = Type.Object(
 
 const TestRunTargetSchema = Type.Object(
   {
-    skillVersionId: Type.String({ format: "uuid" }),
-    skillVersionName: Type.String({ minLength: 1 }),
-    skillVersionNumber: Type.Integer({ minimum: 1 }),
+    draftId: Type.Union([Type.String({ format: "uuid" }), Type.Null()]),
+    draftRevisionId: Type.Union([
+      Type.String({ format: "uuid" }),
+      Type.Null(),
+    ]),
+    draftContentRevision: Type.Union([
+      Type.Integer({ minimum: 1 }),
+      Type.Null(),
+    ]),
+    skillVersionId: Type.Union([
+      Type.String({ format: "uuid" }),
+      Type.Null(),
+    ]),
+    skillVersionName: Type.Union([
+      Type.String({ minLength: 1 }),
+      Type.Null(),
+    ]),
+    skillVersionNumber: Type.Union([
+      Type.Integer({ minimum: 1 }),
+      Type.Null(),
+    ]),
     skillSnapshotId: Type.String({ format: "uuid" }),
     evalRevisionId: Type.String({ format: "uuid" }),
     evalRevisionNumber: Type.Integer({ minimum: 1 }),

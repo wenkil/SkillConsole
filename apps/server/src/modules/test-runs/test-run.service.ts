@@ -11,6 +11,7 @@ import {
   type AgentSessionEvent,
 } from "../agent-sessions/agent-session.domain.js"
 import type { AgentSessionService } from "../agent-sessions/agent-session.service.js"
+import { DraftRevisionService } from "../skill-workspaces/draft-revision.service.js"
 import {
   pinnedSkillCreatorCommit,
   pinnedSkillCreatorTreeHash,
@@ -51,6 +52,7 @@ interface TestRunLogger {
 export interface TestRunServiceOptions {
   readonly claudeSettingsPath: string
   readonly repository: TestRunRepository
+  readonly draftRevisions: DraftRevisionService
   readonly storage: TestRunStorage
   readonly agentSessions: AgentSessionService
   readonly scorer: TestRunScorer
@@ -228,7 +230,8 @@ export class TestRunService {
   async start(input: CreateTestRunInput): Promise<TestRunDetailView> {
     const requestHash = stableHash({
       workspaceId: input.workspaceId,
-      skillVersionId: input.skillVersionId,
+      draftId: input.draftId,
+      draftContentRevision: input.draftContentRevision,
       evalRevisionId: input.evalRevisionId,
       mode: input.mode,
     })
@@ -248,11 +251,20 @@ export class TestRunService {
       return this.options.repository.getDetail(replay.id)
     }
 
-    const selection = await this.options.repository.freezeSelection(
+    const draftRevision = await this.options.draftRevisions.freeze(
       input.workspaceId,
-      input.skillVersionId,
-      input.evalRevisionId,
+      {
+        draftId: input.draftId,
+        contentRevision: input.draftContentRevision,
+      },
+      "TRIAL",
     )
+    const selection = await this.options.repository.freezeSelection({
+      workspaceId: input.workspaceId,
+      skillDraftRevisionId: draftRevision.draftRevisionId,
+      skillVersionId: null,
+      evalRevisionId: input.evalRevisionId,
+    })
     const configurationFingerprint = sha256(
       await readFile(this.options.claudeSettingsPath),
     )
@@ -276,9 +288,9 @@ export class TestRunService {
     })
     const runInputFingerprint = stableHash({
       comparabilityFingerprint,
-      skillVersionId: selection.version.id,
-      skillSnapshotId: selection.version.snapshotId,
-      skillManifestHash: selection.version.manifestHash,
+      draftRevisionId: selection.skill.draftRevisionId,
+      skillSnapshotId: selection.skill.snapshotId,
+      skillManifestHash: selection.skill.manifestHash,
     })
     const cases = selection.cases.flatMap((evalCase, index) => {
       const inputFingerprint = stableHash({
@@ -316,7 +328,7 @@ export class TestRunService {
         skillCreatorTreeHash: pinnedSkillCreatorTreeHash,
         configurationFingerprint,
         environmentFingerprint,
-        skillManifestHash: selection.version.manifestHash,
+        skillManifestHash: selection.skill.manifestHash,
         evalManifestHash: selection.revision.manifestHash,
         comparabilityFingerprint,
         runInputFingerprint,
@@ -472,13 +484,14 @@ export class TestRunService {
     await this.options.repository.markRunRunning(runId)
     await this.publishNewEvents(runId)
     const run = await this.options.repository.getRow(runId)
-    const selection = await this.options.repository.freezeSelection(
-      run.workspaceId,
-      run.skillVersionId,
-      run.evalRevisionId,
-    )
+    const selection = await this.options.repository.freezeSelection({
+      workspaceId: run.workspaceId,
+      skillDraftRevisionId: run.skillDraftRevisionId,
+      skillVersionId: run.skillVersionId,
+      evalRevisionId: run.evalRevisionId,
+    })
     if (
-      selection.version.manifestHash !== run.skillManifestHash ||
+      selection.skill.manifestHash !== run.skillManifestHash ||
       selection.revision.manifestHash !== run.evalManifestHash
     ) {
       throw new Error("The frozen test run input facts no longer match.")

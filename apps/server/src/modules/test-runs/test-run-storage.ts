@@ -240,14 +240,14 @@ export class TestRunStorage {
           "skills",
           selection.revision.skillName,
         )
-        for (const file of selection.version.files) {
+        for (const file of selection.skill.files) {
           const destination = path.join(
             skillRoot,
             ...file.relativePath.split("/"),
           )
           assertWithinRoot(skillRoot, destination)
           const source = this.snapshots.getSnapshotFilePath(
-            selection.version.snapshotId,
+            selection.skill.snapshotId,
             file.relativePath,
           )
           await assertFileHash(source, file.sha256)
@@ -323,7 +323,7 @@ export class TestRunStorage {
         "skills",
         selection.revision.skillName,
       )
-      await assertImmutableFileSet(skillRoot, selection.version.files)
+      await assertImmutableFileSet(skillRoot, selection.skill.files)
     }
     const indexedFiles = new Map(
       selection.files.map((file) => [file.relativePath, file]),

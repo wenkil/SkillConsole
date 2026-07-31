@@ -1,13 +1,15 @@
 import { randomUUID } from "node:crypto"
 
-import { and, eq, max } from "drizzle-orm"
+import { and, eq, inArray, isNull, max } from "drizzle-orm"
 
 import type { UploadLimits } from "../../config/index.js"
 import { DomainError } from "../../core/errors/domain-error.js"
 import {
   skillSnapshotFiles,
   skillSnapshots,
+  skillDraftRevisions,
   skillDrafts,
+  skillTestRuns,
   skillVersions,
   skillWorkspaces,
   type Database,
@@ -178,6 +180,8 @@ export class VersionService {
             id: versionId,
             workspaceId,
             snapshotId,
+            sourceDraftId: draft.id,
+            sourceContentRevision: draft.contentRevision,
             sequenceNumber,
             name,
             description,
@@ -187,6 +191,36 @@ export class VersionService {
             createdAt: now,
             frozenAt: now,
           })
+          const draftRevisions = await transaction
+            .select({ id: skillDraftRevisions.id })
+            .from(skillDraftRevisions)
+            .where(
+              and(
+                eq(skillDraftRevisions.draftId, draft.id),
+                eq(
+                  skillDraftRevisions.sourceContentRevision,
+                  draft.contentRevision,
+                ),
+              ),
+            )
+          if (draftRevisions.length > 0) {
+            await transaction
+              .update(skillTestRuns)
+              .set({ skillVersionId: versionId, updatedAt: now })
+              .where(
+                and(
+                  inArray(
+                    skillTestRuns.skillDraftRevisionId,
+                    draftRevisions.map((revision) => revision.id),
+                  ),
+                  eq(
+                    skillTestRuns.skillManifestHash,
+                    manifest.manifestHash,
+                  ),
+                  isNull(skillTestRuns.skillVersionId),
+                ),
+              )
+          }
           await transaction
             .update(skillWorkspaces)
             .set({

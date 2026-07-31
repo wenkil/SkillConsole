@@ -4,28 +4,20 @@ import { describe, expect, it, vi } from "vitest"
 
 import { StartTestRunDialog } from "@/features/test-runs/components/start-test-run-dialog"
 import type { EvalRevision } from "@/features/evals/model/evals"
-import type { SkillVersionBrowser } from "@/features/version-browser/model/version-browser"
+import type { SkillDraftSummary } from "@/features/workbench-home/model/workbench"
 import { i18n } from "@/shared/i18n/i18n"
 
-const version: SkillVersionBrowser = {
+const draft: SkillDraftSummary = {
   id: "01900000-0000-7000-8000-000000000001",
-  sequenceNumber: 2,
-  name: "V2",
-  description: null,
-  labels: [],
+  contentRevision: 2,
+  status: "OPEN",
   sourceType: "folder",
   sourceName: "sample-skill",
   createdAt: "2026-07-31T00:00:00.000Z",
-  frozenAt: "2026-07-31T00:00:00.000Z",
-  isOnline: true,
-  isComparisonBaseline: false,
-  snapshot: {
-    id: "01900000-0000-7000-8000-000000000002",
-    state: "READY",
-    manifestHash: "a".repeat(64),
+  updatedAt: "2026-07-31T00:00:00.000Z",
+  workingCopy: {
     fileCount: 1,
     totalBytes: 100,
-    createdAt: "2026-07-31T00:00:00.000Z",
   },
 }
 
@@ -35,7 +27,7 @@ const revision: EvalRevision = {
   sequenceNumber: 3,
   skillName: "sample-skill",
   sourceGenerationTaskId: "01900000-0000-7000-8000-000000000005",
-  sourceSnapshotId: version.snapshot.id,
+  sourceSnapshotId: "01900000-0000-7000-8000-000000000002",
   manifestHash: "b".repeat(64),
   rawEvalsSha256: "c".repeat(64),
   evalCount: 4,
@@ -51,29 +43,49 @@ describe("StartTestRunDialog", () => {
     render(
       <StartTestRunDialog
         blocked={false}
+        draft={draft}
         onOpenChange={vi.fn()}
         onRevisionChange={vi.fn()}
         onStart={onStart}
-        onVersionChange={vi.fn()}
         open
         pending={false}
         revisions={[revision]}
         selectedRevision={revision}
         selectedRevisionId={revision.id}
-        selectedVersion={version}
-        selectedVersionId={version.id}
         t={i18n.getFixedT("zh-CN", "testRuns")}
-        versions={[version]}
       />,
     )
 
     const start = screen.getByRole("button", { name: "启动测试运行" })
     expect(start).toBeDisabled()
     await user.click(
-      screen.getByRole("checkbox", { name: /我确认使用 EVALS R3/ }),
+      screen.getByRole("checkbox", { name: /我确认冻结当前工作副本/ }),
     )
     expect(start).toBeEnabled()
     await user.click(start)
     expect(onStart).toHaveBeenCalledOnce()
+  })
+
+  it("blocks starting when the workbench has no active draft", () => {
+    render(
+      <StartTestRunDialog
+        blocked={false}
+        draft={null}
+        onOpenChange={vi.fn()}
+        onRevisionChange={vi.fn()}
+        onStart={vi.fn()}
+        open
+        pending={false}
+        revisions={[revision]}
+        selectedRevision={revision}
+        selectedRevisionId={revision.id}
+        t={i18n.getFixedT("zh-CN", "testRuns")}
+      />,
+    )
+
+    expect(screen.getByText("当前没有可测试的工作副本")).toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "启动测试运行" }),
+    ).toBeDisabled()
   })
 })

@@ -19,6 +19,7 @@ import {
   evalRevisions,
 } from "./evals.js"
 import {
+  skillDraftRevisions,
   skillSnapshots,
   skillVersions,
   skillWorkspaces,
@@ -119,9 +120,14 @@ export const skillTestRuns = pgTable(
     workspaceId: uuid("workspace_id")
       .notNull()
       .references(() => skillWorkspaces.id, { onDelete: "cascade" }),
-    skillVersionId: uuid("skill_version_id")
-      .notNull()
-      .references(() => skillVersions.id, { onDelete: "restrict" }),
+    skillVersionId: uuid("skill_version_id").references(
+      () => skillVersions.id,
+      { onDelete: "restrict" },
+    ),
+    skillDraftRevisionId: uuid("skill_draft_revision_id").references(
+      () => skillDraftRevisions.id,
+      { onDelete: "restrict" },
+    ),
     skillSnapshotId: uuid("skill_snapshot_id")
       .notNull()
       .references(() => skillSnapshots.id, { onDelete: "restrict" }),
@@ -171,6 +177,10 @@ export const skillTestRuns = pgTable(
     }),
   },
   (table) => [
+    check(
+      "skill_test_runs_target_check",
+      sql`${table.skillDraftRevisionId} is not null or ${table.skillVersionId} is not null`,
+    ),
     check(
       "skill_test_runs_hashes_check",
       sql`${table.skillCreatorTreeHash} ~ '^[0-9a-f]{64}$'

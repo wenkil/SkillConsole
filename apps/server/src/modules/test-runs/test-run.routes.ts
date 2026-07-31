@@ -130,7 +130,8 @@ export const testRunRoutes: FastifyPluginAsyncTypebox = async (
       reply.code(202).send(
         serializeRunDetail(await service.start({
           workspaceId: request.params.workspaceId,
-          skillVersionId: request.body.skillVersionId,
+          draftId: request.body.draftId,
+          draftContentRevision: request.body.draftContentRevision,
           evalRevisionId: request.body.evalRevisionId,
           mode: request.body.mode,
           idempotencyKey: request.headers["idempotency-key"],

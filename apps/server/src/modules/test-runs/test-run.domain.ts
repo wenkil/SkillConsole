@@ -31,9 +31,12 @@ export interface TestRunTraceability {
 }
 
 export interface TestRunTargetView {
-  readonly skillVersionId: string
-  readonly skillVersionName: string
-  readonly skillVersionNumber: number
+  readonly draftId: string | null
+  readonly draftRevisionId: string | null
+  readonly draftContentRevision: number | null
+  readonly skillVersionId: string | null
+  readonly skillVersionName: string | null
+  readonly skillVersionNumber: number | null
   readonly skillSnapshotId: string
   readonly evalRevisionId: string
   readonly evalRevisionNumber: number
@@ -148,7 +151,8 @@ export interface TestRunEvent {
 
 export interface CreateTestRunInput {
   readonly workspaceId: string
-  readonly skillVersionId: string
+  readonly draftId: string
+  readonly draftContentRevision: number
   readonly evalRevisionId: string
   readonly mode: typeof testRunMode
   readonly idempotencyKey: string

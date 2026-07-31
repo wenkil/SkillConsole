@@ -414,6 +414,12 @@ export function useVersionBrowserController({
             queryClient.invalidateQueries({
               queryKey: ["skill-workspaces"],
             }),
+            queryClient.invalidateQueries({
+              queryKey: ["skill-workspaces", workspaceId, "test-runs"],
+            }),
+            queryClient.invalidateQueries({
+              queryKey: ["test-runs"],
+            }),
           ])
           return version
         } finally {

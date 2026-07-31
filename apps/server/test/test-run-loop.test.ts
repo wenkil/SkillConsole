@@ -20,10 +20,9 @@ import { buildApplication } from "../src/app.js"
 import {
   closeDatabaseClient,
   createDatabaseClient,
-  skillSnapshotFiles,
-  skillSnapshots,
+  skillDraftFiles,
+  skillDrafts,
   skillTestRunEvents,
-  skillVersions,
   skillWorkspaces,
 } from "../src/infrastructure/database/index.js"
 import type {
@@ -262,22 +261,21 @@ test(
     })
 
     const workspaceId = randomUUID()
-    const snapshotId = randomUUID()
-    const versionId = randomUUID()
+    const draftId = randomUUID()
     const skillContent =
       "---\nname: sample-skill\ndescription: Test Skill\n---\n"
     const skillHash = createHash("sha256")
       .update(skillContent)
       .digest("hex")
     await mkdir(
-      path.join(dataRoot, "snapshots", snapshotId, "files"),
+      path.join(dataRoot, "drafts", draftId, "files"),
       { recursive: true },
     )
     await writeFile(
       path.join(
         dataRoot,
-        "snapshots",
-        snapshotId,
+        "drafts",
+        draftId,
         "files",
         "SKILL.md",
       ),
@@ -289,54 +287,31 @@ test(
         id: workspaceId,
         name: `Test run integration ${workspaceId}`,
       })
-      await transaction.insert(skillSnapshots).values({
-        id: snapshotId,
+      await transaction.insert(skillDrafts).values({
+        id: draftId,
         workspaceId,
-        kind: "VERSION",
-        state: "READY",
-        manifestHash: createHash("sha256")
-          .update(
-            JSON.stringify([
-              {
-                path: "SKILL.md",
-                sha256: skillHash,
-                byteSize: Buffer.byteLength(skillContent),
-                mediaTypeHint: "text/markdown",
-                contentKind: "text",
-              },
-            ]),
-          )
-          .digest("hex"),
-        storageLocator: `snapshots/${snapshotId}`,
+        baseVersionId: null,
+        baseSnapshotId: null,
+        currentSnapshotId: null,
+        workingStorageLocator: `drafts/${draftId}`,
         fileCount: 1,
         totalBytes: Buffer.byteLength(skillContent),
+        status: "OPEN",
+        contentRevision: 1,
+        sourceType: "folder",
+        sourceName: "sample-skill",
+        ignoreRules: [],
+        currentIgnoredPaths: [],
       })
-      await transaction.insert(skillSnapshotFiles).values({
+      await transaction.insert(skillDraftFiles).values({
         id: randomUUID(),
-        snapshotId,
+        draftId,
         relativePath: "SKILL.md",
         sha256: skillHash,
         byteSize: Buffer.byteLength(skillContent),
         mediaTypeHint: "text/markdown",
         contentKind: "text",
       })
-      await transaction.insert(skillVersions).values({
-        id: versionId,
-        workspaceId,
-        snapshotId,
-        sequenceNumber: 1,
-        name: "V1",
-        labels: [],
-        sourceType: "folder",
-        sourceName: "sample-skill",
-      })
-      await transaction
-        .update(skillWorkspaces)
-        .set({
-          currentOnlineVersionId: versionId,
-          comparisonBaselineVersionId: versionId,
-        })
-        .where(eq(skillWorkspaces.id, workspaceId))
     })
     await closeDatabaseClient(databaseClient)
 
@@ -380,7 +355,7 @@ test(
             "idempotency-key": "test-run-evals-1",
           },
           body: JSON.stringify({
-            target: { kind: "version", versionId },
+            target: { kind: "draft", draftId, contentRevision: 1 },
             maxEvalCount: 3,
           }),
         },
@@ -416,7 +391,8 @@ test(
             "idempotency-key": "test-run-1",
           },
           body: JSON.stringify({
-            skillVersionId: versionId,
+            draftId,
+            draftContentRevision: 1,
             evalRevisionId: published.revision.id,
             mode: "target_vs_no_skill",
           }),
@@ -425,6 +401,9 @@ test(
       assert.equal(startResponse.status, 202)
       const started = (await startResponse.json()) as TestRunDetailView
       assert.equal(started.target.evalRevisionId, published.revision.id)
+      assert.equal(started.target.draftId, draftId)
+      assert.equal(started.target.draftContentRevision, 1)
+      assert.equal(started.target.skillVersionId, null)
       const terminal = await waitForRunTerminal(address, started.id)
 
       assert.equal(terminal.status, "COMPLETED")
@@ -432,6 +411,30 @@ test(
       assert.equal(terminal.cases.length, 2)
       assert.equal(terminal.benchmark?.target.passed, 1)
       assert.equal(terminal.benchmark?.baseline.passed, 1)
+
+      const versionResponse = await fetch(
+        `${address}/api/skill-workspaces/${workspaceId}/versions`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name: "V1", setOnline: false }),
+        },
+      )
+      assert.equal(versionResponse.status, 201)
+      const version = (await versionResponse.json()) as {
+        id: string
+        name: string
+      }
+      const refreshedResponse = await fetch(
+        `${address}/api/test-runs/${terminal.id}`,
+      )
+      assert.equal(refreshedResponse.status, 200)
+      const refreshed =
+        (await refreshedResponse.json()) as TestRunDetailView
+      assert.equal(refreshed.target.skillVersionId, version.id)
+      assert.equal(refreshed.target.skillVersionName, "V1")
+      assert.equal(refreshed.target.draftContentRevision, 1)
+
       const target = terminal.cases.find((item) => item.side === "TARGET")
       const baseline = terminal.cases.find(
         (item) => item.side === "BASELINE",

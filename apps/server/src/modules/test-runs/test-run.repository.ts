@@ -19,6 +19,8 @@ import {
   evalRevisions,
   evalSuites,
   runBenchmarks,
+  skillDraftRevisions,
+  skillDrafts,
   skillSnapshots,
   skillSnapshotFiles,
   skillTestArtifacts,
@@ -61,10 +63,15 @@ type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0]
 
 export interface FrozenTestRunSelection {
   readonly workspaceId: string
-  readonly version: {
-    readonly id: string
-    readonly name: string
-    readonly sequenceNumber: number
+  readonly skill: {
+    readonly draftId: string | null
+    readonly draftRevisionId: string | null
+    readonly contentRevision: number | null
+    readonly version: {
+      readonly id: string
+      readonly name: string
+      readonly sequenceNumber: number
+    } | null
     readonly snapshotId: string
     readonly manifestHash: string
     readonly storageLocator: string
@@ -102,6 +109,13 @@ interface CreateRunInput {
   readonly cases: readonly CreateCaseInput[]
 }
 
+interface FreezeSelectionInput {
+  readonly workspaceId: string
+  readonly skillDraftRevisionId: string | null
+  readonly skillVersionId: string | null
+  readonly evalRevisionId: string
+}
+
 export interface CollectedArtifactInput {
   readonly id: string
   readonly relativePath: string
@@ -127,8 +141,11 @@ export interface StoredAssertionResultInput {
 
 interface RunWithDisplay {
   readonly run: SkillTestRunRow
-  readonly versionName: string
-  readonly versionNumber: number
+  readonly draftId: string | null
+  readonly draftContentRevision: number | null
+  readonly versionId: string | null
+  readonly versionName: string | null
+  readonly versionNumber: number | null
   readonly revisionNumber: number
   readonly evalCount: number
   readonly benchmarkTarget: StoredBenchmarkSide | null
@@ -163,7 +180,10 @@ function mapRun(record: RunWithDisplay): TestRunView {
     mode: run.mode,
     status: run.status,
     target: {
-      skillVersionId: run.skillVersionId,
+      draftId: record.draftId,
+      draftRevisionId: run.skillDraftRevisionId,
+      draftContentRevision: record.draftContentRevision,
+      skillVersionId: record.versionId,
       skillVersionName: record.versionName,
       skillVersionNumber: record.versionNumber,
       skillSnapshotId: run.skillSnapshotId,
@@ -300,66 +320,46 @@ function mapCase(
 export class TestRunRepository {
   constructor(private readonly database: Database) {}
 
-  async freezeSelection(
-    workspaceId: string,
-    skillVersionId: string,
-    evalRevisionId: string,
-  ): Promise<FrozenTestRunSelection> {
-    const [record] = await this.database
-      .select({
-        versionId: skillVersions.id,
-        versionName: skillVersions.name,
-        versionNumber: skillVersions.sequenceNumber,
-        versionWorkspaceId: skillVersions.workspaceId,
-        snapshotId: skillSnapshots.id,
-        snapshotState: skillSnapshots.state,
-        snapshotManifestHash: skillSnapshots.manifestHash,
-        snapshotStorageLocator: skillSnapshots.storageLocator,
-        revisionId: evalRevisions.id,
-        revisionSuiteId: evalRevisions.suiteId,
-        revisionNumber: evalRevisions.sequenceNumber,
-        revisionSkillName: evalRevisions.skillName,
-        revisionManifestHash: evalRevisions.manifestHash,
-        revisionStorageLocator: evalRevisions.storageLocator,
-        revisionEvalCount: evalRevisions.evalCount,
-        revisionWorkspaceId: evalSuites.workspaceId,
-        skillCreatorCommit: evalRevisions.skillCreatorCommit,
-        skillCreatorTreeHash: evalRevisions.skillCreatorTreeHash,
-      })
-      .from(skillVersions)
-      .innerJoin(
-        skillSnapshots,
-        eq(skillSnapshots.id, skillVersions.snapshotId),
-      )
-      .innerJoin(
-        evalRevisions,
-        eq(evalRevisions.id, evalRevisionId),
-      )
-      .innerJoin(evalSuites, eq(evalSuites.id, evalRevisions.suiteId))
-      .where(
-        and(
-          eq(skillVersions.id, skillVersionId),
-          eq(skillVersions.workspaceId, workspaceId),
-          eq(evalSuites.workspaceId, workspaceId),
-        ),
-      )
-      .limit(1)
+  async freezeSelection({
+    workspaceId,
+    skillDraftRevisionId,
+    skillVersionId,
+    evalRevisionId,
+  }: FreezeSelectionInput): Promise<FrozenTestRunSelection> {
+    const [skill, revision] = await Promise.all([
+      skillDraftRevisionId
+        ? this.resolveDraftSkill(
+            workspaceId,
+            skillDraftRevisionId,
+            skillVersionId,
+          )
+        : this.resolveLegacyVersionSkill(workspaceId, skillVersionId),
+      this.resolveEvalRevision(workspaceId, evalRevisionId),
+    ])
 
-    if (!record) {
+    if (!skill || !revision) {
       throw new DomainError({
         code: "TEST_RUN_SELECTION_NOT_FOUND",
         message:
-          "The selected Skill version and Evals revision must both belong to this workbench.",
+          "The frozen Skill working copy and Evals revision must both belong to this workbench.",
         kind: "not_found",
-        details: { workspaceId, skillVersionId, evalRevisionId },
+        details: {
+          workspaceId,
+          skillDraftRevisionId,
+          skillVersionId,
+          evalRevisionId,
+        },
       })
     }
-    if (record.snapshotState !== "READY") {
+    if (skill.snapshotState !== "READY") {
       throw new DomainError({
         code: "TEST_RUN_SKILL_SNAPSHOT_NOT_READY",
-        message: "The selected Skill version Snapshot is not ready.",
+        message: "The frozen Skill working-copy Snapshot is not ready.",
         kind: "conflict",
-        details: { skillVersionId, snapshotState: record.snapshotState },
+        details: {
+          skillDraftRevisionId,
+          snapshotState: skill.snapshotState,
+        },
       })
     }
 
@@ -377,13 +377,13 @@ export class TestRunRepository {
       this.database
         .select()
         .from(skillSnapshotFiles)
-        .where(eq(skillSnapshotFiles.snapshotId, record.snapshotId))
+        .where(eq(skillSnapshotFiles.snapshotId, skill.snapshotId))
         .orderBy(asc(skillSnapshotFiles.relativePath)),
     ])
 
     if (
       cases.length === 0 ||
-      cases.length !== record.revisionEvalCount ||
+      cases.length !== revision.evalCount ||
       skillFiles.length === 0
     ) {
       throw new DomainError({
@@ -393,7 +393,7 @@ export class TestRunRepository {
         kind: "conflict",
         details: {
           evalRevisionId,
-          expectedCases: record.revisionEvalCount,
+          expectedCases: revision.evalCount,
           actualCases: cases.length,
           skillFileCount: skillFiles.length,
         },
@@ -402,29 +402,183 @@ export class TestRunRepository {
 
     return {
       workspaceId,
-      version: {
-        id: record.versionId,
-        name: record.versionName,
-        sequenceNumber: record.versionNumber,
-        snapshotId: record.snapshotId,
-        manifestHash: record.snapshotManifestHash,
-        storageLocator: record.snapshotStorageLocator,
+      skill: {
+        draftId: skill.draftId,
+        draftRevisionId: skill.draftRevisionId,
+        contentRevision: skill.contentRevision,
+        version: skill.versionId
+          ? {
+              id: skill.versionId,
+              name: skill.versionName!,
+              sequenceNumber: skill.versionNumber!,
+            }
+          : null,
+        snapshotId: skill.snapshotId,
+        manifestHash: skill.snapshotManifestHash,
+        storageLocator: skill.snapshotStorageLocator,
         files: skillFiles,
       },
       revision: {
-        id: record.revisionId,
-        suiteId: record.revisionSuiteId,
-        sequenceNumber: record.revisionNumber,
-        skillName: record.revisionSkillName,
-        manifestHash: record.revisionManifestHash,
-        storageLocator: record.revisionStorageLocator,
-        evalCount: record.revisionEvalCount,
-        skillCreatorCommit: record.skillCreatorCommit,
-        skillCreatorTreeHash: record.skillCreatorTreeHash,
+        id: revision.id,
+        suiteId: revision.suiteId,
+        sequenceNumber: revision.sequenceNumber,
+        skillName: revision.skillName,
+        manifestHash: revision.manifestHash,
+        storageLocator: revision.storageLocator,
+        evalCount: revision.evalCount,
+        skillCreatorCommit: revision.skillCreatorCommit,
+        skillCreatorTreeHash: revision.skillCreatorTreeHash,
       },
       cases,
       files,
     }
+  }
+
+  private async resolveDraftSkill(
+    workspaceId: string,
+    draftRevisionId: string,
+    resolvedVersionId: string | null,
+  ) {
+    const [draft] = await this.database
+      .select({
+        draftId: skillDrafts.id,
+        draftRevisionId: skillDraftRevisions.id,
+        contentRevision: skillDraftRevisions.sourceContentRevision,
+        snapshotId: skillSnapshots.id,
+        snapshotState: skillSnapshots.state,
+        snapshotManifestHash: skillSnapshots.manifestHash,
+        snapshotStorageLocator: skillSnapshots.storageLocator,
+      })
+      .from(skillDraftRevisions)
+      .innerJoin(
+        skillDrafts,
+        eq(skillDrafts.id, skillDraftRevisions.draftId),
+      )
+      .innerJoin(
+        skillSnapshots,
+        eq(skillSnapshots.id, skillDraftRevisions.snapshotId),
+      )
+      .where(
+        and(
+          eq(skillDraftRevisions.id, draftRevisionId),
+          eq(skillDrafts.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1)
+    if (!draft) return null
+
+    const [version] = await this.database
+      .select({
+        id: skillVersions.id,
+        name: skillVersions.name,
+        sequenceNumber: skillVersions.sequenceNumber,
+      })
+      .from(skillVersions)
+      .innerJoin(
+        skillSnapshots,
+        eq(skillSnapshots.id, skillVersions.snapshotId),
+      )
+      .where(
+        resolvedVersionId
+          ? and(
+              eq(skillVersions.id, resolvedVersionId),
+              eq(skillVersions.workspaceId, workspaceId),
+              eq(skillVersions.sourceDraftId, draft.draftId),
+              eq(
+                skillVersions.sourceContentRevision,
+                draft.contentRevision,
+              ),
+              eq(
+                skillSnapshots.manifestHash,
+                draft.snapshotManifestHash,
+              ),
+            )
+          : and(
+              eq(skillVersions.workspaceId, workspaceId),
+              eq(skillVersions.sourceDraftId, draft.draftId),
+              eq(
+                skillVersions.sourceContentRevision,
+                draft.contentRevision,
+              ),
+              eq(
+                skillSnapshots.manifestHash,
+                draft.snapshotManifestHash,
+              ),
+            ),
+      )
+      .orderBy(
+        asc(skillVersions.frozenAt),
+        asc(skillVersions.sequenceNumber),
+      )
+      .limit(1)
+
+    return {
+      ...draft,
+      versionId: version?.id ?? null,
+      versionName: version?.name ?? null,
+      versionNumber: version?.sequenceNumber ?? null,
+    }
+  }
+
+  private async resolveLegacyVersionSkill(
+    workspaceId: string,
+    skillVersionId: string | null,
+  ) {
+    if (!skillVersionId) return null
+    const [record] = await this.database
+      .select({
+        draftId: skillVersions.sourceDraftId,
+        draftRevisionId: sql<string | null>`null`,
+        contentRevision: skillVersions.sourceContentRevision,
+        versionId: skillVersions.id,
+        versionName: skillVersions.name,
+        versionNumber: skillVersions.sequenceNumber,
+        snapshotId: skillSnapshots.id,
+        snapshotState: skillSnapshots.state,
+        snapshotManifestHash: skillSnapshots.manifestHash,
+        snapshotStorageLocator: skillSnapshots.storageLocator,
+      })
+      .from(skillVersions)
+      .innerJoin(
+        skillSnapshots,
+        eq(skillSnapshots.id, skillVersions.snapshotId),
+      )
+      .where(
+        and(
+          eq(skillVersions.id, skillVersionId),
+          eq(skillVersions.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1)
+    return record ?? null
+  }
+
+  private async resolveEvalRevision(
+    workspaceId: string,
+    evalRevisionId: string,
+  ) {
+    const [revision] = await this.database
+      .select({
+        id: evalRevisions.id,
+        suiteId: evalRevisions.suiteId,
+        sequenceNumber: evalRevisions.sequenceNumber,
+        skillName: evalRevisions.skillName,
+        manifestHash: evalRevisions.manifestHash,
+        storageLocator: evalRevisions.storageLocator,
+        evalCount: evalRevisions.evalCount,
+        skillCreatorCommit: evalRevisions.skillCreatorCommit,
+        skillCreatorTreeHash: evalRevisions.skillCreatorTreeHash,
+      })
+      .from(evalRevisions)
+      .innerJoin(evalSuites, eq(evalSuites.id, evalRevisions.suiteId))
+      .where(
+        and(
+          eq(evalRevisions.id, evalRevisionId),
+          eq(evalSuites.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1)
+    return revision ?? null
   }
 
   async findByIdempotencyKey(
@@ -450,8 +604,9 @@ export class TestRunRepository {
         await transaction.insert(skillTestRuns).values({
           id: input.id,
           workspaceId: input.selection.workspaceId,
-          skillVersionId: input.selection.version.id,
-          skillSnapshotId: input.selection.version.snapshotId,
+          skillVersionId: input.selection.skill.version?.id ?? null,
+          skillDraftRevisionId: input.selection.skill.draftRevisionId,
+          skillSnapshotId: input.selection.skill.snapshotId,
           evalRevisionId: input.selection.revision.id,
           mode: "target_vs_no_skill",
           status: "PREPARING",
@@ -495,7 +650,9 @@ export class TestRunRepository {
         await this.appendEvent(transaction, input.id, null, "run.created", {
           schemaVersion: 1,
           mode: "target_vs_no_skill",
-          skillVersionId: input.selection.version.id,
+          draftRevisionId: input.selection.skill.draftRevisionId,
+          draftContentRevision: input.selection.skill.contentRevision,
+          skillVersionId: input.selection.skill.version?.id ?? null,
           evalRevisionId: input.selection.revision.id,
           totalCases: input.cases.length,
           comparabilityFingerprint:
@@ -1488,15 +1645,62 @@ export class TestRunRepository {
     return this.database
       .select({
         run: skillTestRuns,
-        versionName: skillVersions.name,
-        versionNumber: skillVersions.sequenceNumber,
+        draftId: skillDrafts.id,
+        draftContentRevision: skillDraftRevisions.sourceContentRevision,
+        versionId: sql<string | null>`coalesce(
+          ${skillVersions.id},
+          (select origin_version.id
+            from skill_versions origin_version
+            inner join skill_snapshots origin_snapshot
+              on origin_snapshot.id = origin_version.snapshot_id
+            where origin_version.workspace_id = ${skillTestRuns.workspaceId}
+              and origin_version.source_draft_id = ${skillDrafts.id}
+              and origin_version.source_content_revision = ${skillDraftRevisions.sourceContentRevision}
+              and origin_snapshot.manifest_hash = ${skillTestRuns.skillManifestHash}
+            order by origin_version.published_at asc, origin_version.version_number asc
+            limit 1)
+        )`,
+        versionName: sql<string | null>`coalesce(
+          ${skillVersions.name},
+          (select origin_version.name
+            from skill_versions origin_version
+            inner join skill_snapshots origin_snapshot
+              on origin_snapshot.id = origin_version.snapshot_id
+            where origin_version.workspace_id = ${skillTestRuns.workspaceId}
+              and origin_version.source_draft_id = ${skillDrafts.id}
+              and origin_version.source_content_revision = ${skillDraftRevisions.sourceContentRevision}
+              and origin_snapshot.manifest_hash = ${skillTestRuns.skillManifestHash}
+            order by origin_version.published_at asc, origin_version.version_number asc
+            limit 1)
+        )`,
+        versionNumber: sql<number | null>`coalesce(
+          ${skillVersions.sequenceNumber},
+          (select origin_version.version_number
+            from skill_versions origin_version
+            inner join skill_snapshots origin_snapshot
+              on origin_snapshot.id = origin_version.snapshot_id
+            where origin_version.workspace_id = ${skillTestRuns.workspaceId}
+              and origin_version.source_draft_id = ${skillDrafts.id}
+              and origin_version.source_content_revision = ${skillDraftRevisions.sourceContentRevision}
+              and origin_snapshot.manifest_hash = ${skillTestRuns.skillManifestHash}
+            order by origin_version.published_at asc, origin_version.version_number asc
+            limit 1)
+        )`,
         revisionNumber: evalRevisions.sequenceNumber,
         evalCount: evalRevisions.evalCount,
         benchmarkTarget: runBenchmarks.target,
         benchmarkBaseline: runBenchmarks.baseline,
       })
       .from(skillTestRuns)
-      .innerJoin(
+      .leftJoin(
+        skillDraftRevisions,
+        eq(skillDraftRevisions.id, skillTestRuns.skillDraftRevisionId),
+      )
+      .leftJoin(
+        skillDrafts,
+        eq(skillDrafts.id, skillDraftRevisions.draftId),
+      )
+      .leftJoin(
         skillVersions,
         eq(skillVersions.id, skillTestRuns.skillVersionId),
       )

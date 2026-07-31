@@ -175,6 +175,11 @@ export const skillVersions = pgTable(
     snapshotId: uuid("snapshot_id")
       .notNull()
       .references(() => skillSnapshots.id, { onDelete: "restrict" }),
+    sourceDraftId: uuid("source_draft_id").references(
+      (): AnyPgColumn => skillDrafts.id,
+      { onDelete: "no action" },
+    ),
+    sourceContentRevision: integer("source_content_revision"),
     sequenceNumber: integer("version_number").notNull(),
     name: text("name").notNull(),
     description: text("description"),
@@ -202,6 +207,11 @@ export const skillVersions = pgTable(
       "skill_versions_version_number_check",
       sql`${table.sequenceNumber} >= 1`,
     ),
+    check(
+      "skill_versions_draft_origin_check",
+      sql`(${table.sourceDraftId} is null and ${table.sourceContentRevision} is null)
+        or (${table.sourceDraftId} is not null and ${table.sourceContentRevision} >= 1)`,
+    ),
     uniqueIndex("skill_versions_workspace_number_unique").on(
       table.workspaceId,
       table.sequenceNumber,
@@ -213,6 +223,11 @@ export const skillVersions = pgTable(
     uniqueIndex("skill_versions_snapshot_unique").on(table.snapshotId),
     index("skill_versions_workspace_published_idx").on(
       table.workspaceId,
+      table.frozenAt,
+    ),
+    index("skill_versions_draft_origin_idx").on(
+      table.sourceDraftId,
+      table.sourceContentRevision,
       table.frozenAt,
     ),
   ],
