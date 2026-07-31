@@ -7,6 +7,7 @@ import {
   Square,
 } from "lucide-react"
 import type { TFunction } from "i18next"
+import { Link } from "react-router-dom"
 
 import {
   EvalDraftReview,
@@ -155,6 +156,8 @@ export function EvalTaskDrawer({
   generationBrief,
   pending,
   generationBlocked,
+  workspaceId,
+  publishedRevisionId,
   onOpenChange,
   onTabChange,
   onTargetChange,
@@ -179,6 +182,8 @@ export function EvalTaskDrawer({
   generationBrief: string
   pending: boolean
   generationBlocked: boolean
+  workspaceId: string
+  publishedRevisionId: string | null
   onOpenChange: (open: boolean) => void
   onTabChange: (tab: DrawerTab) => void
   onTargetChange: (key: string) => void
@@ -316,6 +321,17 @@ export function EvalTaskDrawer({
                 )}
               </div>
               <div className="flex gap-2">
+                {draft?.status === "PUBLISHED" &&
+                publishedRevisionId ? (
+                  <Button asChild className="rounded-none">
+                    <Link
+                      to={`/workbenches/${workspaceId}/runs?evalRevisionId=${encodeURIComponent(publishedRevisionId)}`}
+                    >
+                      <Play data-icon="inline-start" />
+                      {t("publish.runTest")}
+                    </Link>
+                  </Button>
+                ) : null}
                 {active ? (
                   <Button
                     className="rounded-none"

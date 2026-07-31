@@ -1,3 +1,5 @@
+export const claudeAgentSdkVersion = "0.3.220"
+
 export const agentSessionStatuses = [
   "STARTING",
   "RUNNING",

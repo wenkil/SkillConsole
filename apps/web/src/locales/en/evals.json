@@ -144,6 +144,7 @@
     "cases": "Cases",
     "files": "Files",
     "action": "Publish immutable revision",
+    "runTest": "Run tests with this revision",
     "confirm": "Published Evals revisions cannot be changed. Confirm that every case has been reviewed and publish?",
     "discard": "Discard this draft",
     "discardConfirm": "A discarded draft cannot be published, but its task record remains. Discard it?",

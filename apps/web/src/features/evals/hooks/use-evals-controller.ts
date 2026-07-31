@@ -11,6 +11,7 @@ import {
   getEvalGeneration,
   getEvalGenerationDraft,
   listEvalGenerations,
+  listEvalRevisions,
   publishEvalGeneration,
   startEvalGeneration,
   subscribeToEvalGeneration,
@@ -68,6 +69,10 @@ export function useEvalsController(workspace: SkillWorkspace) {
   const versionsQuery = useQuery({
     queryKey: ["skill-workspaces", workspace.id, "versions"],
     queryFn: () => listSkillVersions(workspace.id),
+  })
+  const revisionsQuery = useQuery({
+    queryKey: ["skill-workspaces", workspace.id, "eval-revisions"],
+    queryFn: () => listEvalRevisions(workspace.id),
   })
   const tasks = tasksQuery.data?.items ?? []
   const selectedTaskId = requestedTaskId
@@ -290,6 +295,13 @@ export function useEvalsController(workspace: SkillWorkspace) {
         queryClient.invalidateQueries({
           queryKey: ["eval-generations", taskId, "draft"],
         }),
+        queryClient.invalidateQueries({
+          queryKey: [
+            "skill-workspaces",
+            workspace.id,
+            "eval-revisions",
+          ],
+        }),
       ])
     },
   })
@@ -350,6 +362,7 @@ export function useEvalsController(workspace: SkillWorkspace) {
 
   return {
     tasks,
+    revisions: revisionsQuery.data ?? [],
     taskPagination: tasksQuery.data?.pagination ?? {
       page,
       pageSize,
@@ -374,10 +387,12 @@ export function useEvalsController(workspace: SkillWorkspace) {
     activeTask,
     loading:
       tasksQuery.isPending ||
-      versionsQuery.isPending,
+      versionsQuery.isPending ||
+      revisionsQuery.isPending,
     error:
       tasksQuery.isError ||
-      versionsQuery.isError,
+      versionsQuery.isError ||
+      revisionsQuery.isError,
     mutationPending:
       startMutation.isPending ||
       cancelMutation.isPending ||
@@ -404,6 +419,7 @@ export function useEvalsController(workspace: SkillWorkspace) {
         void Promise.all([
           tasksQuery.refetch(),
           versionsQuery.refetch(),
+          revisionsQuery.refetch(),
         ])
       },
       clearMutationError: () => {

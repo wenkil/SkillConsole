@@ -35,6 +35,35 @@ export {
 } from "./evals.js"
 
 export {
+  assertionResults,
+  assertionResultStatus,
+  runBenchmarks,
+  skillTestArtifacts,
+  skillTestRunCases,
+  skillTestRunEvents,
+  skillTestRuns,
+  testRunCaseAssessmentStatus,
+  testRunCaseExecutionStatus,
+  testRunCaseSide,
+  testRunMode,
+  testRunStatus,
+  type AssertionResultRow,
+  type AssertionResultStatus,
+  type RunBenchmarkRow,
+  type SkillTestArtifactRow,
+  type SkillTestRunCaseRow,
+  type SkillTestRunEventRow,
+  type SkillTestRunRow,
+  type StoredAssertionEvidence,
+  type StoredBenchmarkSide,
+  type StoredTestRunUsage,
+  type TestRunCaseAssessmentStatus,
+  type TestRunCaseExecutionStatus,
+  type TestRunCaseSide,
+  type TestRunStatus,
+} from "./test-runs.js"
+
+export {
   skillDrafts,
   skillDraftFiles,
   skillDraftStatus,

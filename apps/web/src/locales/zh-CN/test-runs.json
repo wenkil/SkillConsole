@@ -1,0 +1,95 @@
+{
+  "header": {
+    "eyebrow": "TRACEABLE TEST EXECUTION · 可追溯执行",
+    "title": "测试运行",
+    "description": "为「{{name}}」显式选择不可变 Skill 版本与已发布 Evals 修订，依次执行 Target 和 No-Skill Baseline，并保留日志、证据、产物与可比性指纹。",
+    "metrics": {
+      "total": "全部运行",
+      "active": "执行中",
+      "completed": "已完成"
+    }
+  },
+  "status": {
+    "PREPARING": "准备工作区",
+    "RUNNING": "正在执行",
+    "SCORING": "独立评分",
+    "CANCELING": "正在取消",
+    "COMPLETED": "运行完成",
+    "CANCELED": "已取消",
+    "INTERRUPTED": "已中断",
+    "FAILED": "运行失败"
+  },
+  "list": {
+    "eyebrow": "RUN HISTORY",
+    "title": "运行历史",
+    "start": "新建测试运行",
+    "emptyTitle": "尚无测试运行",
+    "emptyDescription": "先发布一份 Evals 修订，再显式选择要执行的 Skill 版本和用例修订。每次运行都会保留 Target 与 No-Skill Baseline 的完整追踪信息。",
+    "columns": {
+      "status": "状态",
+      "selection": "冻结选择",
+      "progress": "进度",
+      "target": "Target 通过率",
+      "baseline": "Baseline 通过率",
+      "createdAt": "创建时间",
+      "actions": "操作"
+    },
+    "evalCount": "{{count}} 个用例",
+    "view": "查看详情",
+    "total": "共 {{count}} 条",
+    "pageSize": "每页条数",
+    "previous": "上一页",
+    "next": "下一页",
+    "page": "第 {{page}} / {{pageCount}} 页"
+  },
+  "start": {
+    "eyebrow": "IMMUTABLE RUN SELECTION",
+    "title": "配置测试运行",
+    "description": "本次选择在启动后冻结。系统不会自动使用最新 Evals；你必须明确确认要执行的已发布修订。",
+    "skillVersion": "Skill 版本",
+    "evalRevision": "已发布 Evals 修订",
+    "chooseRevision": "请选择一份 Evals 修订",
+    "online": "当前在线",
+    "evalCount": "{{count}} 个用例",
+    "frozenSkill": "冻结 Skill",
+    "frozenEvals": "冻结 Evals",
+    "modeTitle": "Target vs No-Skill Baseline",
+    "modeDescription": "相同任务与输入先后执行两次：Target 安装所选 Skill，Baseline 不安装目标 Skill。两侧分别由禁用工具的独立评分会话逐项判断，不自动宣布胜者。当前运行面向可信 Skill，并非操作系统级安全沙箱。",
+    "confirmTitle": "确认本次执行选择",
+    "confirmSelection": "我确认使用 EVALS R{{revision}}（{{count}} 个用例）执行本次测试。",
+    "confirmPlaceholder": "选择 Evals 修订后才能确认并启动。",
+    "activeRunBlocked": "当前工作台已有测试运行进行中。为保持资源和日志边界清晰，请等待其结束或先取消。",
+    "action": "启动测试运行"
+  },
+  "detail": {
+    "back": "返回运行历史",
+    "cancel": "取消运行",
+    "progress": "已结束执行单元",
+    "target": "TARGET · 安装所选 Skill",
+    "baseline": "BASELINE · 不安装目标 Skill",
+    "tabsLabel": "运行详情",
+    "tabs": {
+      "results": "结果与证据",
+      "logs": "执行日志"
+    },
+    "cases": "Evals 用例",
+    "userTask": "真实用户任务",
+    "noCase": "此侧尚无执行记录。",
+    "logs": "归一化运行事件",
+    "allCases": "全部用例与两侧",
+    "noLogs": "等待可回放事件。",
+    "traceability": "追溯与可比性指纹",
+    "finalOutput": "最终输出",
+    "assertions": "断言结果",
+    "artifacts": "运行产物"
+  },
+  "states": {
+    "loading": "正在读取测试运行工作台",
+    "loadError": "无法读取测试运行",
+    "loadErrorDescription": "请确认本地服务、数据库与迁移状态后重试。",
+    "loadingDetail": "正在读取运行详情",
+    "detailError": "无法读取此测试运行",
+    "retry": "重新加载",
+    "dismiss": "关闭"
+  }
+}

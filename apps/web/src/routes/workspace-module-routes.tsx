@@ -1,5 +1,4 @@
 import {
-  Activity,
   Database,
   FileChartColumn,
 } from "lucide-react"
@@ -14,6 +13,8 @@ import {
 import { VersionBrowserView } from "@/features/version-browser/components/version-browser-view"
 import { VersionCompareView } from "@/features/version-browser/components/version-compare-view"
 import { EvalsWorkbenchView } from "@/features/evals/components/evals-workbench-view"
+import { TestRunDetailView } from "@/features/test-runs/components/test-run-detail-view"
+import { TestRunsWorkbenchView } from "@/features/test-runs/components/test-runs-workbench-view"
 import type { SkillBrowserTarget } from "@/features/version-browser/model/version-browser"
 import { WorkbenchOverview } from "@/features/workbench-home/components/workbench-overview"
 import { ModulePlaceholder } from "@/features/workspace-shell/components/module-placeholder"
@@ -37,6 +38,26 @@ export function WorkbenchOverviewRoute() {
 export function EvalsWorkbenchRoute() {
   const { workspace, locale } = useWorkspaceRouteContext()
   return <EvalsWorkbenchView locale={locale} workspace={workspace} />
+}
+
+export function TestRunsWorkbenchRoute() {
+  const { workspace, locale } = useWorkspaceRouteContext()
+  return <TestRunsWorkbenchView locale={locale} workspace={workspace} />
+}
+
+export function TestRunDetailRoute() {
+  const { runId } = useParams()
+  const { workspace, locale } = useWorkspaceRouteContext()
+  if (!runId) {
+    return <Navigate replace to={`/workbenches/${workspace.id}/runs`} />
+  }
+  return (
+    <TestRunDetailView
+      locale={locale}
+      runId={runId}
+      workspace={workspace}
+    />
+  )
 }
 
 function getVersionTargetPath(
@@ -92,7 +113,7 @@ export function VersionBrowserRoute({
 interface ModulePlaceholderRouteProps {
   module: Extract<
     WorkspaceModule,
-    "datasets" | "runs" | "reports"
+    "datasets" | "reports"
   >
 }
 
@@ -108,12 +129,6 @@ export function ModulePlaceholderRoute({
       plannedStage: t(
         "workspaceShell.placeholders.datasets.plannedStage",
       ),
-    },
-    runs: {
-      icon: Activity,
-      title: t("workspaceShell.navigation.runs"),
-      description: t("workspaceShell.placeholders.runs.description"),
-      plannedStage: t("workspaceShell.placeholders.runs.plannedStage"),
     },
     reports: {
       icon: FileChartColumn,

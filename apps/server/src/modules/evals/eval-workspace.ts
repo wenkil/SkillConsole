@@ -66,9 +66,9 @@ const skillCreatorManifestPath = path.join(
   "skills",
   "skill-creator.manifest.json",
 )
-const pinnedSkillCreatorCommit =
+export const pinnedSkillCreatorCommit =
   "b29e7cf65e5cb78a5ac33d582270551bc74a14eb"
-const pinnedSkillCreatorTreeHash =
+export const pinnedSkillCreatorTreeHash =
   "82538987d2e399537643460f98c2fc7e4d6632ccd08d83f7c0c5a6c99759f0b5"
 
 function sha256(content: Buffer | string): string {

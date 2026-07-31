@@ -5,6 +5,7 @@ import {
 import { healthPlugin } from "../modules/health/health.plugin.js"
 import { skillWorkspacePlugin } from "../modules/skill-workspaces/skill-workspace.plugin.js"
 import { evalGenerationPlugin } from "../modules/evals/eval-generation.plugin.js"
+import { testRunPlugin } from "../modules/test-runs/test-run.plugin.js"
 
 import type { FastifyInstance } from "fastify"
 
@@ -20,4 +21,5 @@ export function registerModules(
   application.register(skillWorkspacePlugin)
   application.register(agentSessionPlugin, options.agentSessions ?? {})
   application.register(evalGenerationPlugin)
+  application.register(testRunPlugin)
 }

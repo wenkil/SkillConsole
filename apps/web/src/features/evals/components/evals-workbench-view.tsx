@@ -153,6 +153,13 @@ export function EvalsWorkbenchView({
 
       <EvalTaskDrawer
         creating={creating}
+        publishedRevisionId={
+          controller.revisions.find(
+            (revision) =>
+              revision.sourceGenerationTaskId ===
+              controller.selectedTask?.id,
+          )?.id ?? null
+        }
         draft={controller.selectedDraft}
         draftLoading={controller.draftLoading}
         events={controller.events}
@@ -178,6 +185,7 @@ export function EvalsWorkbenchView({
         t={t}
         targetOptions={controller.targetOptions}
         task={controller.selectedTask}
+        workspaceId={workspace.id}
         onTabChange={setDrawerTab}
       />
 

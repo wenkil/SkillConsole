@@ -10,6 +10,8 @@ import { WorkbenchHomeRoute } from "@/routes/workbench-home-route"
 import {
   ModulePlaceholderRoute,
   EvalsWorkbenchRoute,
+  TestRunDetailRoute,
+  TestRunsWorkbenchRoute,
   VersionBrowserRoute,
   WorkbenchOverviewRoute,
   WorkspaceFallbackRoute,
@@ -44,8 +46,12 @@ export function AppRoutes() {
             path="datasets"
           />
           <Route
-            element={<ModulePlaceholderRoute module="runs" />}
+            element={<TestRunsWorkbenchRoute />}
             path="runs"
+          />
+          <Route
+            element={<TestRunDetailRoute />}
+            path="runs/:runId"
           />
           <Route
             element={<ModulePlaceholderRoute module="reports" />}

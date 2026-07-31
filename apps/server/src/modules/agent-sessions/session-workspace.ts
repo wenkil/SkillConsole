@@ -62,6 +62,7 @@ function collectSensitiveSettingValues(
 export class AgentSessionWorkspaceStore {
   private readonly sessionsRoot: string
   private readonly evalGenerationsRoot: string
+  private readonly testRunsRoot: string
 
   constructor(
     private readonly dataRoot: string,
@@ -69,6 +70,7 @@ export class AgentSessionWorkspaceStore {
   ) {
     this.sessionsRoot = path.resolve(dataRoot, "agent-sessions")
     this.evalGenerationsRoot = path.resolve(dataRoot, "eval-generations")
+    this.testRunsRoot = path.resolve(dataRoot, "test-runs")
   }
 
   getLocator(sessionId: string): string {
@@ -85,11 +87,20 @@ export class AgentSessionWorkspaceStore {
       segments.length === 3 &&
       segments[0] === "eval-generations" &&
       segments[2] === "workspace"
+    const isTestRunWorkspace =
+      segments.length === 5 &&
+      segments[0] === "test-runs" &&
+      segments[2] === "cases" &&
+      (segments[4] === "workspace" || segments[4] === "grading")
+    const internalIdPattern =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
     if (
-      (!isSessionWorkspace && !isEvalWorkspace) ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        segments[1] ?? "",
-      )
+      (!isSessionWorkspace &&
+        !isEvalWorkspace &&
+        !isTestRunWorkspace) ||
+      !internalIdPattern.test(segments[1] ?? "") ||
+      (isTestRunWorkspace &&
+        !internalIdPattern.test(segments[3] ?? ""))
     ) {
       throw new Error("Agent session workspace locator is invalid.")
     }
@@ -100,7 +111,9 @@ export class AgentSessionWorkspaceStore {
     )
     const controlledRoot = isSessionWorkspace
       ? this.sessionsRoot
-      : this.evalGenerationsRoot
+      : isEvalWorkspace
+        ? this.evalGenerationsRoot
+        : this.testRunsRoot
     const relativeToRoot = path.relative(controlledRoot, absolutePath)
 
     if (

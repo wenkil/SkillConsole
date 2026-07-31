@@ -1,0 +1,95 @@
+{
+  "header": {
+    "eyebrow": "TRACEABLE TEST EXECUTION",
+    "title": "Test runs",
+    "description": "Explicitly select an immutable Skill version and published Evals revision for “{{name}}”, then run Target and No-Skill Baseline sequentially with logs, evidence, Artifacts, and comparability fingerprints.",
+    "metrics": {
+      "total": "All runs",
+      "active": "Active",
+      "completed": "Completed"
+    }
+  },
+  "status": {
+    "PREPARING": "Preparing",
+    "RUNNING": "Running",
+    "SCORING": "Scoring",
+    "CANCELING": "Canceling",
+    "COMPLETED": "Completed",
+    "CANCELED": "Canceled",
+    "INTERRUPTED": "Interrupted",
+    "FAILED": "Failed"
+  },
+  "list": {
+    "eyebrow": "RUN HISTORY",
+    "title": "Run history",
+    "start": "New test run",
+    "emptyTitle": "No test runs yet",
+    "emptyDescription": "Publish an Evals revision, then explicitly select the Skill version and case revision to execute. Every run preserves full Target and No-Skill Baseline traceability.",
+    "columns": {
+      "status": "Status",
+      "selection": "Frozen selection",
+      "progress": "Progress",
+      "target": "Target pass rate",
+      "baseline": "Baseline pass rate",
+      "createdAt": "Created",
+      "actions": "Actions"
+    },
+    "evalCount": "{{count}} cases",
+    "view": "View details",
+    "total": "{{count}} total",
+    "pageSize": "Rows per page",
+    "previous": "Previous page",
+    "next": "Next page",
+    "page": "Page {{page}} / {{pageCount}}"
+  },
+  "start": {
+    "eyebrow": "IMMUTABLE RUN SELECTION",
+    "title": "Configure test run",
+    "description": "This selection is frozen after launch. The latest Evals is never chosen automatically; you must confirm the published revision to execute.",
+    "skillVersion": "Skill version",
+    "evalRevision": "Published Evals revision",
+    "chooseRevision": "Choose an Evals revision",
+    "online": "Current online",
+    "evalCount": "{{count}} cases",
+    "frozenSkill": "Frozen Skill",
+    "frozenEvals": "Frozen Evals",
+    "modeTitle": "Target vs No-Skill Baseline",
+    "modeDescription": "The same task and inputs run twice in sequence. Target installs the selected Skill; Baseline does not. Separate no-tool graders evaluate each side assertion by assertion, without declaring a winner. Runs are for trusted Skills and are not an OS-level security sandbox.",
+    "confirmTitle": "Confirm this run selection",
+    "confirmSelection": "I confirm EVALS R{{revision}} ({{count}} cases) for this run.",
+    "confirmPlaceholder": "Choose an Evals revision before confirming and starting.",
+    "activeRunBlocked": "This workbench already has an active test run. Wait for it to finish or cancel it first.",
+    "action": "Start test run"
+  },
+  "detail": {
+    "back": "Back to run history",
+    "cancel": "Cancel run",
+    "progress": "Finished execution units",
+    "target": "TARGET · Selected Skill installed",
+    "baseline": "BASELINE · No target Skill",
+    "tabsLabel": "Run details",
+    "tabs": {
+      "results": "Results and evidence",
+      "logs": "Execution logs"
+    },
+    "cases": "Evals cases",
+    "userTask": "User task",
+    "noCase": "No execution record exists for this side yet.",
+    "logs": "Normalized run events",
+    "allCases": "All cases and sides",
+    "noLogs": "Waiting for replayable events.",
+    "traceability": "Traceability and comparability fingerprints",
+    "finalOutput": "Final output",
+    "assertions": "Assertion results",
+    "artifacts": "Artifacts"
+  },
+  "states": {
+    "loading": "Loading test run workbench",
+    "loadError": "Could not load test runs",
+    "loadErrorDescription": "Check the local service, database, and migration state, then retry.",
+    "loadingDetail": "Loading run details",
+    "detailError": "Could not load this test run",
+    "retry": "Retry",
+    "dismiss": "Dismiss"
+  }
+}
