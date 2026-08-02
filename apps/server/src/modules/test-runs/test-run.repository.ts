@@ -1068,6 +1068,7 @@ export class TestRunRepository {
     readonly status: "FAILED" | "CANCELED" | "INTERRUPTED"
     readonly code: string
     readonly message: string
+    readonly usage?: StoredTestRunUsage | null
   }): Promise<TestRunEvent> {
     return this.database.transaction(async (transaction) => {
       const runCase = await this.lockCase(transaction, input.caseId)
@@ -1088,6 +1089,7 @@ export class TestRunRepository {
         .set({
           executionStatus: input.status,
           assessmentStatus: "NOT_EVALUATED",
+          ...(input.usage !== undefined ? { usage: input.usage } : {}),
           executionErrorCode: input.code,
           executionErrorMessage: input.message,
           assessmentErrorCode: input.code,
@@ -1114,6 +1116,7 @@ export class TestRunRepository {
           schemaVersion: 1,
           side: runCase.side,
           error: { code: input.code, message: input.message },
+          ...(input.usage !== undefined ? { usage: input.usage } : {}),
         },
       )
     })

@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process"
 import { createHash } from "node:crypto"
 import {
   chmod,
@@ -10,6 +11,7 @@ import {
 } from "node:fs/promises"
 import path from "node:path"
 
+import { DomainError } from "../../core/errors/domain-error.js"
 import type { UploadLimits } from "../../config/index.js"
 import { EvalStorage, assertEvalRelativePath } from "../evals/eval-storage.js"
 import { LocalSnapshotStorage } from "../skill-workspaces/snapshot-storage.js"
@@ -23,6 +25,56 @@ import type { FrozenTestRunSelection } from "./test-run.repository.js"
 
 const internalIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+export interface RuntimeCapabilityRequirement {
+  readonly capability: string
+  readonly commands: readonly string[]
+}
+
+const runtimeCapabilityPatterns: readonly {
+  readonly requirement: RuntimeCapabilityRequirement
+  readonly pattern: RegExp
+}[] = [
+  {
+    requirement: {
+      capability: "Python",
+      commands: ["python", "python3"],
+    },
+    pattern: /(?:\bpython(?:3)?\b|\.py(?:\b|["'`]))/i,
+  },
+  {
+    requirement: {
+      capability: "Pandoc",
+      commands: ["pandoc"],
+    },
+    pattern: /\bpandoc\b/i,
+  },
+]
+
+export function detectRuntimeCapabilityRequirements(
+  textFiles: readonly string[],
+): readonly RuntimeCapabilityRequirement[] {
+  return runtimeCapabilityPatterns
+    .filter(({ pattern }) => textFiles.some((content) => pattern.test(content)))
+    .map(({ requirement }) => requirement)
+}
+
+function commandExists(command: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (process.platform === "win32") {
+      execFile("where.exe", [command], { timeout: 5_000 }, (error) => {
+        resolve(!error)
+      })
+      return
+    }
+    execFile(
+      "sh",
+      ["-lc", `command -v ${command}`],
+      { timeout: 5_000 },
+      (error) => resolve(!error),
+    )
+  })
+}
 
 function assertInternalId(id: string): void {
   if (!internalIdPattern.test(id)) {
@@ -305,6 +357,58 @@ export class TestRunStorage {
     } catch (error) {
       await rm(caseRoot, { recursive: true, force: true })
       throw error
+    }
+  }
+
+  async assertRuntimeCapabilities(
+    runId: string,
+    caseId: string,
+    side: "TARGET" | "BASELINE",
+    selection: FrozenTestRunSelection,
+  ): Promise<void> {
+    if (side !== "TARGET") return
+
+    const workspace = this.getWorkspacePath(runId, caseId)
+    const skillRoot = path.join(
+      workspace,
+      ".claude",
+      "skills",
+      selection.revision.skillName,
+    )
+    const textFiles: string[] = []
+    for (const file of selection.skill.files) {
+      if (file.contentKind !== "text") continue
+      const filePath = path.join(skillRoot, ...file.relativePath.split("/"))
+      assertWithinRoot(skillRoot, filePath)
+      textFiles.push(await readFile(filePath, "utf8"))
+    }
+
+    const requirements = detectRuntimeCapabilityRequirements(textFiles)
+    const missing = (
+      await Promise.all(
+        requirements.map(async (requirement) => ({
+          requirement,
+          available: await Promise.all(
+            requirement.commands.map((command) => commandExists(command)),
+          ),
+        })),
+      )
+    )
+      .filter(({ available }) => !available.some(Boolean))
+      .map(({ requirement }) => ({
+        capability: requirement.capability,
+        commands: requirement.commands,
+      }))
+
+    if (missing.length > 0) {
+      throw new DomainError({
+        code: "TEST_RUN_RUNTIME_CAPABILITY_MISSING",
+        message: `The test run environment is missing required capability: ${missing
+          .map((item) => `${item.capability} (${item.commands.join(" or ")})`)
+          .join(", ")}.`,
+        kind: "precondition_failed",
+        details: { missing },
+      })
     }
   }
 

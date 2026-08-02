@@ -33,6 +33,7 @@ import {
   TestRunRepository,
   type FrozenTestRunSelection,
 } from "./test-run.repository.js"
+import { createTestRunToolPermissionPolicy } from "./test-run-permissions.js"
 import {
   type ParsedAssertionResult,
   TestRunScorer,
@@ -41,9 +42,23 @@ import { TestRunStorage } from "./test-run-storage.js"
 
 export const testRunProtocolVersion = "skill-test-run-v1"
 const maxFinalOutputCharacters = 200_000
+const executionLimits = {
+  maxTurns: 32,
+  maxBudgetUsd: 1.5,
+  timeoutMs: 120_000,
+} as const
+const gradingLimits = {
+  maxTurns: 12,
+  maxBudgetUsd: 0.5,
+  timeoutMs: 60_000,
+} as const
 
 interface TestRunLogger {
   readonly error: (
+    bindings: Readonly<Record<string, unknown>>,
+    message: string,
+  ) => void
+  readonly warn?: (
     bindings: Readonly<Record<string, unknown>>,
     message: string,
   ) => void
@@ -546,6 +561,12 @@ export class TestRunService {
         selection,
         runCase.files,
       )
+      await this.options.storage.assertRuntimeCapabilities(
+        runId,
+        runCase.id,
+        runCase.side,
+        selection,
+      )
       const session = await this.options.agentSessions.createInWorkspace({
         prompt: buildExecutionPrompt({
           userPrompt: runCase.prompt,
@@ -553,6 +574,9 @@ export class TestRunService {
         }),
         workspaceLocator: workspace.locator,
         expectedConfigurationFingerprint: run.configurationFingerprint,
+        canUseTool: createTestRunToolPermissionPolicy(workspace.absolutePath),
+        maxTurns: executionLimits.maxTurns,
+        maxBudgetUsd: executionLimits.maxBudgetUsd,
       })
       executionSessionId = session.id
       this.activeSessions.set(runId, session.id)
@@ -566,6 +590,7 @@ export class TestRunService {
         caseId: runCase.id,
         sessionId: session.id,
         phase: "execution",
+        timeoutMs: executionLimits.timeoutMs,
       })
       this.options.agentSessions.release(session.id)
       executionSessionId = null
@@ -581,7 +606,20 @@ export class TestRunService {
           message:
             result.error?.message ??
             "The Agent execution did not provide complete usage facts.",
+          usage: result.usage,
         })
+        this.options.logger.warn?.(
+          {
+            runId,
+            caseId: runCase.id,
+            phase: "execution",
+            errorCode:
+              result.error?.code ??
+              "TEST_RUN_EXECUTION_RESULT_INCOMPLETE",
+            usage: result.usage,
+          },
+          "Skill test Case execution stopped before completion",
+        )
         await this.publishNewEvents(runId)
         return
       }
@@ -592,6 +630,7 @@ export class TestRunService {
           code: "TEST_RUN_FINAL_OUTPUT_TOO_LARGE",
           message:
             "The Agent final output exceeded the supported test run limit.",
+          usage: result.usage,
         })
         await this.publishNewEvents(runId)
         return
@@ -664,6 +703,14 @@ export class TestRunService {
           current.executionStatus,
         )
       ) {
+        const setupFailure =
+          error instanceof DomainError
+            ? { code: error.code, message: error.message }
+            : {
+                code: "TEST_RUN_CASE_SETUP_FAILED",
+                message:
+                  "The test Case workspace or Agent Session could not be prepared.",
+              }
         await this.options.repository.failExecution({
           caseId: runCase.id,
           status:
@@ -671,12 +718,24 @@ export class TestRunService {
           code:
             runState.status === "CANCELING"
               ? "TEST_RUN_CANCELED"
-              : "TEST_RUN_CASE_SETUP_FAILED",
+              : setupFailure.code,
           message:
             runState.status === "CANCELING"
               ? "The test run was canceled."
-              : "The test Case workspace or Agent Session could not be prepared.",
+              : setupFailure.message,
         })
+        this.options.logger.warn?.(
+          {
+            runId,
+            caseId: runCase.id,
+            phase: "execution",
+            errorCode:
+              runState.status === "CANCELING"
+                ? "TEST_RUN_CANCELED"
+                : setupFailure.code,
+          },
+          "Skill test Case stopped before Agent execution",
+        )
         await this.publishNewEvents(runId)
       } else if (
         current.assessmentStatus === "RUNNING" &&
@@ -736,6 +795,8 @@ export class TestRunService {
       workspaceLocator: gradingLocator,
       expectedConfigurationFingerprint: run.configurationFingerprint,
       allowedTools: [],
+      maxTurns: gradingLimits.maxTurns,
+      maxBudgetUsd: gradingLimits.maxBudgetUsd,
     })
     this.activeSessions.set(runId, session.id)
     try {
@@ -748,6 +809,7 @@ export class TestRunService {
         caseId: runCase.id,
         sessionId: session.id,
         phase: "grading",
+        timeoutMs: gradingLimits.timeoutMs,
       })
       if (result.status !== "COMPLETED") {
         await this.options.repository.failAssessment({
@@ -797,6 +859,7 @@ export class TestRunService {
     readonly caseId: string
     readonly sessionId: string
     readonly phase: "execution" | "grading"
+    readonly timeoutMs: number
   }): Promise<MonitoredSessionResult> {
     let finalOutput = ""
     let usage: StoredTestRunUsage | null = null
@@ -813,6 +876,38 @@ export class TestRunService {
     )
     let settled = false
     let queue = Promise.resolve()
+    const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      this.options.logger.warn?.(
+        {
+          runId: input.runId,
+          caseId: input.caseId,
+          phase: input.phase,
+          timeoutMs: input.timeoutMs,
+          usage,
+        },
+        "Skill test Agent session exceeded its time limit",
+      )
+      void this.options.agentSessions.cancel(input.sessionId).catch((error) => {
+        this.options.logger.error(
+          { runId: input.runId, caseId: input.caseId, error },
+          "Skill test Agent session timeout cancellation failed",
+        )
+      })
+      resolveResult?.({
+        status: "FAILED",
+        finalOutput,
+        usage,
+        error: {
+          code:
+            input.phase === "execution"
+              ? "TEST_RUN_EXECUTION_TIMEOUT"
+              : "TEST_RUN_GRADING_TIMEOUT",
+          message: "The Skill test Agent session exceeded its time limit.",
+        },
+      })
+    }, input.timeoutMs)
 
     const handle = async (event: AgentSessionEvent): Promise<void> => {
       if (seen.has(event.sequence)) return
@@ -905,6 +1000,7 @@ export class TestRunService {
       for (const event of backlog) enqueue(event)
       return await completion
     } finally {
+      clearTimeout(timeout)
       unsubscribe()
       await queue
     }

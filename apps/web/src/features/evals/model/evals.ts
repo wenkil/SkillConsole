@@ -130,7 +130,7 @@ export interface StartEvalGenerationInput {
   generationBrief?: string | null
 }
 
-export interface PublishEvalRevisionResult {
+export interface SaveEvalRevisionResult {
   replayed: boolean
   revision: EvalRevision
 }

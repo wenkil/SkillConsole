@@ -234,6 +234,44 @@ test("maps only complete Claude SDK messages and tool results", () => {
     },
   ])
 
+  const relativeReadPath = mapSdkMessage(
+    {
+      type: "assistant",
+      uuid: "message-2",
+      aborted: false,
+      message: {
+        content: [
+          {
+            type: "tool_use",
+            id: "tool-2",
+            name: "Read",
+            input: {
+              file_path: "C:\\private\\workspace\\target-skill\\SKILL.md",
+            },
+          },
+        ],
+      },
+    } as never,
+    {
+      redactedValues: ["C:\\private\\workspace"],
+      workspacePath: "C:\\private\\workspace",
+    },
+  )
+  assert.deepEqual(relativeReadPath, [
+    {
+      type: "assistant_message",
+      messageId: "message-2",
+      content: [
+        {
+          type: "tool_use",
+          toolUseId: "tool-2",
+          name: "Read",
+          input: { file_path: "target-skill/SKILL.md" },
+        },
+      ],
+    },
+  ])
+
   assert.deepEqual(
     mapSdkMessage({
       type: "assistant",

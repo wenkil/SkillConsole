@@ -2,7 +2,7 @@
   "header": {
     "eyebrow": "TRACEABLE TEST EXECUTION",
     "title": "Test runs",
-    "description": "Freeze the current working copy for “{{name}}” and select a published Evals revision, then run Target and No-Skill Baseline sequentially with logs, evidence, Artifacts, and comparability fingerprints.",
+    "description": "Freeze the current working copy for “{{name}}” and select a saved Evals revision, then run Target and No-Skill Baseline sequentially with logs, evidence, Artifacts, and comparability fingerprints.",
     "metrics": {
       "total": "All runs",
       "active": "Active",
@@ -24,7 +24,7 @@
     "title": "Run history",
     "start": "New test run",
     "emptyTitle": "No test runs yet",
-    "emptyDescription": "Publish an Evals revision, then test the current working copy. Launch automatically freezes the draft and preserves full Target and No-Skill Baseline traceability.",
+    "emptyDescription": "Save an Evals revision, then test the current working copy. Launch automatically freezes the draft and preserves full Target and No-Skill Baseline traceability.",
     "columns": {
       "status": "Status",
       "selection": "Frozen selection",
@@ -47,13 +47,13 @@
   "start": {
     "eyebrow": "IMMUTABLE RUN SELECTION",
     "title": "Configure test run",
-    "description": "The current working copy is frozen at launch. The latest Evals is never chosen automatically; you must confirm the published revision to execute.",
+    "description": "The current working copy is frozen at launch. The latest Evals is never chosen automatically; you must confirm the saved revision to execute.",
     "skillDraft": "Current test draft",
     "draftSelection": "Working copy R{{revision}} · {{source}}",
     "noDraft": "No testable working copy is available",
     "draftRevision": "Working copy R{{revision}}",
     "freezeOnStart": "Automatically frozen as an immutable test Snapshot at launch",
-    "evalRevision": "Published Evals revision",
+    "evalRevision": "Saved Evals revision",
     "chooseRevision": "Choose an Evals revision",
     "evalCount": "{{count}} cases",
     "frozenSkill": "Test draft",

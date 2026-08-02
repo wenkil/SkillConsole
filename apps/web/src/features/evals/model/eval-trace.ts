@@ -15,7 +15,17 @@ interface ToolTraceEntry {
   readonly isError: boolean
 }
 
-export type EvalTraceEntry = EventTraceEntry | ToolTraceEntry
+interface MessageTraceEntry {
+  readonly kind: "message"
+  readonly event: EvalGenerationEvent
+  readonly sequence: number
+  readonly content: string
+}
+
+export type EvalTraceEntry =
+  | EventTraceEntry
+  | ToolTraceEntry
+  | MessageTraceEntry
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return (
@@ -36,10 +46,38 @@ function formatToolOutput(value: unknown): string | null {
   }
 }
 
+function readToolPath(input: unknown): string | null {
+  if (!isRecord(input)) return null
+  const value = input.file_path ?? input.path
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null
+}
+
+function formatAssistantMessage(value: unknown): string | null {
+  if (!Array.isArray(value)) return null
+  const text = value
+    .filter(
+      (block): block is { readonly type: "text"; readonly text: string } =>
+        isRecord(block) &&
+        block.type === "text" &&
+        typeof block.text === "string",
+    )
+    .map((block) => block.text.trim())
+    .filter(Boolean)
+    .join("\n")
+  return text || null
+}
+
+interface ToolCallDetails {
+  readonly name: string
+  readonly input: unknown
+}
+
 function indexToolNames(
   events: readonly EvalGenerationEvent[],
-): ReadonlyMap<string, string> {
-  const toolNames = new Map<string, string>()
+): ReadonlyMap<string, ToolCallDetails> {
+  const toolCalls = new Map<string, ToolCallDetails>()
 
   for (const event of events) {
     if (event.type !== "agent.assistant") continue
@@ -52,12 +90,15 @@ function indexToolNames(
         typeof block.toolUseId === "string" &&
         typeof block.name === "string"
       ) {
-        toolNames.set(block.toolUseId, block.name)
+        toolCalls.set(block.toolUseId, {
+          name: block.name,
+          input: block.input,
+        })
       }
     }
   }
 
-  return toolNames
+  return toolCalls
 }
 
 export function buildEvalTraceEntries(
@@ -66,7 +107,19 @@ export function buildEvalTraceEntries(
   const toolNames = indexToolNames(events)
 
   return events.flatMap((event): EvalTraceEntry[] => {
-    if (event.type === "agent.assistant") return []
+    if (event.type === "agent.assistant") {
+      const content = formatAssistantMessage(event.payload.content)
+      return content
+        ? [
+            {
+              kind: "message",
+              event,
+              sequence: event.sequence,
+              content,
+            },
+          ]
+        : []
+    }
 
     if (event.type === "agent.tool") {
       const toolUseId =
@@ -78,8 +131,13 @@ export function buildEvalTraceEntries(
           kind: "tool",
           event,
           sequence: event.sequence,
-          toolName: toolUseId ? toolNames.get(toolUseId) ?? null : null,
-          output: formatToolOutput(event.payload.content),
+          toolName: toolUseId
+            ? toolNames.get(toolUseId)?.name ?? null
+            : null,
+          output:
+            toolUseId && toolNames.get(toolUseId)?.name === "Read"
+              ? readToolPath(toolNames.get(toolUseId)?.input)
+              : formatToolOutput(event.payload.content),
           isError: event.payload.isError === true,
         },
       ]

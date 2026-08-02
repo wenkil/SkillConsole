@@ -2,7 +2,15 @@
 
 ARG NODE_IMAGE=node:22-bookworm-slim
 
-FROM ${NODE_IMAGE} AS dependencies
+FROM ${NODE_IMAGE} AS runtime-base
+
+# Skills may declare Python/Pandoc-backed transformations. Keep the development,
+# migration, and production server images on the same explicit capability set.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 python-is-python3 pandoc \
+  && rm -rf /var/lib/apt/lists/*
+
+FROM runtime-base AS dependencies
 
 WORKDIR /workspace
 
@@ -30,7 +38,7 @@ COPY apps/server apps/server
 
 RUN npm run build --workspace @skillconsole/server
 
-FROM ${NODE_IMAGE} AS production
+FROM runtime-base AS production
 
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0

@@ -30,7 +30,7 @@ export function EvalControlPanel({
   onBriefChange,
   onStart,
   onCancel,
-  onPublish,
+  onSave,
   onDiscard,
   t,
 }: {
@@ -52,11 +52,11 @@ export function EvalControlPanel({
   onBriefChange: (brief: string) => void
   onStart: () => void
   onCancel: (taskId: string) => void
-  onPublish: (taskId: string) => void
+  onSave: (taskId: string) => void
   onDiscard: (taskId: string) => void
   t: TFunction<"evals">
 }) {
-  const canPublish = draft?.status === "READY" && selectedTask
+  const canSave = draft?.status === "READY" && selectedTask
 
   return (
     <aside className="min-h-0 overflow-y-auto border-l border-foreground bg-sidebar p-4">
@@ -150,14 +150,14 @@ export function EvalControlPanel({
       <section className="mt-4 border border-foreground bg-paper-raised">
         <div className="border-b border-rule-soft px-4 py-3">
           <div className="technical-heading text-[10px] text-signal-dark">
-            {t("publish.eyebrow")}
+            {t("save.eyebrow")}
           </div>
-          <h2 className="mt-1 text-base font-[760]">{t("publish.title")}</h2>
+          <h2 className="mt-1 text-base font-[760]">{t("save.title")}</h2>
         </div>
         <div className="p-4">
           {!draft ? (
             <p className="text-xs leading-5 text-muted-foreground">
-              {t("publish.noDraft")}
+              {t("save.noDraft")}
             </p>
           ) : (
             <>
@@ -165,13 +165,13 @@ export function EvalControlPanel({
                 <div className="bg-background p-2.5">
                   <strong className="block text-lg">{draft.evalCount}</strong>
                   <span className="font-mono text-[9px] text-muted-foreground uppercase">
-                    {t("publish.cases")}
+                    {t("save.cases")}
                   </span>
                 </div>
                 <div className="bg-background p-2.5">
                   <strong className="block text-lg">{draft.fileCount}</strong>
                   <span className="font-mono text-[9px] text-muted-foreground uppercase">
-                    {t("publish.files")}
+                    {t("save.files")}
                   </span>
                 </div>
               </div>
@@ -187,19 +187,19 @@ export function EvalControlPanel({
                 <div className="mt-3 grid gap-2">
                   <Button
                     className="w-full rounded-none"
-                    disabled={pending || !canPublish}
+                    disabled={pending || !canSave}
                     onClick={() => {
                       if (
                         selectedTask &&
-                        window.confirm(t("publish.confirm"))
+                        window.confirm(t("save.confirm"))
                       ) {
-                        onPublish(selectedTask.id)
+                        onSave(selectedTask.id)
                       }
                     }}
                     type="button"
                   >
                     <FileCheck2 data-icon="inline-start" />
-                    {t("publish.action")}
+                    {t("save.action")}
                   </Button>
                   <Button
                     className="w-full rounded-none"
@@ -207,7 +207,7 @@ export function EvalControlPanel({
                     onClick={() => {
                       if (
                         selectedTask &&
-                        window.confirm(t("publish.discardConfirm"))
+                        window.confirm(t("save.discardConfirm"))
                       ) {
                         onDiscard(selectedTask.id)
                       }
@@ -216,7 +216,7 @@ export function EvalControlPanel({
                     variant="outline"
                   >
                     <Ban data-icon="inline-start" />
-                    {t("publish.discard")}
+                    {t("save.discard")}
                   </Button>
                 </div>
               ) : (
@@ -226,7 +226,7 @@ export function EvalControlPanel({
                   ) : (
                     <Ban className="size-4 text-status-cancelled" />
                   )}
-                  {t(`publish.status.${draft.status}`)}
+                  {t(`save.status.${draft.status}`)}
                 </div>
               )}
             </>

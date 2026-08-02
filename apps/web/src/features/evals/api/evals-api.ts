@@ -4,7 +4,7 @@ import type {
   EvalGenerationTask,
   EvalGenerationTaskPage,
   EvalRevision,
-  PublishEvalRevisionResult,
+  SaveEvalRevisionResult,
   StartEvalGenerationInput,
 } from "@/features/evals/model/evals"
 import { readApiError } from "@/shared/api/http"
@@ -89,9 +89,9 @@ export function discardEvalGenerationDraft(
   })
 }
 
-export function publishEvalGeneration(
+export function saveEvalGeneration(
   taskId: string,
-): Promise<PublishEvalRevisionResult> {
+): Promise<SaveEvalRevisionResult> {
   return readJson(`${taskBaseUrl(taskId)}/publish`, {
     method: "POST",
   })

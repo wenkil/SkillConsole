@@ -60,6 +60,67 @@ class ClaudeAgentSdkSession implements AgentRuntimeSession {
         ...(input.allowedTools
           ? { allowedTools: [...input.allowedTools] }
           : {}),
+        ...(input.canUseTool
+          ? {
+              canUseTool: async (
+                toolName: string,
+                toolInput: Record<string, unknown>,
+                options: {
+                  readonly signal: AbortSignal
+                  readonly blockedPath?: string
+                  readonly decisionReason?: string
+                  readonly title?: string
+                  readonly displayName?: string
+                  readonly description?: string
+                  readonly toolUseID: string
+                  readonly requestId: string
+                },
+              ) => {
+                const permission = input.canUseTool
+                  ? await input.canUseTool(toolName, toolInput, {
+                      signal: options.signal,
+                      ...(options.blockedPath
+                        ? { blockedPath: options.blockedPath }
+                        : {}),
+                      ...(options.decisionReason
+                        ? { decisionReason: options.decisionReason }
+                        : {}),
+                      ...(options.title ? { title: options.title } : {}),
+                      ...(options.displayName
+                        ? { displayName: options.displayName }
+                        : {}),
+                      ...(options.description
+                        ? { description: options.description }
+                        : {}),
+                      toolUseId: options.toolUseID,
+                      requestId: options.requestId,
+                    })
+                  : { behavior: "deny" as const, message: "Tool is not enabled." }
+                if (permission.behavior === "allow") {
+                  return {
+                    behavior: "allow" as const,
+                    ...(permission.updatedInput
+                      ? { updatedInput: { ...permission.updatedInput } }
+                      : {}),
+                  }
+                }
+                return {
+                  behavior: "deny" as const,
+                  message: permission.message,
+                  ...(permission.interrupt !== undefined
+                    ? { interrupt: permission.interrupt }
+                    : {}),
+                }
+              },
+            }
+          : {}),
+        ...(input.maxTurns !== undefined
+          ? { maxTurns: input.maxTurns }
+          : {}),
+        ...(input.maxBudgetUsd !== undefined
+          ? { maxBudgetUsd: input.maxBudgetUsd }
+          : {}),
+        ...(input.canUseTool ? { permissionMode: "default" as const } : {}),
         ...(input.resumeSessionId
           ? { resume: input.resumeSessionId }
           : {}),
@@ -118,6 +179,7 @@ class ClaudeAgentSdkSession implements AgentRuntimeSession {
             process.env.ANTHROPIC_AUTH_TOKEN,
             process.env.CLAUDE_CODE_OAUTH_TOKEN,
           ],
+          workspacePath: this.input.cwd,
           priorFailure: this.failureHint,
         })
 

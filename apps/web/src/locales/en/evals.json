@@ -2,11 +2,11 @@
   "header": {
     "eyebrow": "EVALS GENERATION LOOP",
     "title": "Test case generation workbench",
-    "description": "Freeze a Skill target for “{{name}}”, generate cases with Claude and a pinned skill-creator, then review the validated draft before publishing an immutable revision.",
+    "description": "Freeze a Skill target for “{{name}}”, generate cases with Claude and a pinned skill-creator, then review the validated draft before saving an immutable revision.",
     "metrics": {
       "tasks": "Tasks",
       "review": "Awaiting review",
-      "published": "Published"
+      "saved": "Saved"
     }
   },
   "status": {
@@ -45,7 +45,7 @@
     "durationMinutes": "{{minutes}} min {{seconds}} sec",
     "reviewStatus": {
       "READY": "Awaiting review",
-      "PUBLISHED": "Published",
+      "PUBLISHED": "Saved",
       "DISCARDED": "Discarded"
     },
     "viewDetails": "View details",
@@ -60,7 +60,7 @@
     "detailEyebrow": "EVALS TASK DETAIL",
     "createTitle": "Generate an Evals draft",
     "createDescription": "Configure the frozen target and start generation. Closing the drawer does not cancel a running task.",
-    "detailDescription": "Inspect the controlled Agent process, validated result, and human publication state.",
+    "detailDescription": "Inspect the controlled Agent process, validated result, and human save state.",
     "activeTaskHint": "A generation task is already running. Wait for it to finish, or open that task and cancel it.",
     "tabsLabel": "Task details",
     "tabs": {
@@ -68,8 +68,8 @@
       "result": "Generation result"
     },
     "resultReady": "Ready",
-    "publishedRevision": "Published as EVALS R{{revision}}",
-    "reviewBeforePublish": "Review the cases before publishing an immutable revision.",
+    "savedRevision": "Saved as EVALS R{{revision}}",
+    "reviewBeforeSave": "Review the cases before saving this test case set.",
     "closeHint": "Closing the drawer does not affect task execution.",
     "loadingTask": "Loading task details"
   },
@@ -87,7 +87,9 @@
     "toolSucceeded": "Succeeded",
     "toolFailed": "Failed",
     "unknownTool": "Unknown tool",
-    "noToolOutput": "The tool returned no output"
+    "noToolOutput": "The tool returned no output",
+    "readPathUnavailable": "The complete path was unavailable",
+    "messageLabel": "Message · Agent"
   },
   "event": {
     "task": {
@@ -108,10 +110,10 @@
     }
   },
   "review": {
-    "eyebrow": "REVIEW BEFORE PUBLISH",
+    "eyebrow": "REVIEW BEFORE SAVE",
     "title": "Review Evals draft",
     "emptyTitle": "Generate reusable Evals first",
-    "emptyDescription": "Generation never publishes automatically. Review every user task, expected result, objective assertion, and input file after validation.",
+    "emptyDescription": "Generation never saves automatically. Review every user task, expected result, objective assertion, and input file after validation.",
     "loadingDraft": "Loading validated draft",
     "resultPendingTitle": "The generation result is not ready",
     "resultPendingDescription": "The complete cases will be available here after the Agent finishes and server validation succeeds.",
@@ -137,25 +139,25 @@
     "start": "Generate Evals draft",
     "cancel": "Cancel generation"
   },
-  "publish": {
+  "save": {
     "eyebrow": "HUMAN CONFIRMATION GATE",
-    "title": "Publication gate",
-    "noDraft": "Select a successfully validated task to review its draft summary and publication actions.",
+    "title": "Save test cases",
+    "noDraft": "Select a successfully validated task to review its draft summary and save actions.",
     "cases": "Cases",
     "files": "Files",
-    "action": "Publish immutable revision",
-    "runTest": "Run tests with this revision",
-    "confirm": "Published Evals revisions cannot be changed. Confirm that every case has been reviewed and publish?",
+    "action": "Save this test case set",
+    "runTest": "Run tests with this test case set",
+    "confirm": "Saved Evals revisions cannot be changed. Confirm that every case has been reviewed and that you want to save this test case set?",
     "discard": "Discard this draft",
-    "discardConfirm": "A discarded draft cannot be published, but its task record remains. Discard it?",
+    "discardConfirm": "A discarded draft cannot be saved, but its task record remains. Discard it?",
     "status": {
-      "PUBLISHED": "Published as an immutable revision",
+      "PUBLISHED": "Saved as a test case revision",
       "DISCARDED": "Draft discarded"
     }
   },
   "revisions": {
-    "title": "Published revisions",
-    "empty": "No Evals revisions have been published.",
+    "title": "Saved test cases",
+    "empty": "No Evals revisions have been saved.",
     "sourceSnapshot": "Source snapshot"
   },
   "states": {
@@ -167,6 +169,6 @@
   },
   "footer": {
     "snapshotBoundary": "Target Skill and generation dependencies use controlled copies",
-    "publishBoundary": "Only a human-confirmed draft becomes an immutable revision"
+    "saveBoundary": "Only a human-confirmed draft is saved as an immutable revision"
   }
 }

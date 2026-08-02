@@ -157,7 +157,7 @@ export function EvalTaskDrawer({
   pending,
   generationBlocked,
   workspaceId,
-  publishedRevisionId,
+  savedRevisionId,
   onOpenChange,
   onTabChange,
   onTargetChange,
@@ -165,7 +165,7 @@ export function EvalTaskDrawer({
   onBriefChange,
   onStart,
   onCancel,
-  onPublish,
+  onSave,
   onDiscard,
   t,
 }: {
@@ -183,7 +183,7 @@ export function EvalTaskDrawer({
   pending: boolean
   generationBlocked: boolean
   workspaceId: string
-  publishedRevisionId: string | null
+  savedRevisionId: string | null
   onOpenChange: (open: boolean) => void
   onTabChange: (tab: DrawerTab) => void
   onTargetChange: (key: string) => void
@@ -191,7 +191,7 @@ export function EvalTaskDrawer({
   onBriefChange: (brief: string) => void
   onStart: () => Promise<unknown>
   onCancel: (taskId: string) => Promise<unknown>
-  onPublish: (taskId: string) => Promise<unknown>
+  onSave: (taskId: string) => Promise<unknown>
   onDiscard: (taskId: string) => Promise<unknown>
   t: TFunction<"evals">
 }) {
@@ -307,28 +307,28 @@ export function EvalTaskDrawer({
                   <span className="flex items-center gap-2 font-semibold text-status-passed">
                     <CheckCircle2 className="size-4" />
                     {task.revisionNumber
-                      ? t("drawer.publishedRevision", {
+                      ? t("drawer.savedRevision", {
                           revision: task.revisionNumber,
                         })
-                      : t("publish.status.PUBLISHED")}
+                      : t("save.status.PUBLISHED")}
                   </span>
                 ) : draft?.status === "DISCARDED" ? (
-                  t("publish.status.DISCARDED")
+                  t("save.status.DISCARDED")
                 ) : tab === "result" && draft ? (
-                  t("drawer.reviewBeforePublish")
+                  t("drawer.reviewBeforeSave")
                 ) : (
                   t("drawer.closeHint")
                 )}
               </div>
               <div className="flex gap-2">
                 {draft?.status === "PUBLISHED" &&
-                publishedRevisionId ? (
+                savedRevisionId ? (
                   <Button asChild className="rounded-none">
                     <Link
-                      to={`/workbenches/${workspaceId}/runs?evalRevisionId=${encodeURIComponent(publishedRevisionId)}`}
+                      to={`/workbenches/${workspaceId}/runs?evalRevisionId=${encodeURIComponent(savedRevisionId)}`}
                     >
                       <Play data-icon="inline-start" />
-                      {t("publish.runTest")}
+                      {t("save.runTest")}
                     </Link>
                   </Button>
                 ) : null}
@@ -352,7 +352,7 @@ export function EvalTaskDrawer({
                       className="rounded-none"
                       disabled={pending}
                       onClick={() => {
-                        if (window.confirm(t("publish.discardConfirm"))) {
+                        if (window.confirm(t("save.discardConfirm"))) {
                           void onDiscard(task.id).catch(() => undefined)
                         }
                       }}
@@ -360,20 +360,20 @@ export function EvalTaskDrawer({
                       variant="outline"
                     >
                       <Ban data-icon="inline-start" />
-                      {t("publish.discard")}
+                      {t("save.discard")}
                     </Button>
                     <Button
                       className="rounded-none"
                       disabled={pending}
                       onClick={() => {
-                        if (window.confirm(t("publish.confirm"))) {
-                          void onPublish(task.id).catch(() => undefined)
+                        if (window.confirm(t("save.confirm"))) {
+                          void onSave(task.id).catch(() => undefined)
                         }
                       }}
                       type="button"
                     >
                       <FileCheck2 data-icon="inline-start" />
-                      {t("publish.action")}
+                      {t("save.action")}
                     </Button>
                   </>
                 ) : null}

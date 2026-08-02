@@ -2,7 +2,7 @@
   "header": {
     "eyebrow": "TRACEABLE TEST EXECUTION · 可追溯执行",
     "title": "测试运行",
-    "description": "为「{{name}}」冻结当前工作副本并选择已发布 Evals 修订，依次执行 Target 和 No-Skill Baseline，并保留日志、证据、产物与可比性指纹。",
+    "description": "为「{{name}}」冻结当前工作副本并选择已保存 Evals 修订，依次执行 Target 和 No-Skill Baseline，并保留日志、证据、产物与可比性指纹。",
     "metrics": {
       "total": "全部运行",
       "active": "执行中",
@@ -24,7 +24,7 @@
     "title": "运行历史",
     "start": "新建测试运行",
     "emptyTitle": "尚无测试运行",
-    "emptyDescription": "先发布一份 Evals 修订，再使用当前工作副本创建测试。启动时会自动冻结草稿，保留 Target 与 No-Skill Baseline 的完整追踪信息。",
+    "emptyDescription": "先保存一份 Evals 修订，再使用当前工作副本创建测试。启动时会自动冻结草稿，保留 Target 与 No-Skill Baseline 的完整追踪信息。",
     "columns": {
       "status": "状态",
       "selection": "冻结选择",
@@ -47,13 +47,13 @@
   "start": {
     "eyebrow": "IMMUTABLE RUN SELECTION",
     "title": "配置测试运行",
-    "description": "启动时会冻结当前工作副本。系统不会自动使用最新 Evals；你必须明确确认要执行的已发布修订。",
+    "description": "启动时会冻结当前工作副本。系统不会自动使用最新 Evals；你必须明确确认要执行的已保存修订。",
     "skillDraft": "当前测试草稿",
     "draftSelection": "工作副本 R{{revision}} · {{source}}",
     "noDraft": "当前没有可测试的工作副本",
     "draftRevision": "工作副本 R{{revision}}",
     "freezeOnStart": "启动时自动冻结为不可变测试快照",
-    "evalRevision": "已发布 Evals 修订",
+    "evalRevision": "已保存 Evals 修订",
     "chooseRevision": "请选择一份 Evals 修订",
     "evalCount": "{{count}} 个用例",
     "frozenSkill": "测试草稿",

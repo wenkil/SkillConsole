@@ -1,3 +1,5 @@
+import path from "node:path"
+
 import type {
   SDKMessage,
   SDKResultMessage,
@@ -12,6 +14,12 @@ import { classifyClaudeResult } from "./claude-error-classifier.js"
 
 export interface SdkMessageMappingOptions {
   readonly redactedValues?: readonly (string | undefined)[]
+  /**
+   * Read tool paths under this root are exposed as workspace-relative paths.
+   * This keeps the complete logical path useful to the UI without exposing
+   * the host's absolute filesystem path in public events.
+   */
+  readonly workspacePath?: string
   readonly priorFailure?: AgentSessionError | null
 }
 
@@ -47,9 +55,53 @@ function createSanitizer(options: SdkMessageMappingOptions) {
   return sanitize
 }
 
+function normalizeReadToolInput(
+  input: unknown,
+  workspacePath: string | undefined,
+): unknown {
+  if (!workspacePath || !input || typeof input !== "object") {
+    return input
+  }
+
+  const record = input as Record<string, unknown>
+  const key =
+    typeof record.file_path === "string"
+      ? "file_path"
+      : typeof record.path === "string"
+        ? "path"
+        : null
+  if (!key) return input
+
+  const rawValue = record[key]
+  if (typeof rawValue !== "string") return input
+  const rawPath = rawValue.trim()
+  if (!path.isAbsolute(rawPath)) {
+    return {
+      ...record,
+      [key]: rawPath.split(path.sep).join("/"),
+    }
+  }
+
+  const relativePath = path.relative(workspacePath, rawPath)
+  if (
+    !relativePath ||
+    relativePath === ".." ||
+    relativePath.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relativePath)
+  ) {
+    return input
+  }
+
+  return {
+    ...record,
+    [key]: relativePath.split(path.sep).join("/"),
+  }
+}
+
 function mapAssistantContent(
   message: Extract<SDKMessage, { type: "assistant" }>,
   sanitize: (value: unknown) => unknown,
+  workspacePath: string | undefined,
 ) {
   const content: AssistantContent[] = []
 
@@ -60,11 +112,15 @@ function mapAssistantContent(
     }
 
     if (block.type === "tool_use") {
+      const input =
+        block.name === "Read"
+          ? normalizeReadToolInput(block.input, workspacePath)
+          : block.input
       content.push({
         type: "tool_use",
         toolUseId: block.id,
         name: block.name,
-        input: sanitize(block.input),
+        input: sanitize(input),
       })
     }
   }
@@ -139,7 +195,11 @@ export function mapSdkMessage(
       {
         type: "assistant_message",
         messageId: message.uuid,
-        content: mapAssistantContent(message, sanitize),
+        content: mapAssistantContent(
+          message,
+          sanitize,
+          options.workspacePath,
+        ),
       },
     ]
   }

@@ -96,7 +96,7 @@ export function EvalsWorkbenchView({
             </div>
             <div className="min-w-24 bg-background px-3 py-2">
               <span className="block font-mono text-[9px] text-muted-foreground uppercase">
-                {t("header.metrics.published")}
+                {t("header.metrics.saved")}
               </span>
               <strong className="mt-0.5 block text-lg">
                 {controller.taskSummary.published}
@@ -153,7 +153,7 @@ export function EvalsWorkbenchView({
 
       <EvalTaskDrawer
         creating={creating}
-        publishedRevisionId={
+        savedRevisionId={
           controller.revisions.find(
             (revision) =>
               revision.sourceGenerationTaskId ===
@@ -171,7 +171,7 @@ export function EvalsWorkbenchView({
         onCountChange={controller.actions.setMaxEvalCount}
         onDiscard={controller.actions.discard}
         onOpenChange={setDrawerOpen}
-        onPublish={controller.actions.publish}
+        onSave={controller.actions.save}
         onStart={async () => {
           const task = await controller.actions.start()
           setCreating(false)
@@ -196,7 +196,7 @@ export function EvalsWorkbenchView({
         </span>
         <span className="flex items-center gap-1.5">
           <CheckCircle2 className="size-3 text-status-passed" />
-          {t("footer.publishBoundary")}
+          {t("footer.saveBoundary")}
         </span>
       </footer>
     </main>

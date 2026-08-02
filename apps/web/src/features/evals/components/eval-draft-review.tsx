@@ -157,7 +157,18 @@ export function EvalGenerationProgress({
                     </div>
                     <pre className="mt-1.5 max-h-32 overflow-auto border-l border-white/20 pl-2 whitespace-pre-wrap break-all text-[9px] leading-4 text-white/65">
                       {entry.output ??
-                        t("progress.noToolOutput")}
+                        (entry.toolName === "Read"
+                          ? t("progress.readPathUnavailable")
+                          : t("progress.noToolOutput"))}
+                    </pre>
+                  </div>
+                ) : entry.kind === "message" ? (
+                  <div className="min-w-0">
+                    <strong className="text-[10px] text-white">
+                      {t("progress.messageLabel")}
+                    </strong>
+                    <pre className="mt-1.5 max-h-32 overflow-auto border-l border-white/20 pl-2 whitespace-pre-wrap break-words text-[9px] leading-4 text-white/65">
+                      {entry.content}
                     </pre>
                   </div>
                 ) : (

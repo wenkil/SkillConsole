@@ -12,7 +12,7 @@ import {
   getEvalGenerationDraft,
   listEvalGenerations,
   listEvalRevisions,
-  publishEvalGeneration,
+  saveEvalGeneration,
   startEvalGeneration,
   subscribeToEvalGeneration,
 } from "@/features/evals/api/evals-api"
@@ -238,14 +238,14 @@ export function useEvalsController(workspace: SkillWorkspace) {
       })
     },
   })
-  const publishMutation = useMutation({
-    mutationFn: (taskId: string) => publishEvalGeneration(taskId),
+  const saveMutation = useMutation({
+    mutationFn: (taskId: string) => saveEvalGeneration(taskId),
     onSuccess: (result, taskId) => {
       queryClient.setQueriesData<EvalGenerationTaskPage>(
         { queryKey: taskListRootKey(workspace.id) },
         (current) => {
           if (!current) return current
-          const publishedTask = current.items.find(
+          const savedTask = current.items.find(
             (task) => task.id === taskId && task.draftStatus === "READY",
           )
           return {
@@ -259,7 +259,7 @@ export function useEvalsController(workspace: SkillWorkspace) {
                   }
                 : task,
             ),
-            summary: publishedTask
+            summary: savedTask
               ? {
                   ...current.summary,
                   awaitingReview: Math.max(
@@ -357,7 +357,7 @@ export function useEvalsController(workspace: SkillWorkspace) {
   const mutationError =
     startMutation.error ??
     cancelMutation.error ??
-    publishMutation.error ??
+    saveMutation.error ??
     discardMutation.error
 
   return {
@@ -396,7 +396,7 @@ export function useEvalsController(workspace: SkillWorkspace) {
     mutationPending:
       startMutation.isPending ||
       cancelMutation.isPending ||
-      publishMutation.isPending ||
+      saveMutation.isPending ||
       discardMutation.isPending,
     draftLoading: draftQuery.isPending && Boolean(selectedTask?.draftId),
     mutationError:
@@ -413,7 +413,7 @@ export function useEvalsController(workspace: SkillWorkspace) {
       setGenerationBrief,
       start: () => startMutation.mutateAsync(),
       cancel: (taskId: string) => cancelMutation.mutateAsync(taskId),
-      publish: (taskId: string) => publishMutation.mutateAsync(taskId),
+      save: (taskId: string) => saveMutation.mutateAsync(taskId),
       discard: (taskId: string) => discardMutation.mutateAsync(taskId),
       retry: () => {
         void Promise.all([
@@ -425,7 +425,7 @@ export function useEvalsController(workspace: SkillWorkspace) {
       clearMutationError: () => {
         startMutation.reset()
         cancelMutation.reset()
-        publishMutation.reset()
+        saveMutation.reset()
         discardMutation.reset()
       },
     },

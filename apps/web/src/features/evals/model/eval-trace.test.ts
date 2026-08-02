@@ -18,7 +18,7 @@ function event(
 }
 
 describe("buildEvalTraceEntries", () => {
-  it("omits assistant messages and pairs tool results with tool names", () => {
+  it("shows assistant messages and pairs tool results with tool calls", () => {
     const entries = buildEvalTraceEntries([
       event(1, "task.created", {}),
       event(2, "agent.assistant", {
@@ -48,11 +48,48 @@ describe("buildEvalTraceEntries", () => {
         sequence: 1,
       },
       {
+        kind: "message",
+        event: expect.objectContaining({ type: "agent.assistant" }),
+        sequence: 2,
+        content: "analysis",
+      },
+      {
         kind: "tool",
         event: expect.objectContaining({ type: "agent.tool" }),
         sequence: 4,
         toolName: "Write",
         output: "File written successfully.",
+        isError: false,
+      },
+    ])
+  })
+
+  it("shows only the complete path for Read tool calls", () => {
+    const entries = buildEvalTraceEntries([
+      event(1, "agent.assistant", {
+        content: [
+          {
+            type: "tool_use",
+            toolUseId: "read-1",
+            name: "Read",
+            input: { file_path: "/workspace/skill/SKILL.md" },
+          },
+        ],
+      }),
+      event(2, "agent.tool", {
+        toolUseId: "read-1",
+        content: "A very long file body that should not be rendered.",
+        isError: false,
+      }),
+    ])
+
+    expect(entries).toEqual([
+      {
+        kind: "tool",
+        event: expect.objectContaining({ type: "agent.tool" }),
+        sequence: 2,
+        toolName: "Read",
+        output: "/workspace/skill/SKILL.md",
         isError: false,
       },
     ])

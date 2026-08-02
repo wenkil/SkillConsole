@@ -5,6 +5,7 @@ import type {
   AgentRuntimeAdapter,
   AgentRuntimeFailure,
   AgentRuntimeSession,
+  AgentRuntimeToolPermissionHandler,
   AgentSessionEvent,
   AgentSessionView,
 } from "./agent-session.domain.js"
@@ -36,6 +37,9 @@ export interface CreateAgentSessionInWorkspaceInput {
   readonly workspaceLocator: string
   readonly expectedConfigurationFingerprint: string
   readonly allowedTools?: readonly string[]
+  readonly canUseTool?: AgentRuntimeToolPermissionHandler
+  readonly maxTurns?: number
+  readonly maxBudgetUsd?: number
   readonly additionalRedactedValues?: readonly string[]
 }
 
@@ -110,6 +114,13 @@ export class AgentSessionService {
         cwd,
         ...(input.allowedTools
           ? { allowedTools: input.allowedTools }
+          : {}),
+        ...(input.canUseTool ? { canUseTool: input.canUseTool } : {}),
+        ...(input.maxTurns !== undefined
+          ? { maxTurns: input.maxTurns }
+          : {}),
+        ...(input.maxBudgetUsd !== undefined
+          ? { maxBudgetUsd: input.maxBudgetUsd }
           : {}),
         redactedValues: [
           ...settingsValues,
@@ -241,6 +252,9 @@ export class AgentSessionService {
     readonly cwd: string
     readonly sdkSessionId: string | null
     readonly allowedTools?: readonly string[]
+    readonly canUseTool?: AgentRuntimeToolPermissionHandler
+    readonly maxTurns?: number
+    readonly maxBudgetUsd?: number
     readonly redactedValues: readonly string[]
   }): AgentRuntimeSession {
     if (this.shuttingDown) {
@@ -253,6 +267,13 @@ export class AgentSessionService {
       redactedValues: input.redactedValues,
       ...(input.allowedTools
         ? { allowedTools: input.allowedTools }
+        : {}),
+      ...(input.canUseTool ? { canUseTool: input.canUseTool } : {}),
+      ...(input.maxTurns !== undefined
+        ? { maxTurns: input.maxTurns }
+        : {}),
+      ...(input.maxBudgetUsd !== undefined
+        ? { maxBudgetUsd: input.maxBudgetUsd }
         : {}),
       ...(input.sdkSessionId
         ? { resumeSessionId: input.sdkSessionId }
@@ -312,6 +333,9 @@ export class AgentSessionService {
     readonly workspaceLocator: string
     readonly cwd: string
     readonly allowedTools?: readonly string[]
+    readonly canUseTool?: AgentRuntimeToolPermissionHandler
+    readonly maxTurns?: number
+    readonly maxBudgetUsd?: number
     readonly redactedValues: readonly string[]
   }): Promise<AgentSessionView> {
     const turnId = randomUUID()
@@ -330,6 +354,13 @@ export class AgentSessionService {
         redactedValues: [...new Set(input.redactedValues)],
         ...(input.allowedTools
           ? { allowedTools: input.allowedTools }
+          : {}),
+        ...(input.canUseTool ? { canUseTool: input.canUseTool } : {}),
+        ...(input.maxTurns !== undefined
+          ? { maxTurns: input.maxTurns }
+          : {}),
+        ...(input.maxBudgetUsd !== undefined
+          ? { maxBudgetUsd: input.maxBudgetUsd }
           : {}),
       })
       await runtime.send({ turnId, prompt: input.prompt })

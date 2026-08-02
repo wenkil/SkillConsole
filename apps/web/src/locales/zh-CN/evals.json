@@ -2,11 +2,11 @@
   "header": {
     "eyebrow": "EVALS GENERATION LOOP · 生成闭环",
     "title": "测试用例生成工作台",
-    "description": "为「{{name}}」冻结一个 Skill 目标，由 Claude 与固定版本 skill-creator 生成用例；校验通过后先人工审阅，再发布为不可变修订。",
+    "description": "为「{{name}}」冻结一个 Skill 目标，由 Claude 与固定版本 skill-creator 生成用例；校验通过后先人工审阅，再保存为不可变修订。",
     "metrics": {
       "tasks": "生成任务",
       "review": "待审阅",
-      "published": "已发布"
+      "saved": "已保存"
     }
   },
   "status": {
@@ -45,7 +45,7 @@
     "durationMinutes": "{{minutes}} 分 {{seconds}} 秒",
     "reviewStatus": {
       "READY": "等待确认",
-      "PUBLISHED": "已发布",
+      "PUBLISHED": "已保存",
       "DISCARDED": "已丢弃"
     },
     "viewDetails": "查看详情",
@@ -60,7 +60,7 @@
     "detailEyebrow": "EVALS TASK DETAIL",
     "createTitle": "生成 Evals 草稿",
     "createDescription": "配置冻结目标并启动生成。关闭抽屉不会取消正在执行的任务。",
-    "detailDescription": "查看受控 Agent 生成过程、校验结果和人工发布状态。",
+    "detailDescription": "查看受控 Agent 生成过程、校验结果和人工保存状态。",
     "activeTaskHint": "当前已有生成任务正在运行。请等待任务结束，或打开该任务详情后取消。",
     "tabsLabel": "任务详情",
     "tabs": {
@@ -68,8 +68,8 @@
       "result": "生成结果"
     },
     "resultReady": "已就绪",
-    "publishedRevision": "已发布为 EVALS R{{revision}}",
-    "reviewBeforePublish": "请确认用例内容后再发布不可变修订。",
+    "savedRevision": "已保存为 EVALS R{{revision}}",
+    "reviewBeforeSave": "请确认用例内容后再保存此份测试用例。",
     "closeHint": "关闭抽屉不会影响任务执行。",
     "loadingTask": "正在读取任务详情"
   },
@@ -87,7 +87,9 @@
     "toolSucceeded": "成功",
     "toolFailed": "失败",
     "unknownTool": "未知工具",
-    "noToolOutput": "工具未返回输出"
+    "noToolOutput": "工具未返回输出",
+    "readPathUnavailable": "未能读取完整路径",
+    "messageLabel": "消息 · Agent"
   },
   "event": {
     "task": {
@@ -108,10 +110,10 @@
     }
   },
   "review": {
-    "eyebrow": "REVIEW BEFORE PUBLISH",
+    "eyebrow": "REVIEW BEFORE SAVE",
     "title": "Evals 草稿审阅",
     "emptyTitle": "先生成一组可复用 Evals",
-    "emptyDescription": "生成任务不会自动发布。校验通过后，你可以逐条检查用户任务、预期结果、客观断言和输入文件。",
+    "emptyDescription": "生成任务不会自动保存。校验通过后，你可以逐条检查用户任务、预期结果、客观断言和输入文件。",
     "loadingDraft": "正在读取已校验草稿",
     "resultPendingTitle": "生成结果尚未就绪",
     "resultPendingDescription": "Agent 完成生成并通过服务端校验后，可在这里审阅完整用例。",
@@ -137,25 +139,25 @@
     "start": "生成 Evals 草稿",
     "cancel": "取消当前生成"
   },
-  "publish": {
+  "save": {
     "eyebrow": "HUMAN CONFIRMATION GATE",
-    "title": "发布门禁",
-    "noDraft": "选择一个校验成功的任务后，这里会显示草稿摘要与发布操作。",
+    "title": "保存测试用例",
+    "noDraft": "选择一个校验成功的任务后，这里会显示草稿摘要与保存操作。",
     "cases": "用例",
     "files": "文件",
-    "action": "确认发布不可变修订",
-    "runTest": "使用此修订运行测试",
-    "confirm": "发布后该 Evals 修订不可修改。确认已审阅所有用例并继续发布？",
+    "action": "保存此份测试用例",
+    "runTest": "使用此份测试用例运行测试",
+    "confirm": "保存后该 Evals 修订不可修改。确认已审阅所有用例并保存？",
     "discard": "丢弃此草稿",
-    "discardConfirm": "丢弃后不能发布此草稿，但任务记录仍会保留。确认丢弃？",
+    "discardConfirm": "丢弃后不能保存此份测试用例，但任务记录仍会保留。确认丢弃？",
     "status": {
-      "PUBLISHED": "已发布为不可变修订",
+      "PUBLISHED": "已保存为测试用例修订",
       "DISCARDED": "草稿已丢弃"
     }
   },
   "revisions": {
-    "title": "已发布修订",
-    "empty": "尚无已发布 Evals 修订。",
+    "title": "已保存测试用例",
+    "empty": "尚无已保存 Evals 修订。",
     "sourceSnapshot": "来源快照"
   },
   "states": {
@@ -167,6 +169,6 @@
   },
   "footer": {
     "snapshotBoundary": "目标 Skill 与生成依赖均使用受控副本",
-    "publishBoundary": "草稿经人工确认后才成为不可变修订"
+    "saveBoundary": "草稿经人工确认后才保存为不可变修订"
   }
 }

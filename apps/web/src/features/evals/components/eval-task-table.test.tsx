@@ -6,7 +6,7 @@ import { EvalTaskTable } from "@/features/evals/components/eval-task-table"
 import type { EvalGenerationTask } from "@/features/evals/model/evals"
 import { i18n } from "@/shared/i18n/i18n"
 
-const publishedTask: EvalGenerationTask = {
+const savedTask: EvalGenerationTask = {
   id: "01900000-0000-7000-8000-000000000001",
   suiteId: "01900000-0000-7000-8000-000000000002",
   workspaceId: "01900000-0000-7000-8000-000000000003",
@@ -35,7 +35,7 @@ const publishedTask: EvalGenerationTask = {
 }
 
 describe("EvalTaskTable", () => {
-  it("shows the Skill version and published review state", async () => {
+  it("shows the Skill version and saved review state", async () => {
     const user = userEvent.setup()
     const onOpen = vi.fn()
 
@@ -50,17 +50,17 @@ describe("EvalTaskTable", () => {
         pageCount={1}
         pageSize={20}
         t={i18n.getFixedT("zh-CN", "evals")}
-        tasks={[publishedTask]}
+        tasks={[savedTask]}
         total={1}
       />,
     )
 
     expect(screen.getByRole("columnheader", { name: "Skill 版本" })).toBeInTheDocument()
     expect(screen.getByText("V2")).toBeInTheDocument()
-    expect(screen.getByText("已发布")).toBeInTheDocument()
+    expect(screen.getByText("已保存")).toBeInTheDocument()
     expect(screen.queryByText("csv-to-md")).not.toBeInTheDocument()
 
     await user.click(screen.getByRole("button", { name: "查看详情" }))
-    expect(onOpen).toHaveBeenCalledWith(publishedTask.id)
+    expect(onOpen).toHaveBeenCalledWith(savedTask.id)
   })
 })

@@ -162,14 +162,6 @@ export function TestRunsWorkbenchView({
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 {t("list.emptyDescription")}
               </p>
-              <Button
-                className="mt-5 rounded-none"
-                onClick={() => setDialogOpen(true)}
-                type="button"
-              >
-                <Plus data-icon="inline-start" />
-                {t("list.start")}
-              </Button>
             </div>
           </div>
         ) : (

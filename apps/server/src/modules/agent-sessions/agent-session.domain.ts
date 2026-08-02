@@ -158,10 +158,41 @@ export interface RuntimeTurnInput {
   readonly prompt: string
 }
 
+export interface AgentRuntimeToolPermissionContext {
+  readonly signal: AbortSignal
+  readonly blockedPath?: string
+  readonly decisionReason?: string
+  readonly title?: string
+  readonly displayName?: string
+  readonly description?: string
+  readonly toolUseId: string
+  readonly requestId: string
+}
+
+export type AgentRuntimeToolPermissionResult =
+  | {
+      readonly behavior: "allow"
+      readonly updatedInput?: Readonly<Record<string, unknown>>
+    }
+  | {
+      readonly behavior: "deny"
+      readonly message: string
+      readonly interrupt?: boolean
+    }
+
+export type AgentRuntimeToolPermissionHandler = (
+  toolName: string,
+  input: Readonly<Record<string, unknown>>,
+  context: AgentRuntimeToolPermissionContext,
+) => Promise<AgentRuntimeToolPermissionResult>
+
 export interface OpenAgentRuntimeSessionInput {
   readonly cwd: string
   readonly resumeSessionId?: string
   readonly allowedTools?: readonly string[]
+  readonly canUseTool?: AgentRuntimeToolPermissionHandler
+  readonly maxTurns?: number
+  readonly maxBudgetUsd?: number
   readonly redactedValues: readonly string[]
   readonly onEvent: (
     turnId: string | null,
