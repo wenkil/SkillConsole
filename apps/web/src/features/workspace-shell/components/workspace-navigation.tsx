@@ -287,11 +287,6 @@ export function WorkspaceNavigation({
             )}
           </Button>
 
-          {!collapsed ? (
-            <div className="mt-3 px-3 font-mono text-[11px] text-muted-foreground uppercase">
-              {t("workspaceShell.localFirst")}
-            </div>
-          ) : null}
         </div>
       </aside>
     </Tooltip.Provider>

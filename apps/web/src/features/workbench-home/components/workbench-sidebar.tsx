@@ -132,10 +132,6 @@ export function WorkbenchSidebar({
           )}
         </div>
 
-        <div className="mt-4 shrink-0 border-t border-rule-soft pt-4 font-mono text-[10px] leading-relaxed text-muted-foreground uppercase">
-          <div>SC–DOS–01</div>
-          <div>REV 0.4.0</div>
-        </div>
       </div>
     </aside>
   )

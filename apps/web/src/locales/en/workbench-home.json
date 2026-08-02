@@ -119,7 +119,6 @@
     "draftBasedOn": "Draft · based on V{{version}}",
     "noFormalVersion": "No saved version",
     "workingCopy": "Working copy · continuously saved",
-    "localFirst": "LOCAL-FIRST · data stays on this machine",
     "loading": "Loading workbench",
     "loadError": "Workbench unavailable",
     "loadErrorDescription": "Make sure the local service and database are running, then retry.",

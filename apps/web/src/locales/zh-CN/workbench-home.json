@@ -119,7 +119,6 @@
     "draftBasedOn": "草稿 · 基于 V{{version}}",
     "noFormalVersion": "尚无版本",
     "workingCopy": "工作副本 · 持续保存",
-    "localFirst": "LOCAL-FIRST · 数据保留在本机",
     "loading": "正在读取工作台",
     "loadError": "无法读取工作台",
     "loadErrorDescription": "请确认本地服务与数据库已启动，然后重试。",
