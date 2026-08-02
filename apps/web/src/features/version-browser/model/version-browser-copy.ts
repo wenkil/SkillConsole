@@ -3,8 +3,13 @@ import type { TFunction } from "i18next"
 export interface VersionBrowserCopy {
   backToHome: string
   eyebrow: string
+  versionPrefix: string
   formalVersion: string
   versionPicker: string
+  draftTarget: (revision: number) => string
+  versionTarget: (name: string, isOnline: boolean) => string
+  compareVersions: string
+  currentOnlineBadge: string
   currentVersion: string
   historicalVersion: string
   initialCandidate: string
@@ -15,6 +20,10 @@ export interface VersionBrowserCopy {
   immutableDescription: string
   candidateTitle: string
   candidateDescription: string
+  candidateFilesSummary: (count: number) => string
+  frozenVersionTitle: string
+  versionFilesSummary: (count: number, labels: string) => string
+  noLabels: string
   files: string
   searchFiles: string
   noSearchResults: string
@@ -36,6 +45,7 @@ export interface VersionBrowserCopy {
   imageUnavailableTitle: string
   download: string
   newVersionDraft: string
+  saveAsVersion: string
   versionInfo: string
   candidateInfo: string
   snapshotInfo: string
@@ -76,8 +86,18 @@ export function getVersionBrowserCopy(
   return {
     backToHome: translate("actions.backToHome"),
     eyebrow: translate("header.eyebrow"),
+    versionPrefix: translate("header.versionPrefix"),
     formalVersion: translate("header.formalVersion"),
     versionPicker: translate("header.versionPicker"),
+    draftTarget: (revision) =>
+      translate("header.draftTarget", { revision }),
+    versionTarget: (name, isOnline) =>
+      translate("header.versionTarget", {
+        name,
+        suffix: isOnline ? translate("header.currentOnlineSuffix") : "",
+      }),
+    compareVersions: translate("header.compareVersions"),
+    currentOnlineBadge: translate("header.currentOnlineBadge"),
     currentVersion: translate("header.currentVersion"),
     historicalVersion: translate("header.historicalVersion"),
     initialCandidate: translate("header.initialCandidate"),
@@ -88,6 +108,12 @@ export function getVersionBrowserCopy(
     immutableDescription: translate("immutable.description"),
     candidateTitle: translate("candidate.title"),
     candidateDescription: translate("candidate.description"),
+    candidateFilesSummary: (count) =>
+      translate("candidate.filesSummary", { count }),
+    frozenVersionTitle: translate("immutable.frozenVersionTitle"),
+    versionFilesSummary: (count, labels) =>
+      translate("immutable.filesSummary", { count, labels }),
+    noLabels: translate("immutable.noLabels"),
     files: translate("tree.files"),
     searchFiles: translate("tree.search"),
     noSearchResults: translate("tree.noResults"),
@@ -109,6 +135,7 @@ export function getVersionBrowserCopy(
     imageUnavailableTitle: translate("states.imageUnavailableTitle"),
     download: translate("actions.download"),
     newVersionDraft: translate("draft.newVersion"),
+    saveAsVersion: translate("draft.saveAsVersion"),
     versionInfo: translate("metadata.version"),
     candidateInfo: translate("metadata.candidate"),
     snapshotInfo: translate("metadata.snapshot"),

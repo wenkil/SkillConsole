@@ -5,7 +5,13 @@ import { describe, expect, it, vi } from "vitest"
 import { CreateVersionDialog } from "@/features/version-browser/components/create-version-dialog"
 import { VersionMetadataDialog } from "@/features/version-browser/components/version-metadata-dialog"
 import type { SkillVersionBrowser } from "@/features/version-browser/model/version-browser"
+import { getVersionBrowserCopy } from "@/features/version-browser/model/version-browser-copy"
 import { SkillConsoleApiError } from "@/shared/api/http"
+import { i18n } from "@/shared/i18n/i18n"
+
+const copy = getVersionBrowserCopy(
+  i18n.getFixedT("zh-CN", "versionBrowser"),
+)
 
 function versionNameConflict() {
   return new SkillConsoleApiError(409, {
@@ -43,6 +49,7 @@ describe("version name conflict dialogs", () => {
     const user = userEvent.setup()
     render(
       <CreateVersionDialog
+        copy={copy}
         onCreate={vi.fn().mockRejectedValue(versionNameConflict())}
         onCreated={vi.fn()}
         pending={false}

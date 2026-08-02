@@ -5,8 +5,14 @@
   },
   "header": {
     "eyebrow": "Skill 内容浏览",
+    "versionPrefix": "Skill 版本",
     "formalVersion": "不可变版本",
     "versionPicker": "选择工作副本或版本",
+    "draftTarget": "工作副本 · Revision {{revision}}",
+    "versionTarget": "{{name}}{{suffix}}",
+    "currentOnlineSuffix": " · 当前上线",
+    "compareVersions": "版本对比",
+    "currentOnlineBadge": "当前上线",
     "currentVersion": "当前上线版本",
     "historicalVersion": "正在查看其他版本",
     "initialCandidate": "工作副本",
@@ -16,15 +22,20 @@
   },
   "immutable": {
     "title": "只读不可变版本",
+    "frozenVersionTitle": "内容已冻结的测试版本",
+    "filesSummary": "{{count}} 个文件 · {{labels}}",
+    "noLabels": "暂无标签",
     "description": "此页面展示不可变 Snapshot。文件内容、Manifest 和版本元数据不会在浏览过程中被修改。"
   },
   "candidate": {
     "title": "可持续编辑的工作副本",
+    "filesSummary": "{{count}} 个文件 · 保存时只写入变化文件",
     "description": "普通保存只更新变化文件；需要测试、留档或对比时，请将当前工作副本保存为不可变版本。"
   },
   "draft": {
     "newVersion": "新建版本草稿",
     "editorLabel": "草稿文件编辑器",
+    "saveAsVersion": "保存为版本",
     "unsaved": "有未保存修改",
     "synced": "已与当前工作副本同步",
     "viewDiff": "查看 Diff",

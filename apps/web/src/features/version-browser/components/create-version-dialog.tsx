@@ -5,6 +5,7 @@ import type {
   CreateSkillVersionInput,
   SkillVersionBrowser,
 } from "@/features/version-browser/model/version-browser"
+import type { VersionBrowserCopy } from "@/features/version-browser/model/version-browser-copy"
 import { SkillConsoleApiError } from "@/shared/api/http"
 import { Button } from "@/shared/components/ui/button"
 import {
@@ -20,6 +21,7 @@ import {
 import { Input } from "@/shared/components/ui/input"
 
 interface CreateVersionDialogProps {
+  copy: VersionBrowserCopy
   suggestedName: string
   pending: boolean
   onCreate: (
@@ -29,6 +31,7 @@ interface CreateVersionDialogProps {
 }
 
 export function CreateVersionDialog({
+  copy,
   suggestedName,
   pending,
   onCreate,
@@ -59,7 +62,7 @@ export function CreateVersionDialog({
       <DialogTrigger asChild>
         <Button className="h-9 rounded-none" type="button">
           <GitCommitVertical aria-hidden="true" data-icon="inline-start" />
-          保存为版本
+          {copy.saveAsVersion}
         </Button>
       </DialogTrigger>
       <DialogContent className="gap-0 rounded-none border-foreground bg-paper-raised p-0 sm:max-w-lg">

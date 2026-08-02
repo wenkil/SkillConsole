@@ -5,8 +5,14 @@
   },
   "header": {
     "eyebrow": "Skill content browser",
+    "versionPrefix": "Skill version",
     "formalVersion": "Immutable version",
     "versionPicker": "Select working copy or version",
+    "draftTarget": "Working copy · Revision {{revision}}",
+    "versionTarget": "{{name}}{{suffix}}",
+    "currentOnlineSuffix": " · Current online",
+    "compareVersions": "Compare versions",
+    "currentOnlineBadge": "Current online",
     "currentVersion": "Current online version",
     "historicalVersion": "Viewing another version",
     "initialCandidate": "Working copy",
@@ -16,15 +22,20 @@
   },
   "immutable": {
     "title": "Read-only immutable version",
+    "frozenVersionTitle": "Frozen test version",
+    "filesSummary": "{{count}} files · {{labels}}",
+    "noLabels": "No labels",
     "description": "This page displays an immutable Snapshot. Browsing never changes file content, the Manifest, or version metadata."
   },
   "candidate": {
     "title": "Continuously editable working copy",
+    "filesSummary": "{{count}} files · Saving writes changed files only",
     "description": "Normal saves only write changed files. Freeze an immutable version when you need a test target, checkpoint, or comparison."
   },
   "draft": {
     "newVersion": "Create version draft",
     "editorLabel": "Draft file editor",
+    "saveAsVersion": "Save as version",
     "unsaved": "Unsaved changes",
     "synced": "Synced with the current working copy",
     "viewDiff": "View diff",

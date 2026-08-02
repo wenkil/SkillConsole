@@ -230,11 +230,13 @@ describe("VersionBrowserView", () => {
     expect(
       screen.queryByRole("button", { name: "Current file actions" }),
     ).not.toBeInTheDocument()
-    expect(screen.getAllByText(/工作副本/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Working copy/).length).toBeGreaterThan(0)
     expect(
-      screen.getByRole("button", { name: "保存为版本" }),
+      screen.getByRole("button", { name: "Save as version" }),
     ).toBeInTheDocument()
-    expect(screen.getByText("可持续编辑的工作副本")).toBeInTheDocument()
+    expect(
+      screen.getByText("Continuously editable working copy"),
+    ).toBeInTheDocument()
     expect(screen.queryByText("V1")).not.toBeInTheDocument()
     const codeEditor = document.querySelector(
       '.cm-content[contenteditable="true"]',
@@ -295,7 +297,7 @@ describe("VersionBrowserView", () => {
 
     await user.selectOptions(
       screen.getByRole("combobox", {
-        name: "查看目标",
+        name: "Select working copy or version",
       }),
       `version:${versions[1]!.id}`,
     )
@@ -303,7 +305,7 @@ describe("VersionBrowserView", () => {
     expect(
       await screen.findByRole("heading", { name: "V1 content" }),
     ).toBeInTheDocument()
-    expect(screen.getByText("内容已冻结的测试版本")).toBeInTheDocument()
+    expect(screen.getByText("Frozen test version")).toBeInTheDocument()
     await user.click(
       screen.getByRole("button", {
         name: "编辑版本信息",
@@ -317,7 +319,7 @@ describe("VersionBrowserView", () => {
     await user.click(screen.getByRole("button", { name: "取消" }))
     expect(
       screen.getByRole("combobox", {
-        name: "查看目标",
+        name: "Select working copy or version",
       }),
     ).toHaveValue(`version:${versions[1]!.id}`)
   })

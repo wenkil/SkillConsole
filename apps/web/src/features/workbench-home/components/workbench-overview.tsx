@@ -68,21 +68,29 @@ function TodoPanel({
 }
 
 export function WorkbenchOverview({
+  copy,
   workspace,
   locale,
 }: WorkbenchOverviewProps) {
   const draft = workspace.activeDraft
   const online = workspace.onlineVersion
+  const dashboard = copy.overviewDashboard
   const updatedAt = new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(workspace.updatedAt))
+  const onlineLabels = online?.labels.length
+    ? new Intl.ListFormat(locale, {
+        style: "short",
+        type: "conjunction",
+      }).format(online.labels)
+    : null
 
   return (
     <main className="h-full min-h-0 min-w-0 overflow-y-auto px-8 py-7">
       <header>
         <div className="font-mono text-[11px] font-bold tracking-[0.1em] text-signal-dark uppercase">
-          Workbench overview · 工作台概览
+          {dashboard.eyebrow}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 className="text-[clamp(2rem,3vw,3rem)] leading-none font-[780] tracking-[-0.04em]">
@@ -90,38 +98,46 @@ export function WorkbenchOverview({
           </h1>
           {online ? (
             <span className="border border-technical/50 bg-technical/8 px-3 py-1.5 font-mono text-[10px] font-bold text-technical-foreground">
-              当前上线 · {online.name}
+              {dashboard.publishedVersion(online.name)}
             </span>
           ) : (
             <span className="border border-rule bg-paper-muted px-3 py-1.5 font-mono text-[10px] text-muted-foreground">
-              尚未标记上线版本
+              {dashboard.noPublishedVersion}
             </span>
           )}
         </div>
         <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-          管理 Skill 的工作副本、不可变版本、测试任务、版本对比与版本标签。系统仅提供决策证据，最终上线版本由你选择。
+          {dashboard.description}
         </p>
       </header>
 
       <section className="mt-7 border border-foreground bg-paper-raised">
         <h2 className="border-b border-rule px-5 py-3 font-mono text-[11px] font-bold tracking-[0.08em] text-muted-foreground uppercase">
-          Workbench status · 工作台状态
+          {dashboard.statusTitle}
         </h2>
         <div className="grid grid-cols-3">
           <Metric
-            hint={online?.labels.join("、") || "可随时手动标记"}
-            label="当前上线版本"
-            value={online?.name ?? "未设置"}
+            hint={onlineLabels ?? dashboard.currentPublishedVersionHint}
+            label={dashboard.currentPublishedVersion}
+            value={online?.name ?? dashboard.noPublishedVersionValue}
           />
           <Metric
-            hint="内容冻结，可参与目录与报告对比"
-            label="已保存版本"
+            hint={dashboard.savedVersionsHint}
+            label={dashboard.savedVersions}
             value={workspace.versionCount}
           />
           <Metric
-            hint={draft ? `最近更新 ${updatedAt}` : "可从上线版本创建"}
-            label="工作副本"
-            value={draft ? `Revision ${draft.contentRevision}` : "无"}
+            hint={
+              draft
+                ? dashboard.recentUpdated(updatedAt)
+                : dashboard.createFromPublished
+            }
+            label={dashboard.workingCopy}
+            value={
+              draft
+                ? dashboard.revision(draft.contentRevision)
+                : dashboard.noActiveDraft
+            }
           />
         </div>
       </section>
@@ -130,14 +146,14 @@ export function WorkbenchOverview({
         <Button asChild className="h-10 rounded-none">
           <Link to={`/workbenches/${workspace.id}/versions`}>
             <PencilLine data-icon="inline-start" />
-            {draft ? "继续编辑工作副本" : "查看 Skill 版本"}
+            {draft ? dashboard.continueEditingDraft : dashboard.viewSkillVersions}
           </Link>
         </Button>
         {workspace.versionCount >= 2 ? (
           <Button asChild className="h-10 rounded-none" variant="outline">
             <Link to={`/workbenches/${workspace.id}/versions/compare`}>
               <GitCompareArrows data-icon="inline-start" />
-              对比两个版本
+              {dashboard.compareVersions}
             </Link>
           </Button>
         ) : null}
@@ -146,32 +162,32 @@ export function WorkbenchOverview({
       <section className="mt-6">
         <div className="mb-3 flex items-center justify-between gap-4">
           <h2 className="font-mono text-[11px] font-bold tracking-[0.08em] text-muted-foreground uppercase">
-            Evidence workspace · 证据工作区
+            {dashboard.evidenceWorkspace}
           </h2>
           <span className="font-mono text-[10px] text-muted-foreground">
-            后续迭代逐步填充
+            {dashboard.futureIteration}
           </span>
         </div>
         <div className="grid grid-cols-4 gap-3">
           <TodoPanel
-            description="维护每个 Skill 的测试点、输入与预期评估维度。"
+            description={dashboard.cards.testCases.description}
             icon={FlaskConical}
-            title="测试用例"
+            title={dashboard.cards.testCases.title}
           />
           <TodoPanel
-            description="沉淀可复用的输入数据、附件和评估素材。"
+            description={dashboard.cards.datasets.description}
             icon={Files}
-            title="数据集"
+            title={dashboard.cards.datasets.title}
           />
           <TodoPanel
-            description="选择版本和测试集，一键发起并跟踪运行任务。"
+            description={dashboard.cards.testRuns.description}
             icon={Activity}
-            title="测试任务"
+            title={dashboard.cards.testRuns.title}
           />
           <TodoPanel
-            description="汇总版本差异、测试结果和版本标记，不输出强制得分。"
+            description={dashboard.cards.comparisonReports.description}
             icon={FileChartColumn}
-            title="对比报告"
+            title={dashboard.cards.comparisonReports.title}
           />
         </div>
       </section>
@@ -180,9 +196,9 @@ export function WorkbenchOverview({
         <div className="flex items-start gap-3">
           <Tags className="mt-0.5 size-5 text-technical" />
           <div>
-            <strong className="text-sm">按需要设置版本标签</strong>
+            <strong className="text-sm">{dashboard.versionTagsTitle}</strong>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              可使用“候选”“实验”“当前上线”等标签记录版本用途；测试点和评估结果仅作为决策证据，不自动生成“验收通过”结论。
+              {dashboard.versionTagsDescription}
             </p>
           </div>
           <CircleDashed className="ml-auto size-5 text-muted-foreground" />

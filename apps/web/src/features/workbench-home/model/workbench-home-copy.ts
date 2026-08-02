@@ -11,6 +11,37 @@ interface SourceKindCopy {
   choose: string
 }
 
+interface WorkbenchOverviewDashboardCopy {
+  eyebrow: string
+  description: string
+  publishedVersion: (name: string) => string
+  noPublishedVersion: string
+  noPublishedVersionValue: string
+  statusTitle: string
+  currentPublishedVersion: string
+  currentPublishedVersionHint: string
+  savedVersions: string
+  savedVersionsHint: string
+  workingCopy: string
+  recentUpdated: (date: string) => string
+  createFromPublished: string
+  revision: (revision: number) => string
+  noActiveDraft: string
+  continueEditingDraft: string
+  viewSkillVersions: string
+  compareVersions: string
+  evidenceWorkspace: string
+  futureIteration: string
+  cards: {
+    testCases: { title: string; description: string }
+    datasets: { title: string; description: string }
+    testRuns: { title: string; description: string }
+    comparisonReports: { title: string; description: string }
+  }
+  versionTagsTitle: string
+  versionTagsDescription: string
+}
+
 export interface WorkbenchHomeCopy {
   workbenches: string
   workbenchList: string
@@ -93,6 +124,7 @@ export interface WorkbenchHomeCopy {
   immutableVersionDescription: string
   candidateContentTitle: string
   candidateContentDescription: string
+  overviewDashboard: WorkbenchOverviewDashboardCopy
 }
 
 export function getWorkbenchHomeCopy(
@@ -234,5 +266,72 @@ export function getWorkbenchHomeCopy(
     candidateContentDescription: translate(
       "overview.candidateContentDescription",
     ),
+    overviewDashboard: {
+      eyebrow: translate("overview.dashboard.eyebrow"),
+      description: translate("overview.dashboard.description"),
+      publishedVersion: (name) =>
+        translate("overview.dashboard.publishedVersion", { name }),
+      noPublishedVersion: translate("overview.dashboard.noPublishedVersion"),
+      noPublishedVersionValue: translate(
+        "overview.dashboard.noPublishedVersionValue",
+      ),
+      statusTitle: translate("overview.dashboard.statusTitle"),
+      currentPublishedVersion: translate(
+        "overview.dashboard.currentPublishedVersion",
+      ),
+      currentPublishedVersionHint: translate(
+        "overview.dashboard.currentPublishedVersionHint",
+      ),
+      savedVersions: translate("overview.dashboard.savedVersions"),
+      savedVersionsHint: translate("overview.dashboard.savedVersionsHint"),
+      workingCopy: translate("overview.dashboard.workingCopy"),
+      recentUpdated: (date) =>
+        translate("overview.dashboard.recentUpdated", { date }),
+      createFromPublished: translate(
+        "overview.dashboard.createFromPublished",
+      ),
+      revision: (revision) =>
+        translate("overview.dashboard.revision", { revision }),
+      noActiveDraft: translate("overview.dashboard.noActiveDraft"),
+      continueEditingDraft: translate(
+        "overview.dashboard.continueEditingDraft",
+      ),
+      viewSkillVersions: translate("overview.dashboard.viewSkillVersions"),
+      compareVersions: translate("overview.dashboard.compareVersions"),
+      evidenceWorkspace: translate("overview.dashboard.evidenceWorkspace"),
+      futureIteration: translate("overview.dashboard.futureIteration"),
+      cards: {
+        testCases: {
+          title: translate("overview.dashboard.cards.testCases.title"),
+          description: translate(
+            "overview.dashboard.cards.testCases.description",
+          ),
+        },
+        datasets: {
+          title: translate("overview.dashboard.cards.datasets.title"),
+          description: translate(
+            "overview.dashboard.cards.datasets.description",
+          ),
+        },
+        testRuns: {
+          title: translate("overview.dashboard.cards.testRuns.title"),
+          description: translate(
+            "overview.dashboard.cards.testRuns.description",
+          ),
+        },
+        comparisonReports: {
+          title: translate(
+            "overview.dashboard.cards.comparisonReports.title",
+          ),
+          description: translate(
+            "overview.dashboard.cards.comparisonReports.description",
+          ),
+        },
+      },
+      versionTagsTitle: translate("overview.dashboard.versionTagsTitle"),
+      versionTagsDescription: translate(
+        "overview.dashboard.versionTagsDescription",
+      ),
+    },
   }
 }

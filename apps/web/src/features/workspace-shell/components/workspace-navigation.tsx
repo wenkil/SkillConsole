@@ -123,7 +123,7 @@ export function WorkspaceNavigation({
     {
       module: "reports",
       label: t("workspaceShell.navigation.reports", {
-        defaultValue: "对比报告",
+        defaultValue: "Comparison reports",
       }),
       path: `${basePath}/reports`,
       icon: FileChartColumn,
@@ -132,7 +132,7 @@ export function WorkspaceNavigation({
   const workspaceState = getWorkspaceState(
     workspace,
     t("workspaceShell.workingCopy", {
-      defaultValue: "工作副本 · 持续保存",
+      defaultValue: "Working copy · continuously saved",
     }),
     t("workspaceShell.noFormalVersion"),
   )

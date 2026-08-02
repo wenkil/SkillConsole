@@ -176,8 +176,46 @@
       "releaseGateTodo": "发布门禁 TODO",
       "viewingDraft": "正在查看活动草稿",
       "viewingFormal": "正在查看当前正式版本",
+      "eyebrow": "工作台概览",
+      "description": "管理 Skill 的工作副本、不可变版本、测试任务、版本对比与版本标签。系统仅提供决策证据，最终上线版本由你选择。",
+      "publishedVersion": "当前上线 · {{name}}",
+      "noPublishedVersion": "尚未标记上线版本",
+      "noPublishedVersionValue": "未设置",
       "statusTitle": "WORKBENCH STATUS · 工作台状态",
-      "currentFormal": "当前正式版本",
+      "currentPublishedVersion": "当前上线版本",
+      "currentPublishedVersionHint": "可随时手动标记",
+      "savedVersions": "已保存版本",
+      "savedVersionsHint": "内容冻结，可参与目录与报告对比",
+      "workingCopy": "工作副本",
+      "recentUpdated": "最近更新 {{date}}",
+      "createFromPublished": "可从上线版本创建",
+      "revision": "Revision {{revision}}",
+      "continueEditingDraft": "继续编辑工作副本",
+      "viewSkillVersions": "查看 Skill 版本",
+      "compareVersions": "对比两个版本",
+      "evidenceWorkspace": "证据工作区",
+      "futureIteration": "后续迭代逐步填充",
+      "cards": {
+        "testCases": {
+          "title": "测试用例",
+          "description": "维护每个 Skill 的测试点、输入与预期评估维度。"
+        },
+        "datasets": {
+          "title": "数据集",
+          "description": "沉淀可复用的输入数据、附件和评估素材。"
+        },
+        "testRuns": {
+          "title": "测试任务",
+          "description": "选择版本和测试集，一键发起并跟踪运行任务。"
+        },
+        "comparisonReports": {
+          "title": "对比报告",
+          "description": "汇总版本差异、测试结果和版本标记，不输出强制得分。"
+        }
+      },
+      "versionTagsTitle": "按需要设置版本标签",
+      "versionTagsDescription": "可使用“候选”“实验”“当前上线”等标签记录版本用途；测试点和评估结果仅作为决策证据，不自动生成“验收通过”结论。",
+    "currentFormal": "当前正式版本",
       "defaultBaseline": "默认基线",
       "baselineReady": "已建立",
       "notEstablished": "尚未建立",

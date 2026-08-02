@@ -176,8 +176,46 @@
       "releaseGateTodo": "Release gate TODO",
       "viewingDraft": "Viewing the active draft",
       "viewingFormal": "Viewing the current formal version",
+      "eyebrow": "Workbench overview",
+      "description": "Manage the Skill's working copy, immutable versions, test runs, version comparisons, and version labels. The system provides decision evidence; you choose the final release version.",
+      "publishedVersion": "Published · {{name}}",
+      "noPublishedVersion": "No published version yet",
+      "noPublishedVersionValue": "Not set",
       "statusTitle": "WORKBENCH STATUS · Workbench status",
-      "currentFormal": "Current formal version",
+      "currentPublishedVersion": "Current published version",
+      "currentPublishedVersionHint": "Can be marked manually at any time",
+      "savedVersions": "Saved versions",
+      "savedVersionsHint": "Frozen content can be included in directory and report comparisons",
+      "workingCopy": "Working copy",
+      "recentUpdated": "Last updated {{date}}",
+      "createFromPublished": "Can be created from the published version",
+      "revision": "Revision {{revision}}",
+      "continueEditingDraft": "Continue editing the working copy",
+      "viewSkillVersions": "View Skill versions",
+      "compareVersions": "Compare two versions",
+      "evidenceWorkspace": "Evidence workspace",
+      "futureIteration": "More modules will be added in future iterations",
+      "cards": {
+        "testCases": {
+          "title": "Test cases",
+          "description": "Maintain test points, inputs, and expected evaluation dimensions for each Skill."
+        },
+        "datasets": {
+          "title": "Datasets",
+          "description": "Collect reusable input data, attachments, and evaluation materials."
+        },
+        "testRuns": {
+          "title": "Test runs",
+          "description": "Choose a version and test set, then start and track a run."
+        },
+        "comparisonReports": {
+          "title": "Comparison reports",
+          "description": "Summarize version differences, test results, and version labels without forced scoring."
+        }
+      },
+      "versionTagsTitle": "Set version labels as needed",
+      "versionTagsDescription": "Use labels such as candidate, experiment, and currently published to record version purpose. Test points and evaluation results are decision evidence, not an automatic acceptance verdict.",
+    "currentFormal": "Current formal version",
       "defaultBaseline": "Default baseline",
       "baselineReady": "Established",
       "notEstablished": "Not established",

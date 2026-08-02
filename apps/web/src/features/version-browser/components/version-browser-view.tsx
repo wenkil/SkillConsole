@@ -38,7 +38,7 @@ export function VersionBrowserView({
   onTargetSelect,
   onFileSelect,
 }: VersionBrowserViewProps) {
-  const { t } = useTranslation("versionBrowser")
+  const { i18n, t } = useTranslation("versionBrowser")
   const controller = useVersionBrowserController({
     workspaceId: workspace.id,
     activeDraftId: workspace.activeDraft?.id ?? null,
@@ -91,9 +91,9 @@ export function VersionBrowserView({
               ) : (
                 <History className="size-3.5" />
               )}
-              Skill 版本 /{" "}
+              {copy.versionPrefix} /{" "}
               {selectedTarget.kind === "draft"
-                ? "工作副本"
+                ? copy.initialCandidate
                 : selectedTarget.name}
             </div>
             <h1 className="truncate text-3xl leading-none font-[780] tracking-[-0.035em]">
@@ -103,7 +103,7 @@ export function VersionBrowserView({
 
           <div className="flex flex-wrap items-end gap-2">
             <label className="grid gap-1 font-mono text-[9px] text-muted-foreground uppercase">
-              查看目标
+              {copy.versionPicker}
               <select
                 className="h-9 min-w-48 border border-foreground bg-paper-raised px-3 font-mono text-xs outline-none focus:border-primary"
                 onChange={(event) => {
@@ -121,8 +121,8 @@ export function VersionBrowserView({
                     value={`${target.kind}:${target.id}`}
                   >
                     {target.kind === "draft"
-                      ? `工作副本 · Revision ${target.contentRevision}`
-                      : `${target.name}${target.isOnline ? " · 当前上线" : ""}`}
+                      ? copy.draftTarget(target.contentRevision)
+                      : copy.versionTarget(target.name, target.isOnline)}
                   </option>
                 ))}
               </select>
@@ -131,12 +131,13 @@ export function VersionBrowserView({
               <Button asChild className="h-9 rounded-none" variant="outline">
                 <Link to={`/workbenches/${workspace.id}/versions/compare`}>
                   <GitCompareArrows data-icon="inline-start" />
-                  版本对比
+                  {copy.compareVersions}
                 </Link>
               </Button>
             ) : null}
             {selectedTarget.kind === "draft" ? (
               <CreateVersionDialog
+                copy={copy}
                 onCreate={controller.actions.createVersion}
                 onCreated={(version) =>
                   onTargetSelect({ kind: "version", id: version.id })
@@ -183,17 +184,25 @@ export function VersionBrowserView({
           )}
           <strong>
             {selectedTarget.kind === "draft"
-              ? "可持续编辑的工作副本"
-              : "内容已冻结的测试版本"}
+              ? copy.candidateTitle
+              : copy.frozenVersionTitle}
           </strong>
           <span className="text-muted-foreground">
             {selectedTarget.kind === "draft"
-              ? `${selectedTarget.workingCopy.fileCount} 个文件 · 保存时只写入变化文件`
-              : `${selectedTarget.snapshot.fileCount} 个文件 · ${selectedTarget.labels.join("、") || "暂无标签"}`}
+              ? copy.candidateFilesSummary(selectedTarget.workingCopy.fileCount)
+              : copy.versionFilesSummary(
+                  selectedTarget.snapshot.fileCount,
+                  selectedTarget.labels.length
+                    ? new Intl.ListFormat(i18n.resolvedLanguage ?? "en", {
+                        style: "short",
+                        type: "conjunction",
+                      }).format(selectedTarget.labels)
+                    : copy.noLabels,
+                )}
           </span>
           {selectedTarget.kind === "version" && selectedTarget.isOnline ? (
             <span className="ml-auto border border-technical/50 bg-technical/10 px-2 py-1 font-mono text-[10px] font-bold text-technical-foreground">
-              当前上线
+              {copy.currentOnlineBadge}
             </span>
           ) : null}
         </div>
