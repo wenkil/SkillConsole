@@ -8,6 +8,56 @@ export type TestRunStatus =
   | "INTERRUPTED"
   | "FAILED"
 
+export type TestRunMode =
+  | "target_vs_no_skill"
+  | "version_vs_version"
+
+export type TestRunExecutionPolicy =
+  | "target_then_no_skill_serial_v1"
+  | "paired_serial_alternating_v1"
+
+export type TestRunLogPhase =
+  | "execution"
+  | "grading"
+  | "orchestration"
+
+export type SkillInvocationObservation =
+  | "OBSERVED"
+  | "NOT_OBSERVED"
+  | "NOT_APPLICABLE"
+
+export interface TestRunRuntimeLimitSnapshot {
+  maxTurns: number
+  maxBudgetUsd: number
+  timeoutMs: number
+}
+
+export type TestRunEnvironmentSnapshot =
+  | { status: "legacy_unavailable" }
+  | {
+      status: "captured"
+      nodeVersion: string
+      platform: string
+      architecture: string
+      sdkVersion: string
+      model: string
+      apiEndpointHash: string | null
+      executionLimits: TestRunRuntimeLimitSnapshot
+      gradingLimits: TestRunRuntimeLimitSnapshot
+      executionPromptVersion: string
+      graderProtocolVersion: string
+      toolPermissionPolicyVersion: string
+      executionPolicy: TestRunExecutionPolicy
+      runtimeCapabilities: Array<{
+        capability: string
+        commands: Array<{
+          name: string
+          available: boolean
+          version: string | null
+        }>
+      }>
+    }
+
 export type TestRunCaseExecutionStatus =
   | "PENDING"
   | "PREPARING"
@@ -52,12 +102,17 @@ export interface TestRunBenchmarkSide {
   inputTokens: number
   outputTokens: number
   totalCostUsd: number
+  gradingDurationMs: number
+  gradingInputTokens: number
+  gradingOutputTokens: number
+  gradingTotalCostUsd: number
+  gradingNumTurns: number
 }
 
 export interface TestRunView {
   id: string
   workspaceId: string
-  mode: "target_vs_no_skill"
+  mode: TestRunMode
   status: TestRunStatus
   target: {
     draftId: string | null
@@ -71,17 +126,40 @@ export interface TestRunView {
     evalRevisionNumber: number
     evalCount: number
   }
+  baseline:
+    | {
+        kind: "no_skill"
+        skillVersionId: null
+        skillSnapshotId: null
+      }
+    | {
+        kind: "skill_version"
+        skillVersionId: string
+        skillVersionName: string
+        skillVersionNumber: number
+        skillSnapshotId: string
+        skillManifestHash: string
+      }
+  executionPolicy: TestRunExecutionPolicy
+  environment: TestRunEnvironmentSnapshot
   traceability: {
     protocolVersion: string
     sdkVersion: string
     skillCreatorCommit: string
     skillCreatorTreeHash: string
     configurationFingerprint: string
+    semanticConfigurationFingerprint: string
+    executionSettingsFingerprint: string
+    gradingSettingsFingerprint: string
     environmentFingerprint: string
     skillManifestHash: string
+    baselineSkillManifestHash: string | null
     evalManifestHash: string
     comparabilityFingerprint: string
     runInputFingerprint: string
+    executionPromptVersion: string
+    graderProtocolVersion: string
+    toolPermissionPolicyVersion: string
   }
   progress: {
     totalCases: number
@@ -114,10 +192,19 @@ export interface TestRunCase {
   assertions: string[]
   files: string[]
   inputFingerprint: string
+  participantExecutionFingerprint: string
+  skillInvocationObserved: SkillInvocationObservation | null
+  skillToolCallCount: number
+  bundledScriptUses: Array<{
+    relativePath: string
+    count: number
+    evidenceSequences: number[]
+  }>
   executionStatus: TestRunCaseExecutionStatus
   assessmentStatus: TestRunCaseAssessmentStatus
   finalOutput: string | null
   usage: TestRunUsage | null
+  gradingUsage: TestRunUsage | null
   executionError: { code: string; message: string } | null
   assessmentError: { code: string; message: string } | null
   assertionResults: Array<{
@@ -182,11 +269,33 @@ export interface TestRunEvent {
   payload: Record<string, unknown>
 }
 
-export interface StartTestRunInput {
-  draftId: string
-  draftContentRevision: number
-  evalRevisionId: string
-  mode: "target_vs_no_skill"
+export type StartTestRunInput =
+  | {
+      draftId: string
+      draftContentRevision: number
+      evalRevisionId: string
+      mode: "target_vs_no_skill"
+    }
+  | {
+      baselineVersionId: string
+      candidateVersionId: string
+      evalRevisionId: string
+      mode: "version_vs_version"
+    }
+
+export interface TestRunLogFilters {
+  side?: "TARGET" | "BASELINE"
+  externalId?: number
+  phase?: TestRunLogPhase
+}
+
+export interface TestRunLogPage {
+  items: TestRunEvent[]
+  pagination: {
+    limit: number
+    hasMore: boolean
+    nextBeforeSequence: number | null
+  }
 }
 
 export const activeTestRunStatuses: readonly TestRunStatus[] = [

@@ -37,9 +37,15 @@ export interface CreateAgentSessionInWorkspaceInput {
   readonly workspaceLocator: string
   readonly expectedConfigurationFingerprint: string
   readonly allowedTools?: readonly string[]
+  readonly availableTools?: readonly string[]
+  readonly enabledSkills?: readonly string[]
   readonly canUseTool?: AgentRuntimeToolPermissionHandler
   readonly maxTurns?: number
   readonly maxBudgetUsd?: number
+  readonly environment?: Readonly<Record<string, string | undefined>>
+  readonly protectedEnvironmentNames?: readonly string[]
+  readonly sandboxPolicy?: "test_run_strict_v1"
+  readonly isolateSettings?: boolean
   readonly additionalRedactedValues?: readonly string[]
 }
 
@@ -102,11 +108,19 @@ export class AgentSessionService {
     const sessionId = randomUUID()
     const cwd = this.workspaces.resolve(input.workspaceLocator)
     try {
-      const settingsValues = await this.workspaces.installSettings(cwd)
-      await this.workspaces.assertSettingsFingerprint(
-        cwd,
-        input.expectedConfigurationFingerprint,
-      )
+      const settingsValues = input.isolateSettings
+        ? []
+        : await this.workspaces.installSettings(cwd)
+      if (input.isolateSettings) {
+        await this.workspaces.assertSourceSettingsFingerprint(
+          input.expectedConfigurationFingerprint,
+        )
+      } else {
+        await this.workspaces.assertSettingsFingerprint(
+          cwd,
+          input.expectedConfigurationFingerprint,
+        )
+      }
       return this.startSession({
         sessionId,
         prompt: input.prompt,
@@ -115,12 +129,31 @@ export class AgentSessionService {
         ...(input.allowedTools
           ? { allowedTools: input.allowedTools }
           : {}),
+        ...(input.availableTools
+          ? { availableTools: input.availableTools }
+          : {}),
+        ...(input.enabledSkills
+          ? { enabledSkills: input.enabledSkills }
+          : {}),
         ...(input.canUseTool ? { canUseTool: input.canUseTool } : {}),
         ...(input.maxTurns !== undefined
           ? { maxTurns: input.maxTurns }
           : {}),
         ...(input.maxBudgetUsd !== undefined
           ? { maxBudgetUsd: input.maxBudgetUsd }
+          : {}),
+        ...(input.environment ? { environment: input.environment } : {}),
+        ...(input.protectedEnvironmentNames
+          ? {
+              protectedEnvironmentNames:
+                input.protectedEnvironmentNames,
+            }
+          : {}),
+        ...(input.sandboxPolicy
+          ? { sandboxPolicy: input.sandboxPolicy }
+          : {}),
+        ...(input.isolateSettings !== undefined
+          ? { isolateSettings: input.isolateSettings }
           : {}),
         redactedValues: [
           ...settingsValues,
@@ -236,6 +269,14 @@ export class AgentSessionService {
     )
   }
 
+  async assertSourceConfigurationFingerprint(
+    expectedFingerprint: string,
+  ): Promise<void> {
+    await this.workspaces.assertSourceSettingsFingerprint(
+      expectedFingerprint,
+    )
+  }
+
   release(sessionId: string): void {
     this.registry.closeAndDelete(sessionId)
   }
@@ -252,9 +293,15 @@ export class AgentSessionService {
     readonly cwd: string
     readonly sdkSessionId: string | null
     readonly allowedTools?: readonly string[]
+    readonly availableTools?: readonly string[]
+    readonly enabledSkills?: readonly string[]
     readonly canUseTool?: AgentRuntimeToolPermissionHandler
     readonly maxTurns?: number
     readonly maxBudgetUsd?: number
+    readonly environment?: Readonly<Record<string, string | undefined>>
+    readonly protectedEnvironmentNames?: readonly string[]
+    readonly sandboxPolicy?: "test_run_strict_v1"
+    readonly isolateSettings?: boolean
     readonly redactedValues: readonly string[]
   }): AgentRuntimeSession {
     if (this.shuttingDown) {
@@ -268,12 +315,30 @@ export class AgentSessionService {
       ...(input.allowedTools
         ? { allowedTools: input.allowedTools }
         : {}),
+      ...(input.availableTools
+        ? { availableTools: input.availableTools }
+        : {}),
+      ...(input.enabledSkills
+        ? { enabledSkills: input.enabledSkills }
+        : {}),
       ...(input.canUseTool ? { canUseTool: input.canUseTool } : {}),
       ...(input.maxTurns !== undefined
         ? { maxTurns: input.maxTurns }
         : {}),
       ...(input.maxBudgetUsd !== undefined
         ? { maxBudgetUsd: input.maxBudgetUsd }
+        : {}),
+      ...(input.environment ? { environment: input.environment } : {}),
+      ...(input.protectedEnvironmentNames
+        ? {
+            protectedEnvironmentNames: input.protectedEnvironmentNames,
+          }
+        : {}),
+      ...(input.sandboxPolicy
+        ? { sandboxPolicy: input.sandboxPolicy }
+        : {}),
+      ...(input.isolateSettings !== undefined
+        ? { isolateSettings: input.isolateSettings }
         : {}),
       ...(input.sdkSessionId
         ? { resumeSessionId: input.sdkSessionId }
@@ -333,9 +398,15 @@ export class AgentSessionService {
     readonly workspaceLocator: string
     readonly cwd: string
     readonly allowedTools?: readonly string[]
+    readonly availableTools?: readonly string[]
+    readonly enabledSkills?: readonly string[]
     readonly canUseTool?: AgentRuntimeToolPermissionHandler
     readonly maxTurns?: number
     readonly maxBudgetUsd?: number
+    readonly environment?: Readonly<Record<string, string | undefined>>
+    readonly protectedEnvironmentNames?: readonly string[]
+    readonly sandboxPolicy?: "test_run_strict_v1"
+    readonly isolateSettings?: boolean
     readonly redactedValues: readonly string[]
   }): Promise<AgentSessionView> {
     const turnId = randomUUID()
@@ -355,12 +426,31 @@ export class AgentSessionService {
         ...(input.allowedTools
           ? { allowedTools: input.allowedTools }
           : {}),
+        ...(input.availableTools
+          ? { availableTools: input.availableTools }
+          : {}),
+        ...(input.enabledSkills
+          ? { enabledSkills: input.enabledSkills }
+          : {}),
         ...(input.canUseTool ? { canUseTool: input.canUseTool } : {}),
         ...(input.maxTurns !== undefined
           ? { maxTurns: input.maxTurns }
           : {}),
         ...(input.maxBudgetUsd !== undefined
           ? { maxBudgetUsd: input.maxBudgetUsd }
+          : {}),
+        ...(input.environment ? { environment: input.environment } : {}),
+        ...(input.protectedEnvironmentNames
+          ? {
+              protectedEnvironmentNames:
+                input.protectedEnvironmentNames,
+            }
+          : {}),
+        ...(input.sandboxPolicy
+          ? { sandboxPolicy: input.sandboxPolicy }
+          : {}),
+        ...(input.isolateSettings !== undefined
+          ? { isolateSettings: input.isolateSettings }
           : {}),
       })
       await runtime.send({ turnId, prompt: input.prompt })

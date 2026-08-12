@@ -27,7 +27,16 @@ import {
 
 export const testRunMode = pgEnum("test_run_mode", [
   "target_vs_no_skill",
+  "version_vs_version",
 ])
+
+export const testRunExecutionPolicy = pgEnum(
+  "test_run_execution_policy",
+  [
+    "target_then_no_skill_serial_v1",
+    "paired_serial_alternating_v1",
+  ],
+)
 
 export const testRunStatus = pgEnum("test_run_status", [
   "PREPARING",
@@ -79,6 +88,11 @@ export const assertionResultStatus = pgEnum(
   ],
 )
 
+export const skillInvocationObservation = pgEnum(
+  "skill_invocation_observation",
+  ["OBSERVED", "NOT_OBSERVED", "NOT_APPLICABLE"],
+)
+
 export interface StoredTestRunUsage {
   readonly inputTokens: number
   readonly outputTokens: number
@@ -100,6 +114,12 @@ export interface StoredAssertionEvidence {
   readonly excerpt: string | null
 }
 
+export interface StoredBundledScriptUse {
+  readonly relativePath: string
+  readonly count: number
+  readonly evidenceSequences: readonly number[]
+}
+
 export interface StoredBenchmarkSide {
   readonly executed: number
   readonly executionFailed: number
@@ -111,6 +131,11 @@ export interface StoredBenchmarkSide {
   readonly inputTokens: number
   readonly outputTokens: number
   readonly totalCostUsd: number
+  readonly gradingDurationMs: number
+  readonly gradingInputTokens: number
+  readonly gradingOutputTokens: number
+  readonly gradingTotalCostUsd: number
+  readonly gradingNumTurns: number
 }
 
 export const skillTestRuns = pgTable(
@@ -131,21 +156,42 @@ export const skillTestRuns = pgTable(
     skillSnapshotId: uuid("skill_snapshot_id")
       .notNull()
       .references(() => skillSnapshots.id, { onDelete: "restrict" }),
+    baselineSkillVersionId: uuid("baseline_skill_version_id").references(
+      () => skillVersions.id,
+      { onDelete: "restrict" },
+    ),
+    baselineSkillSnapshotId: uuid("baseline_skill_snapshot_id").references(
+      () => skillSnapshots.id,
+      { onDelete: "restrict" },
+    ),
     evalRevisionId: uuid("eval_revision_id")
       .notNull()
       .references(() => evalRevisions.id, { onDelete: "restrict" }),
     mode: testRunMode("mode").notNull(),
     status: testRunStatus("status").notNull(),
+    executionPolicy: testRunExecutionPolicy("execution_policy").notNull(),
     protocolVersion: text("protocol_version").notNull(),
     sdkVersion: text("sdk_version").notNull(),
     skillCreatorCommit: text("skill_creator_commit").notNull(),
     skillCreatorTreeHash: text("skill_creator_tree_hash").notNull(),
     configurationFingerprint: text("configuration_fingerprint").notNull(),
+    semanticConfigurationFingerprint: text(
+      "semantic_configuration_fingerprint",
+    ).notNull(),
     environmentFingerprint: text("environment_fingerprint").notNull(),
+    environmentSnapshot: jsonb("environment_snapshot")
+      .$type<Readonly<Record<string, unknown>>>()
+      .notNull(),
     skillManifestHash: text("skill_manifest_hash").notNull(),
+    baselineSkillManifestHash: text("baseline_skill_manifest_hash"),
     evalManifestHash: text("eval_manifest_hash").notNull(),
     comparabilityFingerprint: text("comparability_fingerprint").notNull(),
     runInputFingerprint: text("run_input_fingerprint").notNull(),
+    executionPromptVersion: text("execution_prompt_version").notNull(),
+    graderProtocolVersion: text("grader_protocol_version").notNull(),
+    toolPermissionPolicyVersion: text(
+      "tool_permission_policy_version",
+    ).notNull(),
     idempotencyKey: text("idempotency_key").notNull(),
     requestHash: text("request_hash").notNull(),
     totalCaseCount: integer("total_case_count").notNull(),
@@ -179,14 +225,38 @@ export const skillTestRuns = pgTable(
   (table) => [
     check(
       "skill_test_runs_target_check",
-      sql`${table.skillDraftRevisionId} is not null or ${table.skillVersionId} is not null`,
+      sql`(
+          ${table.mode}::text = 'target_vs_no_skill'
+          and (${table.skillDraftRevisionId} is not null or ${table.skillVersionId} is not null)
+          and ${table.baselineSkillVersionId} is null
+          and ${table.baselineSkillSnapshotId} is null
+          and ${table.baselineSkillManifestHash} is null
+        ) or (
+          ${table.mode}::text = 'version_vs_version'
+          and ${table.skillDraftRevisionId} is null
+          and ${table.skillVersionId} is not null
+          and ${table.baselineSkillVersionId} is not null
+          and ${table.baselineSkillSnapshotId} is not null
+          and ${table.baselineSkillManifestHash} is not null
+          and ${table.skillVersionId} <> ${table.baselineSkillVersionId}
+        )`,
+    ),
+    check(
+      "skill_test_runs_execution_policy_check",
+      sql`(${table.mode}::text = 'target_vs_no_skill'
+          and ${table.executionPolicy} = 'target_then_no_skill_serial_v1')
+        or (${table.mode}::text = 'version_vs_version'
+          and ${table.executionPolicy} = 'paired_serial_alternating_v1')`,
     ),
     check(
       "skill_test_runs_hashes_check",
       sql`${table.skillCreatorTreeHash} ~ '^[0-9a-f]{64}$'
         and ${table.configurationFingerprint} ~ '^[0-9a-f]{64}$'
+        and ${table.semanticConfigurationFingerprint} ~ '^[0-9a-f]{64}$'
         and ${table.environmentFingerprint} ~ '^[0-9a-f]{64}$'
         and ${table.skillManifestHash} ~ '^[0-9a-f]{64}$'
+        and (${table.baselineSkillManifestHash} is null
+          or ${table.baselineSkillManifestHash} ~ '^[0-9a-f]{64}$')
         and ${table.evalManifestHash} ~ '^[0-9a-f]{64}$'
         and ${table.comparabilityFingerprint} ~ '^[0-9a-f]{64}$'
         and ${table.runInputFingerprint} ~ '^[0-9a-f]{64}$'
@@ -195,6 +265,16 @@ export const skillTestRuns = pgTable(
     check(
       "skill_test_runs_creator_commit_check",
       sql`${table.skillCreatorCommit} ~ '^[0-9a-f]{40}$'`,
+    ),
+    check(
+      "skill_test_runs_environment_snapshot_check",
+      sql`jsonb_typeof(${table.environmentSnapshot}) = 'object'`,
+    ),
+    check(
+      "skill_test_runs_protocol_metadata_check",
+      sql`char_length(trim(${table.executionPromptVersion})) between 1 and 120
+        and char_length(trim(${table.graderProtocolVersion})) between 1 and 120
+        and char_length(trim(${table.toolPermissionPolicyVersion})) between 1 and 120`,
     ),
     check(
       "skill_test_runs_idempotency_key_check",
@@ -249,6 +329,9 @@ export const skillTestRunCases = pgTable(
     assertions: jsonb("assertions").$type<readonly string[]>().notNull(),
     files: jsonb("files").$type<readonly string[]>().notNull(),
     inputFingerprint: text("input_fingerprint").notNull(),
+    participantExecutionFingerprint: text(
+      "participant_execution_fingerprint",
+    ).notNull(),
     executionStatus:
       testRunCaseExecutionStatus("execution_status").notNull(),
     assessmentStatus:
@@ -264,6 +347,15 @@ export const skillTestRunCases = pgTable(
     workspaceLocator: text("workspace_locator"),
     finalOutput: text("final_output"),
     usage: jsonb("usage").$type<StoredTestRunUsage>(),
+    gradingUsage: jsonb("grading_usage").$type<StoredTestRunUsage>(),
+    skillInvocationObserved: skillInvocationObservation(
+      "skill_invocation_observed",
+    ),
+    skillToolCallCount: integer("skill_tool_call_count").default(0).notNull(),
+    bundledScriptUses: jsonb("bundled_script_uses")
+      .$type<readonly StoredBundledScriptUse[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     executionErrorCode: text("execution_error_code"),
     executionErrorMessage: text("execution_error_message"),
     assessmentErrorCode: text("assessment_error_code"),
@@ -306,7 +398,13 @@ export const skillTestRunCases = pgTable(
     ),
     check(
       "skill_test_run_cases_input_hash_check",
-      sql`${table.inputFingerprint} ~ '^[0-9a-f]{64}$'`,
+      sql`${table.inputFingerprint} ~ '^[0-9a-f]{64}$'
+        and ${table.participantExecutionFingerprint} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      "skill_test_run_cases_observation_check",
+      sql`${table.skillToolCallCount} >= 0
+        and jsonb_typeof(${table.bundledScriptUses}) = 'array'`,
     ),
     uniqueIndex("skill_test_run_cases_side_unique").on(
       table.runId,
@@ -504,7 +602,12 @@ export type SkillTestArtifactRow = typeof skillTestArtifacts.$inferSelect
 export type AssertionResultRow = typeof assertionResults.$inferSelect
 export type RunBenchmarkRow = typeof runBenchmarks.$inferSelect
 export type TestRunStatus = (typeof testRunStatus.enumValues)[number]
+export type TestRunMode = (typeof testRunMode.enumValues)[number]
+export type TestRunExecutionPolicy =
+  (typeof testRunExecutionPolicy.enumValues)[number]
 export type TestRunCaseSide = (typeof testRunCaseSide.enumValues)[number]
+export type SkillInvocationObservation =
+  (typeof skillInvocationObservation.enumValues)[number]
 export type TestRunCaseExecutionStatus =
   (typeof testRunCaseExecutionStatus.enumValues)[number]
 export type TestRunCaseAssessmentStatus =

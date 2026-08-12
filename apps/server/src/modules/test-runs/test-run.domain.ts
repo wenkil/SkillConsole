@@ -2,14 +2,62 @@ import type {
   AssertionResultStatus,
   StoredAssertionEvidence,
   StoredBenchmarkSide,
+  StoredBundledScriptUse,
   StoredTestRunUsage,
+  SkillInvocationObservation,
   TestRunCaseAssessmentStatus,
   TestRunCaseExecutionStatus,
   TestRunCaseSide,
+  TestRunExecutionPolicy,
+  TestRunMode,
   TestRunStatus,
 } from "../../infrastructure/database/index.js"
 
-export const testRunMode = "target_vs_no_skill" as const
+export const testRunModes = [
+  "target_vs_no_skill",
+  "version_vs_version",
+] as const satisfies readonly TestRunMode[]
+
+export const testRunExecutionPolicies = [
+  "target_then_no_skill_serial_v1",
+  "paired_serial_alternating_v1",
+] as const satisfies readonly TestRunExecutionPolicy[]
+
+export interface TestRunRuntimeLimitSnapshot {
+  readonly maxTurns: number
+  readonly maxBudgetUsd: number
+  readonly timeoutMs: number
+}
+
+export interface TestRunRuntimeCapabilitySnapshot {
+  readonly capability: string
+  readonly commands: readonly {
+    readonly name: string
+    readonly available: boolean
+    readonly version: string | null
+  }[]
+}
+
+export type TestRunEnvironmentSnapshot =
+  | {
+      readonly status: "captured"
+      readonly nodeVersion: string
+      readonly platform: string
+      readonly architecture: string
+      readonly sdkVersion: string
+      readonly model: string
+      readonly apiEndpointHash: string | null
+      readonly executionLimits: TestRunRuntimeLimitSnapshot
+      readonly gradingLimits: TestRunRuntimeLimitSnapshot
+      readonly executionPromptVersion: string
+      readonly graderProtocolVersion: string
+      readonly toolPermissionPolicyVersion: string
+      readonly executionPolicy: TestRunExecutionPolicy
+      readonly runtimeCapabilities: readonly TestRunRuntimeCapabilitySnapshot[]
+    }
+  | {
+      readonly status: "legacy_unavailable"
+    }
 
 export interface TestRunError {
   readonly code: string
@@ -23,11 +71,18 @@ export interface TestRunTraceability {
   readonly skillCreatorCommit: string
   readonly skillCreatorTreeHash: string
   readonly configurationFingerprint: string
+  readonly semanticConfigurationFingerprint: string
+  readonly executionSettingsFingerprint: string
+  readonly gradingSettingsFingerprint: string
   readonly environmentFingerprint: string
   readonly skillManifestHash: string
+  readonly baselineSkillManifestHash: string | null
   readonly evalManifestHash: string
   readonly comparabilityFingerprint: string
   readonly runInputFingerprint: string
+  readonly executionPromptVersion: string
+  readonly graderProtocolVersion: string
+  readonly toolPermissionPolicyVersion: string
 }
 
 export interface TestRunTargetView {
@@ -43,6 +98,21 @@ export interface TestRunTargetView {
   readonly evalCount: number
 }
 
+export type TestRunBaselineView =
+  | {
+      readonly kind: "no_skill"
+      readonly skillVersionId: null
+      readonly skillSnapshotId: null
+    }
+  | {
+      readonly kind: "skill_version"
+      readonly skillVersionId: string
+      readonly skillVersionName: string
+      readonly skillVersionNumber: number
+      readonly skillSnapshotId: string
+      readonly skillManifestHash: string
+    }
+
 export interface TestRunBenchmarkView {
   readonly target: StoredBenchmarkSide
   readonly baseline: StoredBenchmarkSide
@@ -51,9 +121,12 @@ export interface TestRunBenchmarkView {
 export interface TestRunView {
   readonly id: string
   readonly workspaceId: string
-  readonly mode: typeof testRunMode
+  readonly mode: TestRunMode
+  readonly executionPolicy: TestRunExecutionPolicy
   readonly status: TestRunStatus
   readonly target: TestRunTargetView
+  readonly baseline: TestRunBaselineView
+  readonly environment: TestRunEnvironmentSnapshot
   readonly traceability: TestRunTraceability
   readonly progress: {
     readonly totalCases: number
@@ -98,10 +171,15 @@ export interface TestRunCaseView {
   readonly assertions: readonly string[]
   readonly files: readonly string[]
   readonly inputFingerprint: string
+  readonly participantExecutionFingerprint: string
   readonly executionStatus: TestRunCaseExecutionStatus
   readonly assessmentStatus: TestRunCaseAssessmentStatus
   readonly finalOutput: string | null
   readonly usage: StoredTestRunUsage | null
+  readonly gradingUsage: StoredTestRunUsage | null
+  readonly skillInvocationObserved: SkillInvocationObservation | null
+  readonly skillToolCallCount: number
+  readonly bundledScriptUses: readonly StoredBundledScriptUse[]
   readonly executionError: {
     readonly code: string
     readonly message: string
@@ -149,11 +227,37 @@ export interface TestRunEvent {
   readonly payload: Readonly<Record<string, unknown>>
 }
 
-export interface CreateTestRunInput {
+export interface TestRunLogPage {
+  readonly items: readonly TestRunEvent[]
+  readonly pagination: {
+    readonly limit: number
+    readonly hasMore: boolean
+    readonly nextBeforeSequence: number | null
+  }
+}
+
+export interface TestRunLogQuery {
+  readonly beforeSequence?: number
+  readonly limit: number
+  readonly side?: TestRunCaseSide
+  readonly externalId?: number
+  readonly phase?: "execution" | "grading" | "orchestration"
+}
+
+interface CreateTestRunInputBase {
   readonly workspaceId: string
-  readonly draftId: string
-  readonly draftContentRevision: number
   readonly evalRevisionId: string
-  readonly mode: typeof testRunMode
   readonly idempotencyKey: string
 }
+
+export type CreateTestRunInput =
+  | (CreateTestRunInputBase & {
+      readonly mode: "target_vs_no_skill"
+      readonly draftId: string
+      readonly draftContentRevision: number
+    })
+  | (CreateTestRunInputBase & {
+      readonly mode: "version_vs_version"
+      readonly baselineVersionId: string
+      readonly candidateVersionId: string
+    })

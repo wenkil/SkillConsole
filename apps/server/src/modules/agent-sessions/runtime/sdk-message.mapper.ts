@@ -27,7 +27,8 @@ function createSanitizer(options: SdkMessageMappingOptions) {
   const redactedValues = [
     ...new Set(
       (options.redactedValues ?? []).filter(
-        (value): value is string => Boolean(value),
+        (value): value is string =>
+          typeof value === "string" && value.length >= 4,
       ),
     ),
   ].sort((left, right) => right.length - left.length)

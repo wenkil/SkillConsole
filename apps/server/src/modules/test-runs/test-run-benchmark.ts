@@ -19,6 +19,11 @@ function emptySide(): StoredBenchmarkSide {
     inputTokens: 0,
     outputTokens: 0,
     totalCostUsd: 0,
+    gradingDurationMs: 0,
+    gradingInputTokens: 0,
+    gradingOutputTokens: 0,
+    gradingTotalCostUsd: 0,
+    gradingNumTurns: 0,
   }
 }
 
@@ -39,6 +44,13 @@ function summarizeSide(
       summary.inputTokens += runCase.usage.inputTokens
       summary.outputTokens += runCase.usage.outputTokens
       summary.totalCostUsd += runCase.usage.totalCostUsd
+    }
+    if (runCase.gradingUsage) {
+      summary.gradingDurationMs += runCase.gradingUsage.durationMs
+      summary.gradingInputTokens += runCase.gradingUsage.inputTokens
+      summary.gradingOutputTokens += runCase.gradingUsage.outputTokens
+      summary.gradingTotalCostUsd += runCase.gradingUsage.totalCostUsd
+      summary.gradingNumTurns += runCase.gradingUsage.numTurns
     }
     for (const result of runCase.assertionResults) {
       if (result.status === "PASSED") summary.passed += 1

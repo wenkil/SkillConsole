@@ -12,6 +12,9 @@ import {
   TestRunArtifactParamsSchema,
   TestRunDetailSchema,
   TestRunEventsHeaderSchema,
+  TestRunEventsQuerySchema,
+  TestRunLogPageSchema,
+  TestRunLogsQuerySchema,
   TestRunListQuerySchema,
   TestRunPageSchema,
   TestRunParamsSchema,
@@ -29,10 +32,56 @@ function writeSseEvent(
   response.write(`data: ${JSON.stringify(event)}\n\n`)
 }
 
+type SseHeartbeat = ReturnType<typeof setInterval>
+
+export function createTestRunSseCleanup(
+  unsubscribe: () => void,
+  clearHeartbeat: (heartbeat: SseHeartbeat) => void = clearInterval,
+): {
+  cleanup: () => void
+  setHeartbeat: (heartbeat: SseHeartbeat) => void
+} {
+  let heartbeat: SseHeartbeat | undefined
+  let cleanedUp = false
+
+  return {
+    cleanup: () => {
+      if (cleanedUp) return
+      cleanedUp = true
+      if (heartbeat) clearHeartbeat(heartbeat)
+      unsubscribe()
+    },
+    setHeartbeat: (nextHeartbeat) => {
+      if (cleanedUp) {
+        clearHeartbeat(nextHeartbeat)
+        return
+      }
+      heartbeat = nextHeartbeat
+    },
+  }
+}
+
 function serializeRun(run: TestRunView) {
   return {
     ...run,
     target: { ...run.target },
+    baseline: { ...run.baseline },
+    environment:
+      run.environment.status === "captured"
+        ? {
+            ...run.environment,
+            executionLimits: { ...run.environment.executionLimits },
+            gradingLimits: { ...run.environment.gradingLimits },
+            runtimeCapabilities: run.environment.runtimeCapabilities.map(
+              (capability) => ({
+                ...capability,
+                commands: capability.commands.map((command) => ({
+                  ...command,
+                })),
+              }),
+            ),
+          }
+        : { ...run.environment },
     traceability: { ...run.traceability },
     progress: { ...run.progress },
     benchmark: run.benchmark
@@ -58,6 +107,13 @@ function serializeRunDetail(run: TestRunDetailView) {
       assertions: [...runCase.assertions],
       files: [...runCase.files],
       usage: runCase.usage ? { ...runCase.usage } : null,
+      gradingUsage: runCase.gradingUsage
+        ? { ...runCase.gradingUsage }
+        : null,
+      bundledScriptUses: runCase.bundledScriptUses.map((item) => ({
+        ...item,
+        evidenceSequences: [...item.evidenceSequences],
+      })),
       executionError: runCase.executionError
         ? { ...runCase.executionError }
         : null,
@@ -128,14 +184,13 @@ export const testRunRoutes: FastifyPluginAsyncTypebox = async (
     },
     async (request, reply) =>
       reply.code(202).send(
-        serializeRunDetail(await service.start({
-          workspaceId: request.params.workspaceId,
-          draftId: request.body.draftId,
-          draftContentRevision: request.body.draftContentRevision,
-          evalRevisionId: request.body.evalRevisionId,
-          mode: request.body.mode,
-          idempotencyKey: request.headers["idempotency-key"],
-        })),
+        serializeRunDetail(
+          await service.start({
+            workspaceId: request.params.workspaceId,
+            ...request.body,
+            idempotencyKey: request.headers["idempotency-key"],
+          }),
+        ),
       ),
   )
 
@@ -184,6 +239,40 @@ export const testRunRoutes: FastifyPluginAsyncTypebox = async (
   )
 
   application.get(
+    "/api/test-runs/:runId/logs",
+    {
+      schema: {
+        tags: ["test-runs"],
+        summary: "Read paginated normalized Skill test run logs",
+        params: TestRunParamsSchema,
+        querystring: TestRunLogsQuerySchema,
+        response: {
+          200: TestRunLogPageSchema,
+          404: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) =>
+      reply
+        .header("Cache-Control", "private, no-store")
+        .send(
+          ((page) => ({
+            ...page,
+            items: page.items.map((event) => ({
+              ...event,
+              payload: { ...event.payload },
+            })),
+            pagination: { ...page.pagination },
+          }))(
+            await service.listLogs(request.params.runId, {
+              ...request.query,
+              limit: request.query.limit ?? 200,
+            }),
+          ),
+        ),
+  )
+
+  application.get(
     "/api/test-runs/:runId/events",
     {
       schema: {
@@ -191,6 +280,7 @@ export const testRunRoutes: FastifyPluginAsyncTypebox = async (
         summary: "Replay and stream normalized Skill test run logs",
         params: TestRunParamsSchema,
         headers: TestRunEventsHeaderSchema,
+        querystring: TestRunEventsQuerySchema,
         produces: ["text/event-stream"],
         response: {
           200: Type.String({ contentMediaType: "text/event-stream" }),
@@ -201,8 +291,9 @@ export const testRunRoutes: FastifyPluginAsyncTypebox = async (
     },
     async (request, reply) => {
       const runId = request.params.runId
-      const afterSequence = Number(
-        request.headers["last-event-id"] ?? "0",
+      const afterSequence = Math.max(
+        request.query.afterSequence ?? 0,
+        Number(request.headers["last-event-id"] ?? "0"),
       )
       await service.get(runId)
 
@@ -218,9 +309,25 @@ export const testRunRoutes: FastifyPluginAsyncTypebox = async (
         writeSseEvent(reply.raw, event)
         lastSequence = event.sequence
       })
+      const lifecycle = createTestRunSseCleanup(unsubscribe)
+      let clientClosed = false
+      const closeConnection = () => {
+        clientClosed = true
+        lifecycle.cleanup()
+      }
+      reply.raw.once("close", closeConnection)
+
+      if (reply.raw.destroyed) {
+        closeConnection()
+        return
+      }
 
       try {
         const backlog = await service.listEvents(runId, afterSequence)
+        if (clientClosed || reply.raw.destroyed) {
+          lifecycle.cleanup()
+          return
+        }
         reply.hijack()
         reply.raw.writeHead(200, {
           "Cache-Control": "no-cache, no-transform",
@@ -246,12 +353,10 @@ export const testRunRoutes: FastifyPluginAsyncTypebox = async (
           reply.raw.write(": keep-alive\n\n")
         }, 15_000)
         heartbeat.unref()
-        request.raw.once("close", () => {
-          clearInterval(heartbeat)
-          unsubscribe()
-        })
+        lifecycle.setHeartbeat(heartbeat)
       } catch (error) {
-        unsubscribe()
+        lifecycle.cleanup()
+        if (clientClosed) return
         throw error
       }
     },

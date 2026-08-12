@@ -20,6 +20,11 @@ describe("test run model", () => {
     inputTokens: 1,
     outputTokens: 1,
     totalCostUsd: 0,
+    gradingDurationMs: 1,
+    gradingInputTokens: 1,
+    gradingOutputTokens: 1,
+    gradingTotalCostUsd: 0,
+    gradingNumTurns: 1,
   }
 
   it("separates pass rate for graded assertions from grading coverage", () => {

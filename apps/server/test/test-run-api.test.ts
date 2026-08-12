@@ -9,7 +9,10 @@ import Fastify from "fastify"
 
 import { registerErrorHandling } from "../src/core/http/error-handler.js"
 import type { TestRunDetailView } from "../src/modules/test-runs/test-run.domain.js"
-import { testRunRoutes } from "../src/modules/test-runs/test-run.routes.js"
+import {
+  createTestRunSseCleanup,
+  testRunRoutes,
+} from "../src/modules/test-runs/test-run.routes.js"
 import type { TestRunService } from "../src/modules/test-runs/test-run.service.js"
 
 function createRun(
@@ -22,6 +25,7 @@ function createRun(
     id: runId,
     workspaceId,
     mode: "target_vs_no_skill",
+    executionPolicy: "target_then_no_skill_serial_v1",
     status: "PREPARING",
     target: {
       draftId: randomUUID(),
@@ -35,17 +39,53 @@ function createRun(
       evalRevisionNumber: 2,
       evalCount: 1,
     },
+    baseline: {
+      kind: "no_skill",
+      skillVersionId: null,
+      skillSnapshotId: null,
+    },
+    environment: {
+      status: "captured",
+      nodeVersion: process.version,
+      platform: process.platform,
+      architecture: process.arch,
+      sdkVersion: "0.3.220",
+      model: "sdk_default",
+      apiEndpointHash: null,
+      executionLimits: {
+        maxTurns: 32,
+        maxBudgetUsd: 1.5,
+        timeoutMs: 120_000,
+      },
+      gradingLimits: {
+        maxTurns: 12,
+        maxBudgetUsd: 0.5,
+        timeoutMs: 60_000,
+      },
+      executionPromptVersion: "execution-prompt-v2",
+      graderProtocolVersion: "grader-protocol-v2",
+      toolPermissionPolicyVersion: "tool-permission-policy-v2",
+      executionPolicy: "target_then_no_skill_serial_v1",
+      runtimeCapabilities: [],
+    },
     traceability: {
       protocolVersion: "skill-test-run-v1",
       sdkVersion: "0.3.220",
       skillCreatorCommit: "b".repeat(40),
       skillCreatorTreeHash: hash,
       configurationFingerprint: hash,
+      semanticConfigurationFingerprint: hash,
+      executionSettingsFingerprint: hash,
+      gradingSettingsFingerprint: hash,
       environmentFingerprint: hash,
       skillManifestHash: hash,
+      baselineSkillManifestHash: null,
       evalManifestHash: hash,
       comparabilityFingerprint: hash,
       runInputFingerprint: hash,
+      executionPromptVersion: "execution-prompt-v2",
+      graderProtocolVersion: "grader-protocol-v2",
+      toolPermissionPolicyVersion: "tool-permission-policy-v2",
     },
     progress: { totalCases: 2, completedCases: 0 },
     benchmark: null,
@@ -171,4 +211,74 @@ test("test run SSE rejects unsafe Last-Event-ID values before opening a stream",
   } finally {
     await application.close()
   }
+})
+
+test("test run SSE unsubscribes once when backlog loading fails", async () => {
+  const run = createRun(randomUUID())
+  let unsubscribeCalls = 0
+  const fakeService = {
+    get: async () => run,
+    subscribe: () => () => {
+      unsubscribeCalls += 1
+    },
+    listEvents: async () => {
+      throw new Error("backlog unavailable")
+    },
+  } as unknown as TestRunService
+  const application = Fastify({ logger: false }).withTypeProvider<TypeBoxTypeProvider>()
+  application.decorate("testRunService", fakeService)
+  registerErrorHandling(application)
+  await application.register(testRunRoutes)
+
+  try {
+    const response = await application.inject({
+      method: "GET",
+      url: `/api/test-runs/${run.id}/events`,
+    })
+    assert.equal(response.statusCode, 500)
+    assert.equal(unsubscribeCalls, 1)
+  } finally {
+    await application.close()
+  }
+})
+
+test("test run SSE cleanup is idempotent before and after heartbeat creation", () => {
+  let unsubscribeCalls = 0
+  const clearedHeartbeats: unknown[] = []
+  const cleanup = createTestRunSseCleanup(
+    () => {
+      unsubscribeCalls += 1
+    },
+    (heartbeat) => {
+      clearedHeartbeats.push(heartbeat)
+    },
+  )
+
+  cleanup.cleanup()
+  cleanup.cleanup()
+  assert.equal(unsubscribeCalls, 1)
+  assert.deepEqual(clearedHeartbeats, [])
+
+  const lateHeartbeat = {} as ReturnType<typeof setInterval>
+  cleanup.setHeartbeat(lateHeartbeat)
+  cleanup.cleanup()
+  assert.equal(unsubscribeCalls, 1)
+  assert.deepEqual(clearedHeartbeats, [lateHeartbeat])
+
+  let secondUnsubscribeCalls = 0
+  const secondClearedHeartbeats: unknown[] = []
+  const secondCleanup = createTestRunSseCleanup(
+    () => {
+      secondUnsubscribeCalls += 1
+    },
+    (heartbeat) => {
+      secondClearedHeartbeats.push(heartbeat)
+    },
+  )
+  const activeHeartbeat = {} as ReturnType<typeof setInterval>
+  secondCleanup.setHeartbeat(activeHeartbeat)
+  secondCleanup.cleanup()
+  secondCleanup.cleanup()
+  assert.equal(secondUnsubscribeCalls, 1)
+  assert.deepEqual(secondClearedHeartbeats, [activeHeartbeat])
 })

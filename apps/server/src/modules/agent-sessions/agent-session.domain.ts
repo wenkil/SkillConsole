@@ -190,9 +190,15 @@ export interface OpenAgentRuntimeSessionInput {
   readonly cwd: string
   readonly resumeSessionId?: string
   readonly allowedTools?: readonly string[]
+  readonly availableTools?: readonly string[]
+  readonly enabledSkills?: readonly string[]
   readonly canUseTool?: AgentRuntimeToolPermissionHandler
   readonly maxTurns?: number
   readonly maxBudgetUsd?: number
+  readonly environment?: Readonly<Record<string, string | undefined>>
+  readonly protectedEnvironmentNames?: readonly string[]
+  readonly sandboxPolicy?: "test_run_strict_v1"
+  readonly isolateSettings?: boolean
   readonly redactedValues: readonly string[]
   readonly onEvent: (
     turnId: string | null,

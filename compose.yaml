@@ -58,6 +58,20 @@ services:
       OPENAPI_ENABLED: "true"
       SKILLCONSOLE_DATA_ROOT: /workspace/var
       SKILLCONSOLE_CLAUDE_SETTINGS_PATH: /workspace/settings.json
+    # Docker's default seccomp profile blocks the unprivileged namespaces used
+    # by bubblewrap. Do not grant SYS_ADMIN: the child Agent process enters its
+    # own fail-closed bwrap sandbox before any approved Bash command runs.
+    security_opt:
+      - seccomp=unconfined
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -78,7 +92,7 @@ services:
       - ./apps/server/src:/workspace/apps/server/src
       - ./settings.json:/workspace/settings.json:ro
       - skillconsole_data:/workspace/var
-      - claude_data:/root/.claude
+      - claude_data:/home/node/.claude
 
   web:
     profiles:
@@ -124,6 +138,20 @@ services:
       STATIC_ROOT: /workspace/apps/web/dist
       SKILLCONSOLE_DATA_ROOT: /workspace/var
       SKILLCONSOLE_CLAUDE_SETTINGS_PATH: /workspace/settings.json
+    # See the development server note above. The container keeps Docker's
+    # default capability set; only the seccomp profile is relaxed so bwrap can
+    # create an unprivileged child namespace.
+    security_opt:
+      - seccomp=unconfined
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -143,7 +171,7 @@ services:
     volumes:
       - ./settings.json:/workspace/settings.json:ro
       - skillconsole_data:/workspace/var
-      - claude_data:/root/.claude
+      - claude_data:/home/node/.claude
 
 volumes:
   postgres_data:

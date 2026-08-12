@@ -6,6 +6,8 @@ import path from "node:path"
 import test from "node:test"
 
 import { AgentSessionWorkspaceStore } from "../src/modules/agent-sessions/session-workspace.js"
+import { strictTestRunSandbox } from "../src/modules/agent-sessions/runtime/claude-agent-sdk.adapter.js"
+import { mapSdkMessage } from "../src/modules/agent-sessions/runtime/sdk-message.mapper.js"
 import { buildExecutionPrompt } from "../src/modules/test-runs/test-run-prompt.js"
 import {
   formatEvidenceWithLineNumbers,
@@ -13,7 +15,303 @@ import {
   TestRunGraderProtocolError,
 } from "../src/modules/test-runs/test-run-grader-protocol.js"
 import { TestRunScorer } from "../src/modules/test-runs/test-run-scorer.js"
+import {
+  containsPublicRuntimeLeakContent,
+  containsPublicRuntimeLeakText,
+  sanitizeTestRunPublicValue,
+} from "../src/modules/test-runs/test-run-public-safety.js"
+import {
+  buildTestRunRuntimeEnvironment,
+  forTestRunWorkspace,
+} from "../src/modules/test-runs/test-run-runtime-environment.js"
+import {
+  buildTestRunSemanticConfigurationFingerprint,
+  extractObservedBundledScriptPaths,
+  getTestRunCaseSideOrder,
+} from "../src/modules/test-runs/test-run.service.js"
 import { TestRunStorage } from "../src/modules/test-runs/test-run-storage.js"
+
+test("version comparison alternates the paired serial order by Eval", () => {
+  assert.deepEqual(
+    [0, 1, 2].map((index) =>
+      getTestRunCaseSideOrder("version_vs_version", index),
+    ),
+    [
+      ["BASELINE", "TARGET"],
+      ["TARGET", "BASELINE"],
+      ["BASELINE", "TARGET"],
+    ],
+  )
+  assert.deepEqual(
+    getTestRunCaseSideOrder("target_vs_no_skill", 1),
+    ["TARGET", "BASELINE"],
+  )
+})
+
+test("semantic configuration fingerprint ignores credentials but tracks model changes", () => {
+  const settings = (apiKey: string, model: string) =>
+    Buffer.from(
+      JSON.stringify({
+        model: "claude-top-level",
+        env: {
+          ANTHROPIC_API_KEY: apiKey,
+          ANTHROPIC_BASE_URL: "https://api.example.test",
+          ANTHROPIC_MODEL: model,
+        },
+      }),
+      "utf8",
+    )
+
+  const first = buildTestRunSemanticConfigurationFingerprint(
+    settings("secret-one", "claude-test"),
+  )
+  const credentialOnly = buildTestRunSemanticConfigurationFingerprint(
+    settings("secret-two", "claude-test"),
+  )
+  const modelChanged = buildTestRunSemanticConfigurationFingerprint(
+    settings("secret-two", "claude-test-next"),
+  )
+
+  assert.equal(first, credentialOnly)
+  assert.notEqual(first, modelChanged)
+})
+
+test("test run log payloads redact host absolute paths recursively", () => {
+  assert.deepEqual(
+    sanitizeTestRunPublicValue({
+      command: "python /usr/bin/tool.py C:\\Users\\tester\\secret.txt",
+      nested: [
+        "/tmp/work/result.txt",
+        "/workspace/settings.json",
+        "/nix/store/abcd/main.js",
+        "\\\\fileserver\\private\\secret.txt",
+        '"C:\\Program Files\\Secret App\\config.json"',
+        "https://example.test/public/result",
+        "file:///C:/Users/tester/secret.js",
+        "outputs/result.txt",
+      ],
+      stack:
+        "Error: fail at run (file:///nix/store/abcd/main.js:1:2)",
+    }),
+    {
+      command: "python [REDACTED_PATH] [REDACTED_PATH]",
+      nested: [
+        "[REDACTED_PATH]",
+        "[REDACTED_PATH]",
+        "[REDACTED_PATH]",
+        "[REDACTED_PATH]",
+        '"[REDACTED_PATH]"',
+        "https://example.test/public/result",
+        "[REDACTED_PATH]",
+        "outputs/result.txt",
+      ],
+      stack: "[REDACTED_STACK]",
+    },
+  )
+  assert.equal(
+    containsPublicRuntimeLeakText(
+      "Error: fail at run (file:///nix/store/abcd/main.js:1:2)",
+    ),
+    true,
+  )
+  const sanitizedJson = String(
+    sanitizeTestRunPublicValue(
+      '{"reason":"/workspace/private.txt","reference":"file:///nix/store/main.js","passed":false}',
+    ),
+  )
+  assert.deepEqual(JSON.parse(sanitizedJson), {
+    reason: "[REDACTED_PATH]",
+    reference: "[REDACTED_PATH]",
+    passed: false,
+  })
+})
+
+test("Artifact safety detects UTF-16 paths and sensitive values without rejecting ordinary binary", () => {
+  const utf16be = (value: string) => {
+    const littleEndian = Buffer.from(value, "utf16le")
+    for (let index = 0; index + 1 < littleEndian.length; index += 2) {
+      const first = littleEndian[index]
+      littleEndian[index] = littleEndian[index + 1]!
+      littleEndian[index + 1] = first!
+    }
+    return littleEndian
+  }
+  const absolutePath = "C:\\Users\\tester\\private.txt"
+  const sensitiveValue = "integration-secret"
+
+  assert.equal(
+    containsPublicRuntimeLeakContent(Buffer.from(absolutePath, "utf16le")),
+    true,
+  )
+  assert.equal(containsPublicRuntimeLeakContent(utf16be(absolutePath)), true)
+  assert.equal(
+    containsPublicRuntimeLeakContent(
+      Buffer.from(sensitiveValue, "utf16le"),
+      [sensitiveValue],
+    ),
+    true,
+  )
+  assert.equal(
+    containsPublicRuntimeLeakContent(utf16be(sensitiveValue), [
+      sensitiveValue,
+    ]),
+    true,
+  )
+  assert.equal(
+    containsPublicRuntimeLeakContent(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2]),
+      [sensitiveValue],
+    ),
+    false,
+  )
+})
+
+test("bundled script observations normalize Windows paths and reject Eval input paths", () => {
+  const declared = new Set(["scripts/render.py"])
+  assert.deepEqual(
+    extractObservedBundledScriptPaths(
+      {
+        command:
+          "python scripts\\render.py && python .claude\\skills\\csv-to-md\\scripts\\render.py",
+      },
+      "csv-to-md",
+      declared,
+    ),
+    ["scripts/render.py"],
+  )
+  assert.deepEqual(
+    extractObservedBundledScriptPaths(
+      { command: "python inputs\\scripts\\render.py" },
+      "csv-to-md",
+      declared,
+    ),
+    [],
+  )
+})
+
+test("test run runtime environment excludes unrelated Server secrets", () => {
+  const frozen = buildTestRunRuntimeEnvironment(
+    Buffer.from(
+      JSON.stringify({
+        model: "claude-top-level",
+        env: {
+          ANTHROPIC_AUTH_TOKEN: "test-anthropic-token",
+          ANTHROPIC_BASE_URL: "https://api.example.test",
+          INTERNAL_DATABASE_TOKEN: "must-not-reach-runtime",
+        },
+      }),
+    ),
+    {
+      PATH: "C:\\Runtime\\bin",
+      DATABASE_URL: "postgres://private.example.test/database",
+      CLOUD_API_TOKEN: "host-cloud-secret",
+    },
+  )
+  assert.equal(
+    frozen.values.PATH
+      ?.split(path.delimiter)
+      .includes(path.dirname(process.execPath)),
+    true,
+  )
+  assert.equal(frozen.values.PATH?.includes("C:\\Runtime\\bin"), false)
+  assert.equal(
+    frozen.values.ANTHROPIC_AUTH_TOKEN,
+    "test-anthropic-token",
+  )
+  assert.equal(
+    frozen.values.ANTHROPIC_BASE_URL,
+    "https://api.example.test",
+  )
+  assert.equal(frozen.values.ANTHROPIC_MODEL, "claude-top-level")
+  assert.deepEqual(frozen.sensitiveValues, [
+    "test-anthropic-token",
+    "https://api.example.test",
+  ])
+  assert.deepEqual(frozen.protectedNames, [
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_BASE_URL",
+    "INTERNAL_DATABASE_TOKEN",
+  ])
+  assert.equal(
+    JSON.stringify(frozen).includes("host-cloud-secret"),
+    false,
+  )
+  assert.equal(
+    JSON.stringify(frozen).includes("must-not-reach-runtime"),
+    false,
+  )
+
+  const isolated = forTestRunWorkspace(
+    frozen,
+    "C:\\controlled\\case\\workspace",
+  )
+  assert.equal(
+    isolated.values.HOME,
+    "C:\\controlled\\case\\workspace",
+  )
+  assert.equal(isolated.values.PYTHONNOUSERSITE, "1")
+  assert.equal(
+    isolated.values.TMP,
+    path.join("C:\\controlled\\case\\workspace", "outputs", ".tmp"),
+  )
+  assert.equal(isolated.values.TEMP, isolated.values.TMP)
+  assert.equal(isolated.values.TMPDIR, isolated.values.TMP)
+  assert.deepEqual(isolated.sensitiveValues, frozen.sensitiveValues)
+})
+
+test("runtime redaction ignores short control values but still removes secrets", () => {
+  const events = mapSdkMessage(
+    {
+      type: "assistant",
+      uuid: "message-redaction",
+      aborted: false,
+      message: {
+        content: [
+          {
+            type: "text",
+            text: '{"assertionIndex":1,"token":"real-secret"}',
+          },
+        ],
+      },
+    } as never,
+    { redactedValues: ["1", "real-secret"] },
+  )
+  assert.equal(
+    events[0]?.type === "assistant_message"
+      ? events[0].content[0]?.type === "text"
+        ? events[0].content[0].text
+        : null
+      : null,
+    '{"assertionIndex":1,"token":"[REDACTED]"}',
+  )
+})
+
+test("strict test run sandbox never re-allows a filesystem root", () => {
+  const cwd = path.resolve("C:/controlled/test-run/workspace")
+  const sandbox = strictTestRunSandbox({
+    cwd,
+    environment: {
+      PATH: "C:\\Windows",
+      SystemRoot: "C:\\Windows",
+    },
+    redactedValues: [],
+    onEvent: async () => undefined,
+    onFatalError: async () => undefined,
+  })
+  assert.equal(
+    sandbox.filesystem.allowRead.some(
+      (candidate) => path.parse(candidate).root === candidate,
+    ),
+    false,
+  )
+  assert.equal(sandbox.enableWeakerNestedSandbox, false)
+  assert.equal(
+    sandbox.filesystem.allowWrite.every((candidate) =>
+      candidate.endsWith(path.join("workspace", "outputs")),
+    ),
+    true,
+  )
+})
 
 test("test run scorer requires one independently evidenced result per assertion", () => {
   const scorer = new TestRunScorer()
@@ -284,8 +582,22 @@ test("test run Artifact safety gate removes outputs containing protected values"
   const content = "result contains integration-secret"
   await mkdir(outputRoot, { recursive: true })
   await writeFile(path.join(outputRoot, "result.txt"), content, "utf8")
+  await mkdir(path.join(outputRoot, ".tmp"), { recursive: true })
+  await writeFile(
+    path.join(outputRoot, ".tmp", "transient.txt"),
+    "temporary data",
+    "utf8",
+  )
 
   try {
+    const collected = await storage.collectArtifacts(runId, caseId)
+    assert.deepEqual(
+      collected.map((artifact) => artifact.relativePath),
+      ["result.txt"],
+    )
+    await assert.rejects(() =>
+      readFile(path.join(outputRoot, ".tmp", "transient.txt")),
+    )
     await assert.rejects(
       () =>
         storage.assertArtifactsSafe(
@@ -306,6 +618,69 @@ test("test run Artifact safety gate removes outputs containing protected values"
     )
     await assert.rejects(() =>
       readFile(path.join(outputRoot, "result.txt")),
+    )
+
+    const leakedPathContent =
+      "execution diagnostics referenced /workspace/settings.json"
+    await writeFile(
+      path.join(outputRoot, "runtime-path.txt"),
+      leakedPathContent,
+      "utf8",
+    )
+    await assert.rejects(
+      () =>
+        storage.assertArtifactsSafe(
+          runId,
+          caseId,
+          [
+            {
+              relativePath: "runtime-path.txt",
+              sha256: createHash("sha256")
+                .update(leakedPathContent)
+                .digest("hex"),
+              byteSize: Buffer.byteLength(leakedPathContent),
+              mediaTypeHint: "text/plain",
+              contentKind: "text",
+            },
+          ],
+          [],
+        ),
+      /runtime paths/i,
+    )
+    await assert.rejects(() =>
+      readFile(path.join(outputRoot, "runtime-path.txt")),
+    )
+
+    const binaryLeakContent = Buffer.concat([
+      Buffer.from([0]),
+      Buffer.from("file:///C:/Users/tester/secret.txt", "utf8"),
+    ])
+    await writeFile(
+      path.join(outputRoot, "binary-leak.bin"),
+      binaryLeakContent,
+    )
+    await assert.rejects(
+      () =>
+        storage.assertArtifactsSafe(
+          runId,
+          caseId,
+          [
+            {
+              relativePath: "binary-leak.bin",
+              sha256: createHash("sha256")
+                .update(binaryLeakContent)
+                .digest("hex"),
+              byteSize: binaryLeakContent.byteLength,
+              mediaTypeHint: "application/octet-stream",
+              contentKind: "binary",
+            },
+          ],
+          [],
+        ),
+      /runtime paths/i,
+    )
+    await assert.rejects(() =>
+      readFile(path.join(outputRoot, "binary-leak.bin")),
     )
   } finally {
     await rm(dataRoot, { recursive: true, force: true })

@@ -8,6 +8,9 @@ import {
   eq,
   gt,
   inArray,
+  isNull,
+  lt,
+  or,
   sql,
 } from "drizzle-orm"
 
@@ -47,10 +50,14 @@ import type {
   TestRunCaseView,
   TestRunDetailView,
   TestRunEvent,
+  TestRunEnvironmentSnapshot,
+  TestRunLogPage,
+  TestRunLogQuery,
   TestRunPage,
   TestRunTraceability,
   TestRunView,
 } from "./test-run.domain.js"
+import { sanitizeTestRunPublicValue } from "./test-run-public-safety.js"
 
 const activeStatuses: readonly TestRunStatus[] = [
   "PREPARING",
@@ -98,11 +105,21 @@ interface CreateCaseInput {
   readonly side: "TARGET" | "BASELINE"
   readonly executionOrder: number
   readonly inputFingerprint: string
+  readonly participantExecutionFingerprint: string
+  readonly skillInvocationObserved:
+    | "NOT_APPLICABLE"
+    | null
 }
 
 interface CreateRunInput {
   readonly id: string
-  readonly selection: FrozenTestRunSelection
+  readonly mode: "target_vs_no_skill" | "version_vs_version"
+  readonly executionPolicy:
+    | "target_then_no_skill_serial_v1"
+    | "paired_serial_alternating_v1"
+  readonly targetSelection: FrozenTestRunSelection
+  readonly baselineSelection: FrozenTestRunSelection | null
+  readonly environment: TestRunEnvironmentSnapshot
   readonly traceability: TestRunTraceability
   readonly idempotencyKey: string
   readonly requestHash: string
@@ -150,6 +167,37 @@ interface RunWithDisplay {
   readonly evalCount: number
   readonly benchmarkTarget: StoredBenchmarkSide | null
   readonly benchmarkBaseline: StoredBenchmarkSide | null
+  readonly baselineVersionName: string | null
+  readonly baselineVersionNumber: number | null
+}
+
+interface CaseEventContext {
+  readonly mode: "target_vs_no_skill" | "version_vs_version"
+  readonly side: "TARGET" | "BASELINE"
+  readonly subjectKind: "no_skill" | "skill_version" | "draft_snapshot"
+  readonly versionId: string | null
+  readonly versionNumber: number | null
+  readonly evalRevisionCaseId: string
+  readonly externalId: number
+}
+
+function caseEventPayload(
+  context: CaseEventContext,
+  phase: "execution" | "grading" | "orchestration",
+  extra: Readonly<Record<string, unknown>> = {},
+): Readonly<Record<string, unknown>> {
+  return {
+    ...extra,
+    schemaVersion: 2,
+    mode: context.mode,
+    side: context.side,
+    subjectKind: context.subjectKind,
+    versionId: context.versionId,
+    versionNumber: context.versionNumber,
+    evalRevisionCaseId: context.evalRevisionCaseId,
+    externalId: context.externalId,
+    phase,
+  }
 }
 
 function runNotFound(runId: string): DomainError {
@@ -168,7 +216,9 @@ function mapEvent(row: SkillTestRunEventRow): TestRunEvent {
     runId: row.runId,
     caseId: row.caseId,
     occurredAt: row.occurredAt.toISOString(),
-    payload: row.payload,
+    payload: sanitizeTestRunPublicValue(row.payload) as Readonly<
+      Record<string, unknown>
+    >,
   }
 }
 
@@ -178,6 +228,7 @@ function mapRun(record: RunWithDisplay): TestRunView {
     id: run.id,
     workspaceId: run.workspaceId,
     mode: run.mode,
+    executionPolicy: run.executionPolicy,
     status: run.status,
     target: {
       draftId: record.draftId,
@@ -191,17 +242,43 @@ function mapRun(record: RunWithDisplay): TestRunView {
       evalRevisionNumber: record.revisionNumber,
       evalCount: record.evalCount,
     },
+    baseline:
+      run.mode === "version_vs_version"
+        ? {
+            kind: "skill_version",
+            skillVersionId: run.baselineSkillVersionId!,
+            skillVersionName: record.baselineVersionName!,
+            skillVersionNumber: record.baselineVersionNumber!,
+            skillSnapshotId: run.baselineSkillSnapshotId!,
+            skillManifestHash: run.baselineSkillManifestHash!,
+          }
+        : {
+            kind: "no_skill",
+            skillVersionId: null,
+            skillSnapshotId: null,
+          },
+    environment: sanitizeTestRunPublicValue(
+      run.environmentSnapshot,
+    ) as TestRunEnvironmentSnapshot,
     traceability: {
       protocolVersion: run.protocolVersion,
       sdkVersion: run.sdkVersion,
       skillCreatorCommit: run.skillCreatorCommit,
       skillCreatorTreeHash: run.skillCreatorTreeHash,
       configurationFingerprint: run.configurationFingerprint,
+      semanticConfigurationFingerprint:
+        run.semanticConfigurationFingerprint,
+      executionSettingsFingerprint: run.configurationFingerprint,
+      gradingSettingsFingerprint: run.configurationFingerprint,
       environmentFingerprint: run.environmentFingerprint,
       skillManifestHash: run.skillManifestHash,
+      baselineSkillManifestHash: run.baselineSkillManifestHash,
       evalManifestHash: run.evalManifestHash,
       comparabilityFingerprint: run.comparabilityFingerprint,
       runInputFingerprint: run.runInputFingerprint,
+      executionPromptVersion: run.executionPromptVersion,
+      graderProtocolVersion: run.graderProtocolVersion,
+      toolPermissionPolicyVersion: run.toolPermissionPolicyVersion,
     },
     progress: {
       totalCases: run.totalCaseCount,
@@ -210,16 +287,20 @@ function mapRun(record: RunWithDisplay): TestRunView {
     benchmark:
       record.benchmarkTarget && record.benchmarkBaseline
         ? {
-            target: record.benchmarkTarget,
-            baseline: record.benchmarkBaseline,
+            target: normalizeBenchmarkSide(record.benchmarkTarget),
+            baseline: normalizeBenchmarkSide(record.benchmarkBaseline),
           }
         : null,
     error:
       run.errorCode && run.errorMessage
         ? {
             code: run.errorCode,
-            message: run.errorMessage,
-            details: run.errorDetails ?? null,
+            message: String(
+              sanitizeTestRunPublicValue(run.errorMessage),
+            ),
+            details: (sanitizeTestRunPublicValue(
+              run.errorDetails ?? null,
+            ) ?? null) as Readonly<Record<string, unknown>> | null,
           }
         : null,
     createdAt: run.createdAt.toISOString(),
@@ -256,6 +337,19 @@ function mapArtifact(
   }
 }
 
+function normalizeBenchmarkSide(
+  side: StoredBenchmarkSide,
+): StoredBenchmarkSide {
+  return {
+    ...side,
+    gradingDurationMs: side.gradingDurationMs ?? 0,
+    gradingInputTokens: side.gradingInputTokens ?? 0,
+    gradingOutputTokens: side.gradingOutputTokens ?? 0,
+    gradingTotalCostUsd: side.gradingTotalCostUsd ?? 0,
+    gradingNumTurns: side.gradingNumTurns ?? 0,
+  }
+}
+
 function mapAssertion(
   row: AssertionResultRow,
 ): TestRunAssertionResultView {
@@ -264,8 +358,10 @@ function mapAssertion(
     assertionIndex: row.assertionIndex,
     assertion: row.assertion,
     status: row.status,
-    reason: row.reason,
-    evidence: row.evidence,
+    reason: String(sanitizeTestRunPublicValue(row.reason)),
+    evidence: sanitizeTestRunPublicValue(
+      row.evidence,
+    ) as readonly StoredAssertionEvidence[],
   }
 }
 
@@ -287,22 +383,35 @@ function mapCase(
     assertions: row.assertions,
     files: row.files,
     inputFingerprint: row.inputFingerprint,
+    participantExecutionFingerprint:
+      row.participantExecutionFingerprint,
     executionStatus: row.executionStatus,
     assessmentStatus: row.assessmentStatus,
-    finalOutput: row.finalOutput,
+    finalOutput:
+      row.finalOutput === null
+        ? null
+        : String(sanitizeTestRunPublicValue(row.finalOutput)),
     usage: row.usage,
+    gradingUsage: row.gradingUsage,
+    skillInvocationObserved: row.skillInvocationObserved,
+    skillToolCallCount: row.skillToolCallCount,
+    bundledScriptUses: row.bundledScriptUses,
     executionError:
       row.executionErrorCode && row.executionErrorMessage
         ? {
             code: row.executionErrorCode,
-            message: row.executionErrorMessage,
+            message: String(
+              sanitizeTestRunPublicValue(row.executionErrorMessage),
+            ),
           }
         : null,
     assessmentError:
       row.assessmentErrorCode && row.assessmentErrorMessage
         ? {
             code: row.assessmentErrorCode,
-            message: row.assessmentErrorMessage,
+            message: String(
+              sanitizeTestRunPublicValue(row.assessmentErrorMessage),
+            ),
           }
         : null,
     assertionResults: assertions.map(mapAssertion),
@@ -601,14 +710,19 @@ export class TestRunRepository {
   async create(input: CreateRunInput): Promise<TestRunDetailView> {
     try {
       await this.database.transaction(async (transaction) => {
+        const target = input.targetSelection
+        const baseline = input.baselineSelection
         await transaction.insert(skillTestRuns).values({
           id: input.id,
-          workspaceId: input.selection.workspaceId,
-          skillVersionId: input.selection.skill.version?.id ?? null,
-          skillDraftRevisionId: input.selection.skill.draftRevisionId,
-          skillSnapshotId: input.selection.skill.snapshotId,
-          evalRevisionId: input.selection.revision.id,
-          mode: "target_vs_no_skill",
+          workspaceId: target.workspaceId,
+          skillVersionId: target.skill.version?.id ?? null,
+          skillDraftRevisionId: target.skill.draftRevisionId,
+          skillSnapshotId: target.skill.snapshotId,
+          baselineSkillVersionId: baseline?.skill.version?.id ?? null,
+          baselineSkillSnapshotId: baseline?.skill.snapshotId ?? null,
+          evalRevisionId: target.revision.id,
+          mode: input.mode,
+          executionPolicy: input.executionPolicy,
           status: "PREPARING",
           protocolVersion: input.traceability.protocolVersion,
           sdkVersion: input.traceability.sdkVersion,
@@ -617,14 +731,25 @@ export class TestRunRepository {
             input.traceability.skillCreatorTreeHash,
           configurationFingerprint:
             input.traceability.configurationFingerprint,
+          semanticConfigurationFingerprint:
+            input.traceability.semanticConfigurationFingerprint,
           environmentFingerprint:
             input.traceability.environmentFingerprint,
+          environmentSnapshot: input.environment,
           skillManifestHash: input.traceability.skillManifestHash,
+          baselineSkillManifestHash:
+            input.traceability.baselineSkillManifestHash,
           evalManifestHash: input.traceability.evalManifestHash,
           comparabilityFingerprint:
             input.traceability.comparabilityFingerprint,
           runInputFingerprint:
             input.traceability.runInputFingerprint,
+          executionPromptVersion:
+            input.traceability.executionPromptVersion,
+          graderProtocolVersion:
+            input.traceability.graderProtocolVersion,
+          toolPermissionPolicyVersion:
+            input.traceability.toolPermissionPolicyVersion,
           idempotencyKey: input.idempotencyKey,
           requestHash: input.requestHash,
           totalCaseCount: input.cases.length,
@@ -643,27 +768,67 @@ export class TestRunRepository {
             assertions: runCase.evalCase.assertions,
             files: runCase.evalCase.files,
             inputFingerprint: runCase.inputFingerprint,
+            participantExecutionFingerprint:
+              runCase.participantExecutionFingerprint,
+            skillInvocationObserved:
+              runCase.skillInvocationObserved,
             executionStatus: "PENDING" as const,
             assessmentStatus: "PENDING" as const,
           })),
         )
         await this.appendEvent(transaction, input.id, null, "run.created", {
-          schemaVersion: 1,
-          mode: "target_vs_no_skill",
-          draftRevisionId: input.selection.skill.draftRevisionId,
-          draftContentRevision: input.selection.skill.contentRevision,
-          skillVersionId: input.selection.skill.version?.id ?? null,
-          evalRevisionId: input.selection.revision.id,
+          schemaVersion: 2,
+          mode: input.mode,
+          executionPolicy: input.executionPolicy,
+          draftRevisionId: target.skill.draftRevisionId,
+          draftContentRevision: target.skill.contentRevision,
+          skillVersionId: target.skill.version?.id ?? null,
+          baselineSkillVersionId: baseline?.skill.version?.id ?? null,
+          evalRevisionId: target.revision.id,
           totalCases: input.cases.length,
           comparabilityFingerprint:
             input.traceability.comparabilityFingerprint,
         })
+        for (const runCase of input.cases) {
+          await this.appendEvent(
+            transaction,
+            input.id,
+            runCase.id,
+            "case.queued",
+            {
+              schemaVersion: 2,
+              mode: input.mode,
+              side: runCase.side,
+              subjectKind:
+                input.mode === "target_vs_no_skill" &&
+                runCase.side === "BASELINE"
+                  ? "no_skill"
+                  : target.skill.draftRevisionId
+                    ? "draft_snapshot"
+                    : "skill_version",
+              versionId:
+                runCase.side === "TARGET"
+                  ? target.skill.version?.id ?? null
+                  : baseline?.skill.version?.id ?? null,
+              versionNumber:
+                runCase.side === "TARGET"
+                  ? target.skill.version?.sequenceNumber ?? null
+                  : baseline?.skill.version?.sequenceNumber ?? null,
+              evalRevisionCaseId: runCase.evalCase.id,
+              externalId: runCase.evalCase.externalId,
+              inputFingerprint: runCase.inputFingerprint,
+              participantExecutionFingerprint:
+                runCase.participantExecutionFingerprint,
+              phase: "orchestration",
+            },
+          )
+        }
       })
       return this.getDetail(input.id)
     } catch (error) {
       if (this.isUniqueViolation(error)) {
         const existing = await this.findByIdempotencyKey(
-          input.selection.workspaceId,
+          input.targetSelection.workspaceId,
           input.idempotencyKey,
         )
         if (existing) {
@@ -796,6 +961,60 @@ export class TestRunRepository {
     ).map(mapEvent)
   }
 
+  async listLogs(
+    runId: string,
+    query: TestRunLogQuery,
+  ): Promise<TestRunLogPage> {
+    await this.get(runId)
+    const phaseCondition = query.phase
+      ? query.phase === "execution"
+        ? sql<boolean>`(${skillTestRunEvents.type} like 'execution.%'
+            or ${skillTestRunEvents.type} like 'case.execution.%')`
+        : query.phase === "grading"
+          ? sql<boolean>`(${skillTestRunEvents.type} like 'grading.%'
+              or ${skillTestRunEvents.type} like 'case.assessment.%')`
+          : sql<boolean>`(${skillTestRunEvents.type} not like 'execution.%'
+              and ${skillTestRunEvents.type} not like 'case.execution.%'
+              and ${skillTestRunEvents.type} not like 'grading.%'
+              and ${skillTestRunEvents.type} not like 'case.assessment.%')`
+      : undefined
+    const rows = await this.database
+      .select({ event: skillTestRunEvents })
+      .from(skillTestRunEvents)
+      .leftJoin(
+        skillTestRunCases,
+        eq(skillTestRunCases.id, skillTestRunEvents.caseId),
+      )
+      .where(
+        and(
+          eq(skillTestRunEvents.runId, runId),
+          query.beforeSequence
+            ? lt(skillTestRunEvents.sequence, query.beforeSequence)
+            : undefined,
+          query.side ? eq(skillTestRunCases.side, query.side) : undefined,
+          query.externalId
+            ? eq(skillTestRunCases.externalId, query.externalId)
+            : undefined,
+          phaseCondition,
+        ),
+      )
+      .orderBy(desc(skillTestRunEvents.sequence))
+      .limit(query.limit + 1)
+    const hasMore = rows.length > query.limit
+    const items = rows
+      .slice(0, query.limit)
+      .map(({ event }) => mapEvent(event))
+      .reverse()
+    return {
+      items,
+      pagination: {
+        limit: query.limit,
+        hasMore,
+        nextBeforeSequence: hasMore ? items[0]?.sequence ?? null : null,
+      },
+    }
+  }
+
   async getRow(runId: string): Promise<SkillTestRunRow> {
     const [run] = await this.database
       .select()
@@ -832,6 +1051,79 @@ export class TestRunRepository {
       })
     }
     return runCase
+  }
+
+  private async getCaseEventContext(
+    transaction: Transaction,
+    runCase: SkillTestRunCaseRow,
+  ): Promise<CaseEventContext> {
+    const [context] = await transaction
+      .select({
+        mode: skillTestRuns.mode,
+        targetVersionId: skillTestRuns.skillVersionId,
+        targetDraftRevisionId: skillTestRuns.skillDraftRevisionId,
+        baselineVersionId: skillTestRuns.baselineSkillVersionId,
+        targetVersionNumber: skillVersions.sequenceNumber,
+        baselineVersionNumber: sql<
+          number | null
+        >`(select ${skillVersions.sequenceNumber}
+            from ${skillVersions}
+            where ${skillVersions.id} = ${skillTestRuns.baselineSkillVersionId})`,
+      })
+      .from(skillTestRuns)
+      .leftJoin(
+        skillVersions,
+        eq(skillVersions.id, skillTestRuns.skillVersionId),
+      )
+      .where(eq(skillTestRuns.id, runCase.runId))
+      .limit(1)
+    if (!context) throw runNotFound(runCase.runId)
+    if (
+      runCase.side === "BASELINE" &&
+      context.mode === "target_vs_no_skill"
+    ) {
+      return {
+        mode: context.mode,
+        side: runCase.side,
+        subjectKind: "no_skill",
+        versionId: null,
+        versionNumber: null,
+        evalRevisionCaseId: runCase.evalRevisionCaseId,
+        externalId: runCase.externalId,
+      }
+    }
+    const isTarget = runCase.side === "TARGET"
+    return {
+      mode: context.mode,
+      side: runCase.side,
+      subjectKind:
+        isTarget && context.targetDraftRevisionId
+          ? "draft_snapshot"
+          : "skill_version",
+      versionId: isTarget
+        ? context.targetVersionId
+        : context.baselineVersionId,
+      versionNumber: isTarget
+        ? context.targetVersionNumber
+        : context.baselineVersionNumber,
+      evalRevisionCaseId: runCase.evalRevisionCaseId,
+      externalId: runCase.externalId,
+    }
+  }
+
+  async appendOrchestrationEvent(
+    runId: string,
+    caseId: string | null,
+    type: string,
+    payload: Readonly<Record<string, unknown>>,
+  ): Promise<TestRunEvent> {
+    return this.database.transaction((transaction) =>
+      this.appendEvent(transaction, runId, caseId, type, {
+        ...payload,
+        schemaVersion: 2,
+        phase: "orchestration",
+      }),
+    )
   }
 
   async markRunRunning(runId: string): Promise<TestRunEvent | null> {
@@ -901,16 +1193,13 @@ export class TestRunRepository {
         .where(eq(skillTestRunCases.id, caseId))
         .returning()
       if (!updatedCase) throw new Error("Test Case update returned no row.")
+      const context = await this.getCaseEventContext(transaction, updatedCase)
       return this.appendEvent(
         transaction,
         updatedCase.runId,
         caseId,
         "case.preparing",
-        {
-          schemaVersion: 1,
-          side: updatedCase.side,
-          externalId: updatedCase.externalId,
-        },
+        caseEventPayload(context, "orchestration"),
       )
     })
   }
@@ -957,15 +1246,13 @@ export class TestRunRepository {
         .where(eq(skillTestRunCases.id, caseId))
         .returning()
       if (!updatedCase) throw new Error("Test Case update returned no row.")
+      const context = await this.getCaseEventContext(transaction, updatedCase)
       return this.appendEvent(
         transaction,
         updatedCase.runId,
         caseId,
         "case.execution.started",
-        {
-          schemaVersion: 1,
-          side: updatedCase.side,
-        },
+        caseEventPayload(context, "execution"),
       )
     })
   }
@@ -976,6 +1263,13 @@ export class TestRunRepository {
     readonly sessionId: string
     readonly sourceSequence: number
     readonly phase: "execution" | "grading"
+    readonly mode: "target_vs_no_skill" | "version_vs_version"
+    readonly side: "TARGET" | "BASELINE"
+    readonly subjectKind: "no_skill" | "skill_version" | "draft_snapshot"
+    readonly versionId: string | null
+    readonly versionNumber: number | null
+    readonly evalRevisionCaseId: string
+    readonly externalId: number
     readonly type: string
     readonly payload: Readonly<Record<string, unknown>>
   }): Promise<TestRunEvent | null> {
@@ -987,8 +1281,18 @@ export class TestRunRepository {
           input.caseId,
           `${input.phase}.${input.type}`,
           {
-            ...input.payload,
-            schemaVersion: 1,
+            ...(sanitizeTestRunPublicValue(input.payload) as Readonly<
+              Record<string, unknown>
+            >),
+            schemaVersion: 2,
+            mode: input.mode,
+            side: input.side,
+            subjectKind: input.subjectKind,
+            versionId: input.versionId,
+            versionNumber: input.versionNumber,
+            evalRevisionCaseId: input.evalRevisionCaseId,
+            externalId: input.externalId,
+            phase: input.phase,
           },
         )
         await transaction
@@ -1015,6 +1319,16 @@ export class TestRunRepository {
     readonly caseId: string
     readonly finalOutput: string
     readonly usage: StoredTestRunUsage
+    readonly skillInvocationObserved:
+      | "OBSERVED"
+      | "NOT_OBSERVED"
+      | "NOT_APPLICABLE"
+    readonly skillToolCallCount: number
+    readonly bundledScriptUses: readonly {
+      readonly relativePath: string
+      readonly count: number
+      readonly evidenceSequences: readonly number[]
+    }[]
     readonly artifacts: readonly CollectedArtifactInput[]
   }): Promise<TestRunEvent> {
     return this.database.transaction(async (transaction) => {
@@ -1044,21 +1358,23 @@ export class TestRunRepository {
           executionStatus: "COMPLETED",
           finalOutput: input.finalOutput,
           usage: input.usage,
+          skillInvocationObserved: input.skillInvocationObserved,
+          skillToolCallCount: input.skillToolCallCount,
+          bundledScriptUses: input.bundledScriptUses,
           updatedAt: new Date(),
           executionCompletedAt: new Date(),
         })
         .where(eq(skillTestRunCases.id, input.caseId))
+      const context = await this.getCaseEventContext(transaction, runCase)
       return this.appendEvent(
         transaction,
         runCase.runId,
         input.caseId,
         "case.execution.completed",
-        {
-          schemaVersion: 1,
-          side: runCase.side,
+        caseEventPayload(context, "execution", {
           artifactCount: input.artifacts.length,
           usage: input.usage,
-        },
+        }),
       )
     })
   }
@@ -1069,9 +1385,22 @@ export class TestRunRepository {
     readonly code: string
     readonly message: string
     readonly usage?: StoredTestRunUsage | null
+    readonly observations?: {
+      readonly skillInvocationObserved:
+        | "OBSERVED"
+        | "NOT_OBSERVED"
+        | "NOT_APPLICABLE"
+      readonly skillToolCallCount: number
+      readonly bundledScriptUses: readonly {
+        readonly relativePath: string
+        readonly count: number
+        readonly evidenceSequences: readonly number[]
+      }[]
+    }
   }): Promise<TestRunEvent> {
     return this.database.transaction(async (transaction) => {
       const runCase = await this.lockCase(transaction, input.caseId)
+      const safeMessage = String(sanitizeTestRunPublicValue(input.message))
       if (
         ["COMPLETED", "FAILED", "CANCELED", "INTERRUPTED"].includes(
           runCase.executionStatus,
@@ -1090,8 +1419,16 @@ export class TestRunRepository {
           executionStatus: input.status,
           assessmentStatus: "NOT_EVALUATED",
           ...(input.usage !== undefined ? { usage: input.usage } : {}),
+          ...(input.observations
+            ? {
+                skillInvocationObserved:
+                  input.observations.skillInvocationObserved,
+                skillToolCallCount: input.observations.skillToolCallCount,
+                bundledScriptUses: input.observations.bundledScriptUses,
+              }
+            : {}),
           executionErrorCode: input.code,
-          executionErrorMessage: input.message,
+          executionErrorMessage: safeMessage,
           assessmentErrorCode: input.code,
           assessmentErrorMessage:
             "Assertions were not evaluated because execution did not complete.",
@@ -1104,20 +1441,19 @@ export class TestRunRepository {
         transaction,
         runCase,
         input.code,
-        input.message,
+        safeMessage,
       )
       await this.incrementCompletedCases(transaction, runCase.runId)
+      const context = await this.getCaseEventContext(transaction, runCase)
       return this.appendEvent(
         transaction,
         runCase.runId,
         input.caseId,
         `case.execution.${input.status.toLowerCase()}`,
-        {
-          schemaVersion: 1,
-          side: runCase.side,
-          error: { code: input.code, message: input.message },
+        caseEventPayload(context, "execution", {
+          error: { code: input.code, message: safeMessage },
           ...(input.usage !== undefined ? { usage: input.usage } : {}),
-        },
+        }),
       )
     })
   }
@@ -1162,12 +1498,13 @@ export class TestRunRepository {
         .update(skillTestRunCases)
         .set({ assessmentStatus: "RUNNING", updatedAt: new Date() })
         .where(eq(skillTestRunCases.id, caseId))
+      const context = await this.getCaseEventContext(transaction, runCase)
       return this.appendEvent(
         transaction,
         runCase.runId,
         caseId,
         "case.assessment.started",
-        { schemaVersion: 1, side: runCase.side },
+        caseEventPayload(context, "grading"),
       )
     })
   }
@@ -1214,6 +1551,7 @@ export class TestRunRepository {
   async completeAssessment(
     caseId: string,
     results: readonly StoredAssertionResultInput[],
+    gradingUsage: StoredTestRunUsage | null,
   ): Promise<TestRunEvent> {
     return this.database.transaction(async (transaction) => {
       const runCase = await this.lockCase(transaction, caseId)
@@ -1232,6 +1570,7 @@ export class TestRunRepository {
         .update(skillTestRunCases)
         .set({
           assessmentStatus: "COMPLETED",
+          gradingUsage,
           updatedAt: new Date(),
           assessmentCompletedAt: new Date(),
         })
@@ -1246,19 +1585,19 @@ export class TestRunRepository {
             eq(skillTestRuns.status, "SCORING"),
           ),
         )
+      const context = await this.getCaseEventContext(transaction, runCase)
       return this.appendEvent(
         transaction,
         runCase.runId,
         caseId,
         "case.assessment.completed",
-        {
-          schemaVersion: 1,
-          side: runCase.side,
+        caseEventPayload(context, "grading", {
+          usage: gradingUsage,
           results: results.map((result) => ({
             assertionIndex: result.assertionIndex,
             status: result.status,
           })),
-        },
+        }),
       )
     })
   }
@@ -1267,9 +1606,11 @@ export class TestRunRepository {
     readonly caseId: string
     readonly code: string
     readonly message: string
+    readonly gradingUsage?: StoredTestRunUsage | null
   }): Promise<TestRunEvent> {
     return this.database.transaction(async (transaction) => {
       const runCase = await this.lockCase(transaction, input.caseId)
+      const safeMessage = String(sanitizeTestRunPublicValue(input.message))
       if (runCase.assessmentStatus !== "RUNNING") {
         const existing = await this.latestEventForCase(
           transaction,
@@ -1282,14 +1623,17 @@ export class TestRunRepository {
         transaction,
         runCase,
         input.code,
-        input.message,
+        safeMessage,
       )
       await transaction
         .update(skillTestRunCases)
         .set({
           assessmentStatus: "FAILED",
+          ...(input.gradingUsage !== undefined
+            ? { gradingUsage: input.gradingUsage }
+            : {}),
           assessmentErrorCode: input.code,
-          assessmentErrorMessage: input.message,
+          assessmentErrorMessage: safeMessage,
           updatedAt: new Date(),
           assessmentCompletedAt: new Date(),
         })
@@ -1304,16 +1648,18 @@ export class TestRunRepository {
             eq(skillTestRuns.status, "SCORING"),
           ),
         )
+      const context = await this.getCaseEventContext(transaction, runCase)
       return this.appendEvent(
         transaction,
         runCase.runId,
         input.caseId,
         "case.assessment.failed",
-        {
-          schemaVersion: 1,
-          side: runCase.side,
-          error: { code: input.code, message: input.message },
-        },
+        caseEventPayload(context, "grading", {
+          ...(input.gradingUsage !== undefined
+            ? { usage: input.gradingUsage }
+            : {}),
+          error: { code: input.code, message: safeMessage },
+        }),
       )
     })
   }
@@ -1436,6 +1782,7 @@ export class TestRunRepository {
     message: string,
   ): Promise<TestRunEvent> {
     return this.database.transaction(async (transaction) => {
+      const safeMessage = String(sanitizeTestRunPublicValue(message))
       const [run] = await transaction
         .select()
         .from(skillTestRuns)
@@ -1481,7 +1828,7 @@ export class TestRunRepository {
               : {
                   executionStatus: "FAILED" as const,
                   executionErrorCode: code,
-                  executionErrorMessage: message,
+                  executionErrorMessage: safeMessage,
                   executionCompletedAt: new Date(),
                 }),
             assessmentStatus: "NOT_EVALUATED",
@@ -1496,7 +1843,7 @@ export class TestRunRepository {
           transaction,
           runCase,
           code,
-          message,
+          safeMessage,
         )
       }
       await transaction
@@ -1505,14 +1852,14 @@ export class TestRunRepository {
           status: "FAILED",
           completedCaseCount: run.totalCaseCount,
           errorCode: code,
-          errorMessage: message,
+          errorMessage: safeMessage,
           updatedAt: new Date(),
           completedAt: new Date(),
         })
         .where(eq(skillTestRuns.id, runId))
       return this.appendEvent(transaction, runId, null, "run.failed", {
         schemaVersion: 1,
-        error: { code, message },
+        error: { code, message: safeMessage },
       })
     })
   }
@@ -1688,6 +2035,18 @@ export class TestRunRepository {
               and origin_snapshot.manifest_hash = ${skillTestRuns.skillManifestHash}
             order by origin_version.published_at asc, origin_version.version_number asc
             limit 1)
+        )`,
+        baselineVersionName: sql<string | null>`(
+          select baseline_version.name
+          from skill_versions baseline_version
+          where baseline_version.id = ${skillTestRuns.baselineSkillVersionId}
+          limit 1
+        )`,
+        baselineVersionNumber: sql<number | null>`(
+          select baseline_version.version_number
+          from skill_versions baseline_version
+          where baseline_version.id = ${skillTestRuns.baselineSkillVersionId}
+          limit 1
         )`,
         revisionNumber: evalRevisions.sequenceNumber,
         evalCount: evalRevisions.evalCount,
@@ -1914,6 +2273,9 @@ export class TestRunRepository {
     type: string,
     payload: Readonly<Record<string, unknown>>,
   ): Promise<TestRunEvent> {
+    const safePayload = sanitizeTestRunPublicValue(payload) as Readonly<
+      Record<string, unknown>
+    >
     const [lockedRun] = await transaction
       .select({ id: skillTestRuns.id })
       .from(skillTestRuns)
@@ -1934,7 +2296,7 @@ export class TestRunRepository {
         caseId,
         sequence: sequenceRecord?.next ?? 1,
         type,
-        payload,
+        payload: safePayload,
       })
       .returning()
     if (!event) throw new Error("Test run event insert returned no row.")

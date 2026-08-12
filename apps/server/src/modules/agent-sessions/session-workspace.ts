@@ -159,11 +159,20 @@ export class AgentSessionWorkspaceStore {
   async readRedactedValues(
     absoluteWorkspacePath: string,
   ): Promise<readonly string[]> {
+    return this.readSettingsRedactedValues(
+      this.getWorkspaceSettingsPath(absoluteWorkspacePath),
+    )
+  }
+
+  async readSourceRedactedValues(): Promise<readonly string[]> {
+    return this.readSettingsRedactedValues(this.claudeSettingsPath)
+  }
+
+  private async readSettingsRedactedValues(
+    settingsPath: string,
+  ): Promise<readonly string[]> {
     try {
-      const rawSettings = await readFile(
-        this.getWorkspaceSettingsPath(absoluteWorkspacePath),
-        "utf8",
-      )
+      const rawSettings = await readFile(settingsPath, "utf8")
       const values = [rawSettings]
 
       try {
@@ -187,6 +196,22 @@ export class AgentSessionWorkspaceStore {
       const content = await readFile(
         this.getWorkspaceSettingsPath(absoluteWorkspacePath),
       )
+      const actualFingerprint = createHash("sha256")
+        .update(content)
+        .digest("hex")
+      if (actualFingerprint !== expectedFingerprint) {
+        throw new Error("Claude settings changed during task preparation.")
+      }
+    } catch (error) {
+      throw new AgentSessionWorkspaceConfigurationError({ cause: error })
+    }
+  }
+
+  async assertSourceSettingsFingerprint(
+    expectedFingerprint: string,
+  ): Promise<void> {
+    try {
+      const content = await readFile(this.claudeSettingsPath)
       const actualFingerprint = createHash("sha256")
         .update(content)
         .digest("hex")

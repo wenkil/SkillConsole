@@ -31,6 +31,15 @@ function formatRate(value: number | null): string {
   return value === null ? "—" : `${Math.round(value * 100)}%`
 }
 
+function formatDuration(milliseconds: number): string {
+  if (milliseconds < 1_000) return `${milliseconds} ms`
+  const seconds = Math.round(milliseconds / 1_000)
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  return `${minutes}m ${remainingSeconds}s`
+}
+
 export function TestRunsWorkbenchView({
   workspace,
   locale,
@@ -170,16 +179,19 @@ export function TestRunsWorkbenchView({
           </div>
         ) : (
           <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full min-w-[70rem] border-collapse text-left">
+            <table className="w-full min-w-[88rem] border-collapse text-left">
               <thead className="sticky top-0 z-10 bg-paper-muted">
                 <tr className="border-b border-foreground">
                   {(
                     [
                       "status",
+                      "mode",
                       "selection",
                       "progress",
                       "target",
                       "baseline",
+                      "usage",
+                      "duration",
                       "createdAt",
                       "actions",
                     ] as const
@@ -204,8 +216,23 @@ export function TestRunsWorkbenchView({
                       <TestRunStatusBadge status={run.status} t={t} />
                     </td>
                     <td className="px-4 py-3.5">
+                      <span className="inline-flex border border-rule px-2 py-1 font-mono text-[9px] font-bold">
+                        {t(
+                          run.mode === "version_vs_version"
+                            ? "list.versionComparisonMode"
+                            : "list.skillEffectMode",
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5">
                       <strong className="block text-xs">
-                        {run.target.draftContentRevision
+                        {run.mode === "version_vs_version" &&
+                        run.baseline.kind === "skill_version"
+                          ? t("list.versionPair", {
+                              candidate: run.target.skillVersionNumber,
+                              baseline: run.baseline.skillVersionNumber,
+                            })
+                          : run.target.draftContentRevision
                           ? t("list.draftRevision", {
                               revision:
                                 run.target.draftContentRevision,
@@ -216,6 +243,12 @@ export function TestRunsWorkbenchView({
                         {t("list.confirmedVersion")}: {run.target.skillVersionName
                           ? `${run.target.skillVersionName} · #${run.target.skillVersionNumber}`
                           : "—"}
+                      </span>
+                      <span className="mt-1 block font-mono text-[9px] text-muted-foreground">
+                        BASELINE:{" "}
+                        {run.baseline.kind === "no_skill"
+                          ? t("list.noSkillBaseline")
+                          : `${run.baseline.skillVersionName} · #${run.baseline.skillVersionNumber}`}
                       </span>
                       <span className="mt-1 block font-mono text-[9px] text-muted-foreground">
                         EVALS R{run.target.evalRevisionNumber} ·{" "}
@@ -265,6 +298,48 @@ export function TestRunsWorkbenchView({
                           })}
                         </span>
                       ) : null}
+                    </td>
+                    <td className="px-4 py-3.5 font-mono text-[10px]">
+                      <strong className="block">
+                        {run.benchmark
+                          ? t("list.tokens", {
+                              count:
+                                run.benchmark.target.inputTokens +
+                                run.benchmark.target.outputTokens +
+                                run.benchmark.target.gradingInputTokens +
+                                run.benchmark.target.gradingOutputTokens +
+                                run.benchmark.baseline.inputTokens +
+                                run.benchmark.baseline.outputTokens +
+                                run.benchmark.baseline.gradingInputTokens +
+                                run.benchmark.baseline.gradingOutputTokens,
+                            })
+                          : "—"}
+                      </strong>
+                      <span className="mt-1 block text-[8px] text-muted-foreground">
+                        {run.benchmark
+                          ? t("list.cost", {
+                              value: (
+                                run.benchmark.target.totalCostUsd +
+                                run.benchmark.target.gradingTotalCostUsd +
+                                run.benchmark.baseline.totalCostUsd +
+                                run.benchmark.baseline.gradingTotalCostUsd
+                              ).toFixed(4),
+                            })
+                          : "—"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 font-mono text-[10px]">
+                      {run.startedAt
+                        ? formatDuration(
+                            Math.max(
+                              0,
+                              new Date(
+                                run.completedAt ?? run.updatedAt,
+                              ).getTime() -
+                                new Date(run.startedAt).getTime(),
+                            ),
+                          )
+                        : "—"}
                     </td>
                     <td className="px-4 py-3.5">
                       <time className="font-mono text-[10px]">
@@ -364,6 +439,18 @@ export function TestRunsWorkbenchView({
 
       <StartTestRunDialog
         blocked={controller.hasActiveRun}
+        baselineVersion={controller.baselineVersion}
+        baselineVersionId={controller.baselineVersionId}
+        candidateVersion={controller.candidateVersion}
+        candidateVersionId={controller.candidateVersionId}
+        mode={controller.mode}
+        onBaselineVersionChange={
+          controller.actions.selectBaselineVersion
+        }
+        onCandidateVersionChange={
+          controller.actions.selectCandidateVersion
+        }
+        onModeChange={controller.actions.selectMode}
         onOpenChange={setOpen}
         onRevisionChange={controller.actions.selectRevision}
         onStart={async () => {
@@ -378,6 +465,9 @@ export function TestRunsWorkbenchView({
         selectedRevisionId={controller.selectedRevisionId}
         t={t}
         draft={controller.draft}
+        versions={controller.versions}
+        versionsError={controller.versionsError}
+        versionsLoading={controller.versionsLoading}
       />
     </main>
   )

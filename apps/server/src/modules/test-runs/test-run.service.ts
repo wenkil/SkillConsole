@@ -5,6 +5,7 @@ import { DomainError } from "../../core/errors/domain-error.js"
 import type {
   SkillTestRunCaseRow,
   StoredTestRunUsage,
+  TestRunMode,
 } from "../../infrastructure/database/index.js"
 import {
   claudeAgentSdkVersion,
@@ -12,16 +13,16 @@ import {
 } from "../agent-sessions/agent-session.domain.js"
 import type { AgentSessionService } from "../agent-sessions/agent-session.service.js"
 import { DraftRevisionService } from "../skill-workspaces/draft-revision.service.js"
-import {
-  pinnedSkillCreatorCommit,
-  pinnedSkillCreatorTreeHash,
-} from "../evals/eval-workspace.js"
 import { calculateTestRunBenchmark } from "./test-run-benchmark.js"
 import type {
   CreateTestRunInput,
   TestRunDetailView,
   TestRunEvent,
+  TestRunEnvironmentSnapshot,
+  TestRunLogPage,
+  TestRunLogQuery,
   TestRunPage,
+  TestRunRuntimeCapabilitySnapshot,
   TestRunView,
 } from "./test-run.domain.js"
 import { TestRunEventBus } from "./test-run-event-bus.js"
@@ -32,18 +33,32 @@ import {
 import {
   buildExecutionPrompt,
   buildGraderPrompt,
+  testRunExecutionPromptVersion,
+  testRunGraderProtocolVersion,
 } from "./test-run-prompt.js"
 import {
   TestRunRepository,
   type FrozenTestRunSelection,
 } from "./test-run.repository.js"
-import { createTestRunToolPermissionPolicy } from "./test-run-permissions.js"
+import {
+  containsPublicRuntimeLeakContent,
+  sanitizeTestRunPublicValue,
+} from "./test-run-public-safety.js"
+import {
+  buildTestRunRuntimeEnvironment,
+  forTestRunWorkspace,
+  type TestRunRuntimeEnvironment,
+} from "./test-run-runtime-environment.js"
+import {
+  createTestRunToolPermissionPolicy,
+  testRunToolPermissionPolicyVersion,
+} from "./test-run-permissions.js"
 import {
   TestRunScorer,
 } from "./test-run-scorer.js"
 import { TestRunStorage } from "./test-run-storage.js"
 
-export const testRunProtocolVersion = "skill-test-run-v2"
+export const testRunProtocolVersion = "skill-test-run-v3"
 const maxFinalOutputCharacters = 200_000
 const executionLimits = {
   maxTurns: 32,
@@ -81,10 +96,29 @@ interface MonitoredSessionResult {
   readonly status: "COMPLETED" | "CANCELED" | "INTERRUPTED" | "FAILED"
   readonly finalOutput: string
   readonly usage: StoredTestRunUsage | null
+  readonly observations: ExecutionObservations
   readonly error: {
     readonly code: string
     readonly message: string
   } | null
+}
+
+interface ExecutionObservations {
+  readonly skillInvocationObserved:
+    | "OBSERVED"
+    | "NOT_OBSERVED"
+    | "NOT_APPLICABLE"
+  readonly skillToolCallCount: number
+  readonly bundledScriptUses: readonly {
+    readonly relativePath: string
+    readonly count: number
+    readonly evidenceSequences: readonly number[]
+  }[]
+}
+
+interface SemanticRuntimeConfiguration {
+  readonly model: string
+  readonly apiEndpointHash: string | null
 }
 
 function sha256(value: Buffer | string): string {
@@ -93,6 +127,153 @@ function sha256(value: Buffer | string): string {
 
 function stableHash(value: unknown): string {
   return sha256(JSON.stringify(value))
+}
+
+function parseSemanticRuntimeConfiguration(
+  settings: Buffer,
+): SemanticRuntimeConfiguration {
+  try {
+    const parsed = JSON.parse(settings.toString("utf8")) as {
+      readonly model?: unknown
+      readonly env?: Readonly<Record<string, unknown>>
+    }
+    const configuredModel =
+      typeof parsed.env?.ANTHROPIC_MODEL === "string"
+        ? parsed.env.ANTHROPIC_MODEL.trim()
+        : typeof parsed.model === "string"
+          ? parsed.model.trim()
+          : ""
+    const endpoint =
+      typeof parsed.env?.ANTHROPIC_BASE_URL === "string"
+        ? parsed.env.ANTHROPIC_BASE_URL.trim()
+        : ""
+    return {
+      model: configuredModel || "sdk_default",
+      apiEndpointHash: endpoint ? sha256(endpoint) : null,
+    }
+  } catch {
+    return { model: "sdk_default", apiEndpointHash: null }
+  }
+}
+
+function buildEnvironmentSnapshot(
+  semantic: SemanticRuntimeConfiguration,
+  runtimeCapabilities: readonly TestRunRuntimeCapabilitySnapshot[],
+  executionPolicy:
+    | "target_then_no_skill_serial_v1"
+    | "paired_serial_alternating_v1",
+): TestRunEnvironmentSnapshot {
+  return {
+    status: "captured",
+    nodeVersion: process.version,
+    platform: process.platform,
+    architecture: process.arch,
+    sdkVersion: claudeAgentSdkVersion,
+    model: semantic.model,
+    apiEndpointHash: semantic.apiEndpointHash,
+    executionLimits,
+    gradingLimits,
+    executionPromptVersion: testRunExecutionPromptVersion,
+    graderProtocolVersion: testRunGraderProtocolVersion,
+    toolPermissionPolicyVersion: testRunToolPermissionPolicyVersion,
+    executionPolicy,
+    runtimeCapabilities,
+  }
+}
+
+function frozenRuntimeCapabilities(
+  environment: Readonly<Record<string, unknown>>,
+): readonly TestRunRuntimeCapabilitySnapshot[] | null {
+  if (
+    environment.status !== "captured" ||
+    !Array.isArray(environment.runtimeCapabilities)
+  ) {
+    return null
+  }
+  const capabilities: TestRunRuntimeCapabilitySnapshot[] = []
+  for (const rawCapability of environment.runtimeCapabilities) {
+    if (
+      !rawCapability ||
+      typeof rawCapability !== "object" ||
+      !("capability" in rawCapability) ||
+      typeof rawCapability.capability !== "string" ||
+      !("commands" in rawCapability) ||
+      !Array.isArray(rawCapability.commands)
+    ) {
+      return null
+    }
+    const commands: TestRunRuntimeCapabilitySnapshot["commands"][number][] = []
+    for (const rawCommand of rawCapability.commands) {
+      if (
+        !rawCommand ||
+        typeof rawCommand !== "object" ||
+        !("name" in rawCommand) ||
+        typeof rawCommand.name !== "string" ||
+        !("available" in rawCommand) ||
+        typeof rawCommand.available !== "boolean" ||
+        !("version" in rawCommand) ||
+        (rawCommand.version !== null &&
+          typeof rawCommand.version !== "string")
+      ) {
+        return null
+      }
+      commands.push({
+        name: rawCommand.name,
+        available: rawCommand.available,
+        version: rawCommand.version,
+      })
+    }
+    capabilities.push({
+      capability: rawCapability.capability,
+      commands,
+    })
+  }
+  return capabilities
+}
+
+export function buildTestRunSemanticConfigurationFingerprint(
+  settings: Buffer,
+): string {
+  return stableHash({
+    ...parseSemanticRuntimeConfiguration(settings),
+    executionLimits,
+    gradingLimits,
+    executionPromptVersion: testRunExecutionPromptVersion,
+    graderProtocolVersion: testRunGraderProtocolVersion,
+    toolPermissionPolicyVersion: testRunToolPermissionPolicyVersion,
+  })
+}
+
+export function getTestRunCaseSideOrder(
+  mode: TestRunMode,
+  evalIndex: number,
+): readonly ["TARGET" | "BASELINE", "TARGET" | "BASELINE"] {
+  return mode === "version_vs_version" && evalIndex % 2 === 0
+    ? ["BASELINE", "TARGET"]
+    : ["TARGET", "BASELINE"]
+}
+
+function subjectFacts(
+  run: Awaited<ReturnType<TestRunRepository["getRow"]>>,
+  runCase: SkillTestRunCaseRow,
+  selection: FrozenTestRunSelection,
+) {
+  if (runCase.side === "BASELINE" && run.mode === "target_vs_no_skill") {
+    return {
+      subjectKind: "no_skill" as const,
+      versionId: null,
+      versionNumber: null,
+    }
+  }
+  return {
+    subjectKind:
+      runCase.side === "TARGET" && run.skillDraftRevisionId
+        ? ("draft_snapshot" as const)
+        : ("skill_version" as const),
+    versionId:
+      selection.skill.version?.id ?? null,
+    versionNumber: selection.skill.version?.sequenceNumber ?? null,
+  }
 }
 
 function referencedFileFacts(
@@ -192,11 +373,91 @@ function usageFromEvent(
   }
 }
 
+function toolUsesFromEvent(event: AgentSessionEvent): readonly {
+  readonly name: string
+  readonly input: Readonly<Record<string, unknown>>
+}[] {
+  if (
+    event.type !== "assistant.message" ||
+    !Array.isArray(event.payload.content)
+  ) {
+    return []
+  }
+  return event.payload.content.flatMap((item) => {
+    if (
+      typeof item !== "object" ||
+      item === null ||
+      !("type" in item) ||
+      item.type !== "tool_use" ||
+      !("name" in item) ||
+      typeof item.name !== "string"
+    ) {
+      return []
+    }
+    return [
+      {
+        name: item.name,
+        input:
+          "input" in item &&
+          typeof item.input === "object" &&
+          item.input !== null &&
+          !Array.isArray(item.input)
+            ? (item.input as Readonly<Record<string, unknown>>)
+            : {},
+      },
+    ]
+  })
+}
+
+function collectStringValues(value: unknown): readonly string[] {
+  if (typeof value === "string") return [value]
+  if (Array.isArray(value)) return value.flatMap(collectStringValues)
+  if (value && typeof value === "object") {
+    return Object.values(value).flatMap(collectStringValues)
+  }
+  return []
+}
+
+export function extractObservedBundledScriptPaths(
+  input: Readonly<Record<string, unknown>>,
+  skillName: string,
+  declaredBundledScripts: ReadonlySet<string>,
+): readonly string[] {
+  const observed = new Set<string>()
+  for (const value of collectStringValues(input)) {
+    const installedMatches = value.matchAll(
+      /\.claude[\\/]+skills[\\/]+([^\\/\s"'`]+)[\\/]+scripts[\\/]+([^\s"'`,};)]+)/giu,
+    )
+    for (const match of installedMatches) {
+      if (match[1] !== skillName) continue
+      const relativePath = `scripts/${match[2]!.replace(/[\\/]+/gu, "/")}`
+      if (declaredBundledScripts.has(relativePath)) {
+        observed.add(relativePath)
+      }
+    }
+
+    const relativeMatches = value.matchAll(
+      /(?:^|[\s"'`=:(])(?:\.[\\/]+)?scripts[\\/]+([^\s"'`,};)]+)/giu,
+    )
+    for (const match of relativeMatches) {
+      const relativePath = `scripts/${match[1]!.replace(/[\\/]+/gu, "/")}`
+      if (declaredBundledScripts.has(relativePath)) {
+        observed.add(relativePath)
+      }
+    }
+  }
+  return [...observed]
+}
+
 export class TestRunService {
   private readonly eventBus = new TestRunEventBus()
   private readonly workers = new Map<string, Promise<void>>()
   private readonly activeSessions = new Map<string, string>()
   private readonly lastPublishedSequences = new Map<string, number>()
+  private readonly runtimeEnvironments = new Map<
+    string,
+    TestRunRuntimeEnvironment
+  >()
   private shuttingDown = false
 
   constructor(private readonly options: TestRunServiceOptions) {}
@@ -209,10 +470,17 @@ export class TestRunService {
   async start(input: CreateTestRunInput): Promise<TestRunDetailView> {
     const requestHash = stableHash({
       workspaceId: input.workspaceId,
-      draftId: input.draftId,
-      draftContentRevision: input.draftContentRevision,
       evalRevisionId: input.evalRevisionId,
       mode: input.mode,
+      ...(input.mode === "target_vs_no_skill"
+        ? {
+            draftId: input.draftId,
+            draftContentRevision: input.draftContentRevision,
+          }
+        : {
+            baselineVersionId: input.baselineVersionId,
+            candidateVersionId: input.candidateVersionId,
+          }),
     })
     const replay = await this.options.repository.findByIdempotencyKey(
       input.workspaceId,
@@ -230,92 +498,158 @@ export class TestRunService {
       return this.options.repository.getDetail(replay.id)
     }
 
-    const draftRevision = await this.options.draftRevisions.freeze(
-      input.workspaceId,
-      {
-        draftId: input.draftId,
-        contentRevision: input.draftContentRevision,
-      },
-      "TRIAL",
+    let targetSelection: FrozenTestRunSelection
+    let baselineSelection: FrozenTestRunSelection | null = null
+    if (input.mode === "target_vs_no_skill") {
+      const draftRevision = await this.options.draftRevisions.freeze(
+        input.workspaceId,
+        {
+          draftId: input.draftId,
+          contentRevision: input.draftContentRevision,
+        },
+        "TRIAL",
+      )
+      targetSelection = await this.options.repository.freezeSelection({
+        workspaceId: input.workspaceId,
+        skillDraftRevisionId: draftRevision.draftRevisionId,
+        skillVersionId: null,
+        evalRevisionId: input.evalRevisionId,
+      })
+    } else {
+      if (input.baselineVersionId === input.candidateVersionId) {
+        throw new DomainError({
+          code: "TEST_RUN_VERSIONS_MUST_DIFFER",
+          message: "Select two different Skill versions to compare.",
+          kind: "conflict",
+        })
+      }
+      ;[targetSelection, baselineSelection] = await Promise.all([
+        this.options.repository.freezeSelection({
+          workspaceId: input.workspaceId,
+          skillDraftRevisionId: null,
+          skillVersionId: input.candidateVersionId,
+          evalRevisionId: input.evalRevisionId,
+        }),
+        this.options.repository.freezeSelection({
+          workspaceId: input.workspaceId,
+          skillDraftRevisionId: null,
+          skillVersionId: input.baselineVersionId,
+          evalRevisionId: input.evalRevisionId,
+        }),
+      ])
+    }
+
+    const settings = await readFile(this.options.claudeSettingsPath)
+    const configurationFingerprint = sha256(settings)
+    const semantic = parseSemanticRuntimeConfiguration(settings)
+    const executionPolicy =
+      input.mode === "version_vs_version"
+        ? ("paired_serial_alternating_v1" as const)
+        : ("target_then_no_skill_serial_v1" as const)
+    const semanticConfigurationFingerprint =
+      buildTestRunSemanticConfigurationFingerprint(settings)
+    const runtimeCapabilities =
+      await this.options.storage.captureRuntimeCapabilities()
+    const runtimeEnvironment = buildTestRunRuntimeEnvironment(settings)
+    const environment = buildEnvironmentSnapshot(
+      semantic,
+      runtimeCapabilities,
+      executionPolicy,
     )
-    const selection = await this.options.repository.freezeSelection({
-      workspaceId: input.workspaceId,
-      skillDraftRevisionId: draftRevision.draftRevisionId,
-      skillVersionId: null,
-      evalRevisionId: input.evalRevisionId,
-    })
-    const configurationFingerprint = sha256(
-      await readFile(this.options.claudeSettingsPath),
-    )
-    const environmentFingerprint = stableHash({
-      node: process.version,
-      platform: process.platform,
-      architecture: process.arch,
-      sdkVersion: claudeAgentSdkVersion,
-      protocolVersion: testRunProtocolVersion,
-    })
+    const environmentFingerprint = stableHash(environment)
     const comparabilityFingerprint = stableHash({
       mode: input.mode,
-      evalRevisionId: selection.revision.id,
-      evalManifestHash: selection.revision.manifestHash,
-      configurationFingerprint,
+      executionPolicy,
+      evalRevisionId: targetSelection.revision.id,
+      evalManifestHash: targetSelection.revision.manifestHash,
+      semanticConfigurationFingerprint,
       environmentFingerprint,
       sdkVersion: claudeAgentSdkVersion,
       protocolVersion: testRunProtocolVersion,
-      skillCreatorCommit: pinnedSkillCreatorCommit,
-      skillCreatorTreeHash: pinnedSkillCreatorTreeHash,
+      executionPromptVersion: testRunExecutionPromptVersion,
+      graderProtocolVersion: testRunGraderProtocolVersion,
+      toolPermissionPolicyVersion: testRunToolPermissionPolicyVersion,
+      skillCreatorCommit: targetSelection.revision.skillCreatorCommit,
+      skillCreatorTreeHash: targetSelection.revision.skillCreatorTreeHash,
     })
     const runInputFingerprint = stableHash({
       comparabilityFingerprint,
-      draftRevisionId: selection.skill.draftRevisionId,
-      skillSnapshotId: selection.skill.snapshotId,
-      skillManifestHash: selection.skill.manifestHash,
+      targetSnapshotId: targetSelection.skill.snapshotId,
+      targetSkillManifestHash: targetSelection.skill.manifestHash,
+      baselineSnapshotId: baselineSelection?.skill.snapshotId ?? null,
+      baselineSkillManifestHash:
+        baselineSelection?.skill.manifestHash ?? null,
     })
-    const cases = selection.cases.flatMap((evalCase, index) => {
+    const cases = targetSelection.cases.flatMap((evalCase, index) => {
       const inputFingerprint = stableHash({
-        evalRevisionId: selection.revision.id,
+        evalRevisionId: targetSelection.revision.id,
         externalId: evalCase.externalId,
         prompt: evalCase.prompt,
         expectedOutput: evalCase.expectedOutput,
         assertions: evalCase.assertions,
-        files: referencedFileFacts(selection, evalCase.files),
+        files: referencedFileFacts(targetSelection, evalCase.files),
       })
-      return [
-        {
+      const sideOrder = getTestRunCaseSideOrder(input.mode, index)
+      return sideOrder.map((side, sideIndex) => {
+        const subjectKind =
+          input.mode === "target_vs_no_skill" && side === "BASELINE"
+            ? "no_skill"
+            : "skill_snapshot"
+        const skillManifestHash =
+          side === "TARGET"
+            ? targetSelection.skill.manifestHash
+            : baselineSelection?.skill.manifestHash ?? null
+        return {
           id: randomUUID(),
           evalCase,
-          side: "TARGET" as const,
-          executionOrder: index * 2 + 1,
+          side,
+          executionOrder: index * 2 + sideIndex + 1,
           inputFingerprint,
-        },
-        {
-          id: randomUUID(),
-          evalCase,
-          side: "BASELINE" as const,
-          executionOrder: index * 2 + 2,
-          inputFingerprint,
-        },
-      ]
+          participantExecutionFingerprint: stableHash({
+            comparabilityFingerprint,
+            inputFingerprint,
+            subjectKind,
+            skillManifestHash,
+          }),
+          skillInvocationObserved:
+            subjectKind === "no_skill"
+              ? ("NOT_APPLICABLE" as const)
+              : null,
+        }
+      })
     })
     const run = await this.options.repository.create({
       id: randomUUID(),
-      selection,
+      mode: input.mode,
+      executionPolicy,
+      targetSelection,
+      baselineSelection,
+      environment,
       traceability: {
         protocolVersion: testRunProtocolVersion,
         sdkVersion: claudeAgentSdkVersion,
-        skillCreatorCommit: pinnedSkillCreatorCommit,
-        skillCreatorTreeHash: pinnedSkillCreatorTreeHash,
+        skillCreatorCommit: targetSelection.revision.skillCreatorCommit,
+        skillCreatorTreeHash: targetSelection.revision.skillCreatorTreeHash,
         configurationFingerprint,
+        semanticConfigurationFingerprint,
+        executionSettingsFingerprint: configurationFingerprint,
+        gradingSettingsFingerprint: configurationFingerprint,
         environmentFingerprint,
-        skillManifestHash: selection.skill.manifestHash,
-        evalManifestHash: selection.revision.manifestHash,
+        skillManifestHash: targetSelection.skill.manifestHash,
+        baselineSkillManifestHash:
+          baselineSelection?.skill.manifestHash ?? null,
+        evalManifestHash: targetSelection.revision.manifestHash,
         comparabilityFingerprint,
         runInputFingerprint,
+        executionPromptVersion: testRunExecutionPromptVersion,
+        graderProtocolVersion: testRunGraderProtocolVersion,
+        toolPermissionPolicyVersion: testRunToolPermissionPolicyVersion,
       },
       idempotencyKey: input.idempotencyKey,
       requestHash,
       cases,
     })
+    this.runtimeEnvironments.set(run.id, runtimeEnvironment)
     await this.publishNewEvents(run.id)
     this.launch(run.id)
     return run
@@ -342,6 +676,13 @@ export class TestRunService {
     afterSequence: number,
   ): Promise<readonly TestRunEvent[]> {
     return this.options.repository.listEvents(runId, afterSequence)
+  }
+
+  listLogs(
+    runId: string,
+    query: TestRunLogQuery,
+  ): Promise<TestRunLogPage> {
+    return this.options.repository.listLogs(runId, query)
   }
 
   subscribe(
@@ -408,6 +749,15 @@ export class TestRunService {
         details: { runId, artifactId },
       })
     }
+    if (containsPublicRuntimeLeakContent(content)) {
+      throw new DomainError({
+        code: "TEST_RUN_ARTIFACT_UNSAFE",
+        message:
+          "The requested Artifact contains protected runtime information.",
+        kind: "conflict",
+        details: { runId, artifactId },
+      })
+    }
     return {
       content,
       fileName:
@@ -440,8 +790,12 @@ export class TestRunService {
           ) {
             await this.options.repository.failRun(
               runId,
-              "TEST_RUN_ORCHESTRATION_FAILED",
-              "The Skill test run could not continue.",
+              error instanceof DomainError
+                ? error.code
+                : "TEST_RUN_ORCHESTRATION_FAILED",
+              error instanceof DomainError
+                ? error.message
+                : "The Skill test run could not continue.",
             )
           }
           await this.publishNewEvents(runId)
@@ -455,27 +809,153 @@ export class TestRunService {
       .finally(() => {
         this.workers.delete(runId)
         this.activeSessions.delete(runId)
+        this.runtimeEnvironments.delete(runId)
       })
     this.workers.set(runId, worker)
   }
 
   private async executeRun(runId: string): Promise<void> {
-    await this.options.repository.markRunRunning(runId)
-    await this.publishNewEvents(runId)
-    const run = await this.options.repository.getRow(runId)
-    const selection = await this.options.repository.freezeSelection({
-      workspaceId: run.workspaceId,
-      skillDraftRevisionId: run.skillDraftRevisionId,
-      skillVersionId: run.skillVersionId,
-      evalRevisionId: run.evalRevisionId,
-    })
+    let run = await this.options.repository.getRow(runId)
     if (
-      selection.skill.manifestHash !== run.skillManifestHash ||
-      selection.revision.manifestHash !== run.evalManifestHash
+      ["COMPLETED", "FAILED", "CANCELED", "INTERRUPTED"].includes(
+        run.status,
+      )
     ) {
-      throw new Error("The frozen test run input facts no longer match.")
+      return
     }
+    await this.options.repository.appendOrchestrationEvent(
+      runId,
+      null,
+      "run.preflight.started",
+      { mode: run.mode },
+    )
+    await this.publishNewEvents(runId)
+    let targetSelection!: FrozenTestRunSelection
+    let baselineSelection: FrozenTestRunSelection | null = null
+    try {
+      targetSelection = await this.options.repository.freezeSelection({
+        workspaceId: run.workspaceId,
+        skillDraftRevisionId: run.skillDraftRevisionId,
+        skillVersionId: run.skillVersionId,
+        evalRevisionId: run.evalRevisionId,
+      })
+      baselineSelection = run.baselineSkillVersionId
+        ? await this.options.repository.freezeSelection({
+            workspaceId: run.workspaceId,
+            skillDraftRevisionId: null,
+            skillVersionId: run.baselineSkillVersionId,
+            evalRevisionId: run.evalRevisionId,
+          })
+        : null
+      if (
+        targetSelection.skill.manifestHash !== run.skillManifestHash ||
+        targetSelection.revision.manifestHash !== run.evalManifestHash ||
+        (baselineSelection?.skill.manifestHash ?? null) !==
+          run.baselineSkillManifestHash
+      ) {
+        throw new DomainError({
+          code: "TEST_RUN_FROZEN_INPUT_MISMATCH",
+          message: "The frozen test run input facts no longer match.",
+          kind: "conflict",
+        })
+      }
+      const runtimeCapabilities = frozenRuntimeCapabilities(
+        run.environmentSnapshot,
+      )
+      if (!runtimeCapabilities) {
+        throw new DomainError({
+          code: "TEST_RUN_ENVIRONMENT_UNAVAILABLE",
+          message: "The frozen test run environment is unavailable.",
+          kind: "precondition_failed",
+        })
+      }
+      const preflights = await Promise.all([
+        this.options.storage.preflightSelection(
+          targetSelection,
+          runtimeCapabilities,
+        ),
+        ...(baselineSelection
+          ? [
+              this.options.storage.preflightSelection(
+                baselineSelection,
+                runtimeCapabilities,
+              ),
+            ]
+          : []),
+      ])
+      const missing = preflights.flatMap((result) => result.missing)
+      if (missing.length > 0) {
+        throw new DomainError({
+          code: "TEST_RUN_RUNTIME_CAPABILITY_MISSING",
+          message: `The test run environment is missing required capability: ${missing
+            .map(
+              (item) =>
+                `${item.capability} (${item.commands.join(" or ")})`,
+            )
+            .join(", ")}.`,
+          kind: "precondition_failed",
+          details: { missing },
+        })
+      }
+      await this.options.repository.appendOrchestrationEvent(
+        runId,
+        null,
+        "run.preflight.completed",
+        {
+          mode: run.mode,
+          runtimeCapabilities,
+          environmentFingerprint: run.environmentFingerprint,
+        },
+      )
+    } catch (error) {
+      const current = await this.options.repository.getRow(runId)
+      if (current.status === "CANCELING") {
+        await this.options.repository.finalizeCanceled(runId)
+        await this.publishNewEvents(runId)
+        return
+      }
+      if (
+        ["COMPLETED", "FAILED", "CANCELED", "INTERRUPTED"].includes(
+          current.status,
+        )
+      ) {
+        return
+      }
+      const code =
+        error instanceof DomainError
+          ? error.code
+          : "TEST_RUN_PREFLIGHT_FAILED"
+      const message =
+        error instanceof DomainError
+          ? error.message
+          : "The test run preflight failed."
+      if (!(error instanceof DomainError)) {
+        this.options.logger.error(
+          { runId, error },
+          "Skill test run preflight failed",
+        )
+      }
+      await this.options.repository.appendOrchestrationEvent(
+        runId,
+        null,
+        "run.preflight.failed",
+        { mode: run.mode, error: { code, message } },
+      )
+      throw error
+    }
+    const startedEvent = await this.options.repository.markRunRunning(runId)
+    if (!startedEvent) {
+      const current = await this.options.repository.getRow(runId)
+      if (current.status === "CANCELING") {
+        await this.options.repository.finalizeCanceled(runId)
+      }
+      await this.publishNewEvents(runId)
+      return
+    }
+    await this.publishNewEvents(runId)
+    run = await this.options.repository.getRow(runId)
     const cases = await this.options.repository.listCaseRows(runId)
+    let activePair: number | null = null
     for (const runCase of cases) {
       const current = await this.options.repository.getRow(runId)
       if (current.status === "CANCELING") {
@@ -483,7 +963,46 @@ export class TestRunService {
         await this.publishNewEvents(runId)
         return
       }
+      if (run.mode === "version_vs_version") {
+        if (activePair !== runCase.externalId) {
+          activePair = runCase.externalId
+          await this.options.repository.appendOrchestrationEvent(
+            runId,
+            null,
+            "pair.started",
+            {
+              mode: run.mode,
+              evalRevisionCaseId: runCase.evalRevisionCaseId,
+              externalId: activePair,
+            },
+          )
+          await this.publishNewEvents(runId)
+        }
+      }
+      const selection =
+        runCase.side === "BASELINE" && baselineSelection
+          ? baselineSelection
+          : targetSelection
       await this.executeCase(runId, run, runCase, selection)
+      if (
+        run.mode === "version_vs_version" &&
+        [...cases]
+          .reverse()
+          .find((item) => item.externalId === runCase.externalId)?.id ===
+          runCase.id
+      ) {
+        await this.options.repository.appendOrchestrationEvent(
+          runId,
+          null,
+          "pair.completed",
+          {
+            mode: run.mode,
+            evalRevisionCaseId: runCase.evalRevisionCaseId,
+            externalId: runCase.externalId,
+          },
+        )
+        await this.publishNewEvents(runId)
+      }
     }
     const current = await this.options.repository.getRow(runId)
     if (current.status === "CANCELING") {
@@ -510,6 +1029,18 @@ export class TestRunService {
       runId,
       runCase.id,
     )
+    const runtimeEnvironment = this.runtimeEnvironments.get(runId)
+    if (!runtimeEnvironment) {
+      throw new DomainError({
+        code: "TEST_RUN_RUNTIME_ENVIRONMENT_UNAVAILABLE",
+        message: "The frozen test run runtime environment is unavailable.",
+        kind: "precondition_failed",
+      })
+    }
+    const installSkill = !(
+      run.mode === "target_vs_no_skill" &&
+      runCase.side === "BASELINE"
+    )
     await this.options.repository.markCasePreparing(
       runCase.id,
       workspaceLocator,
@@ -521,15 +1052,13 @@ export class TestRunService {
       const workspace = await this.options.storage.prepareCase(
         runId,
         runCase.id,
-        runCase.side,
+        installSkill,
         selection,
         runCase.files,
       )
-      await this.options.storage.assertRuntimeCapabilities(
-        runId,
-        runCase.id,
-        runCase.side,
-        selection,
+      const caseRuntimeEnvironment = forTestRunWorkspace(
+        runtimeEnvironment,
+        workspace.absolutePath,
       )
       const session = await this.options.agentSessions.createInWorkspace({
         prompt: buildExecutionPrompt({
@@ -538,12 +1067,56 @@ export class TestRunService {
         }),
         workspaceLocator: workspace.locator,
         expectedConfigurationFingerprint: run.configurationFingerprint,
-        canUseTool: createTestRunToolPermissionPolicy(workspace.absolutePath),
+        availableTools: [
+          "Read",
+          "Glob",
+          "Grep",
+          "Write",
+          "Edit",
+          "NotebookEdit",
+          "Bash",
+          ...(installSkill ? ["Skill"] : []),
+        ],
+        enabledSkills: installSkill ? [selection.revision.skillName] : [],
+        isolateSettings: true,
+        canUseTool: createTestRunToolPermissionPolicy(
+          workspace.absolutePath,
+          {
+            skillName: selection.revision.skillName,
+            bundledScripts: installSkill
+              ? selection.skill.files
+                  .map((file) =>
+                    file.relativePath.replaceAll("\\", "/"),
+                  )
+                  .filter((relativePath) =>
+                    relativePath.startsWith("scripts/"),
+                  )
+              : [],
+          },
+        ),
         maxTurns: executionLimits.maxTurns,
         maxBudgetUsd: executionLimits.maxBudgetUsd,
+        environment: caseRuntimeEnvironment.values,
+        protectedEnvironmentNames:
+          caseRuntimeEnvironment.protectedNames,
+        sandboxPolicy: "test_run_strict_v1",
+        additionalRedactedValues:
+          caseRuntimeEnvironment.sensitiveValues,
       })
       executionSessionId = session.id
       this.activeSessions.set(runId, session.id)
+      const sessionRun = await this.options.repository.getRow(runId)
+      if (["CANCELING", "CANCELED"].includes(sessionRun.status)) {
+        try {
+          await this.options.agentSessions.cancel(session.id)
+        } catch (error) {
+          this.options.logger.error(
+            { runId, sessionId: session.id, error },
+            "New test run Agent Session could not be canceled",
+          )
+        }
+        return
+      }
       await this.options.repository.bindExecutionSession(
         runCase.id,
         session.id,
@@ -554,6 +1127,9 @@ export class TestRunService {
         caseId: runCase.id,
         sessionId: session.id,
         phase: "execution",
+        run,
+        runCase,
+        selection,
         timeoutMs: executionLimits.timeoutMs,
       })
       this.options.agentSessions.release(session.id)
@@ -571,6 +1147,7 @@ export class TestRunService {
             result.error?.message ??
             "The Agent execution did not provide complete usage facts.",
           usage: result.usage,
+          observations: result.observations,
         })
         this.options.logger.warn?.(
           {
@@ -595,18 +1172,18 @@ export class TestRunService {
           message:
             "The Agent final output exceeded the supported test run limit.",
           usage: result.usage,
+          observations: result.observations,
         })
         await this.publishNewEvents(runId)
         return
       }
-      await this.options.agentSessions.assertWorkspaceConfigurationFingerprint(
-        workspace.locator,
+      await this.options.agentSessions.assertSourceConfigurationFingerprint(
         run.configurationFingerprint,
       )
       await this.options.storage.verifyImmutableInputs(
         runId,
         runCase.id,
-        runCase.side,
+        installSkill,
         selection,
         runCase.files,
       )
@@ -614,20 +1191,23 @@ export class TestRunService {
         runId,
         runCase.id,
       )
-      const sensitiveValues =
-        await this.options.agentSessions.getWorkspaceSensitiveValues(
-          workspace.locator,
-        )
       await this.options.storage.assertArtifactsSafe(
         runId,
         runCase.id,
         artifacts,
-        [...sensitiveValues, workspace.absolutePath],
+        [
+          workspace.absolutePath,
+          ...caseRuntimeEnvironment.sensitiveValues,
+        ],
       )
       await this.options.repository.completeExecution({
         caseId: runCase.id,
         finalOutput: result.finalOutput,
         usage: result.usage,
+        skillInvocationObserved:
+          result.observations.skillInvocationObserved,
+        skillToolCallCount: result.observations.skillToolCallCount,
+        bundledScriptUses: result.observations.bundledScriptUses,
         artifacts: artifacts.map((artifact) => ({
           id: randomUUID(),
           relativePath: artifact.relativePath,
@@ -656,6 +1236,7 @@ export class TestRunService {
         workspace.gradingLocator,
         result.finalOutput,
         artifacts,
+        selection,
       )
     } catch (error) {
       const [current, runState] = await Promise.all([
@@ -732,7 +1313,20 @@ export class TestRunService {
     gradingLocator: string,
     finalOutput: string,
     artifacts: Awaited<ReturnType<TestRunStorage["collectArtifacts"]>>,
+    selection: FrozenTestRunSelection,
   ): Promise<void> {
+    const runtimeEnvironment = this.runtimeEnvironments.get(runId)
+    if (!runtimeEnvironment) {
+      throw new DomainError({
+        code: "TEST_RUN_RUNTIME_ENVIRONMENT_UNAVAILABLE",
+        message: "The frozen test run runtime environment is unavailable.",
+        kind: "precondition_failed",
+      })
+    }
+    const graderRuntimeEnvironment = forTestRunWorkspace(
+      runtimeEnvironment,
+      this.options.storage.getGradingPath(runId, runCase.id),
+    )
     await this.options.repository.beginAssessment(runCase.id)
     await this.publishNewEvents(runId)
     const evidence = await this.options.storage.readTextArtifactEvidence(
@@ -759,11 +1353,32 @@ export class TestRunService {
       workspaceLocator: gradingLocator,
       expectedConfigurationFingerprint: run.configurationFingerprint,
       allowedTools: [],
+      availableTools: [],
+      enabledSkills: [],
+      isolateSettings: true,
       maxTurns: gradingLimits.maxTurns,
       maxBudgetUsd: gradingLimits.maxBudgetUsd,
+      environment: graderRuntimeEnvironment.values,
+      protectedEnvironmentNames:
+        graderRuntimeEnvironment.protectedNames,
+      sandboxPolicy: "test_run_strict_v1",
+      additionalRedactedValues:
+        graderRuntimeEnvironment.sensitiveValues,
     })
     this.activeSessions.set(runId, session.id)
     try {
+      const sessionRun = await this.options.repository.getRow(runId)
+      if (["CANCELING", "CANCELED"].includes(sessionRun.status)) {
+        try {
+          await this.options.agentSessions.cancel(session.id)
+        } catch (error) {
+          this.options.logger.error(
+            { runId, sessionId: session.id, error },
+            "New grader Agent Session could not be canceled",
+          )
+        }
+        return
+      }
       await this.options.repository.bindGraderSession(
         runCase.id,
         session.id,
@@ -773,6 +1388,9 @@ export class TestRunService {
         caseId: runCase.id,
         sessionId: session.id,
         phase: "grading",
+        run,
+        runCase,
+        selection,
         timeoutMs: gradingLimits.timeoutMs,
       })
       if (result.status !== "COMPLETED") {
@@ -782,6 +1400,7 @@ export class TestRunService {
           message:
             result.error?.message ??
             "The independent grader did not complete.",
+          gradingUsage: result.usage,
         })
       } else {
         try {
@@ -810,6 +1429,7 @@ export class TestRunService {
               reason: item.reason,
               evidence: item.evidence,
             })),
+            result.usage,
           )
         } catch (error) {
           if (!(error instanceof TestRunGraderProtocolError)) {
@@ -819,6 +1439,7 @@ export class TestRunService {
             caseId: runCase.id,
             code: error.code,
             message: error.message,
+            gradingUsage: result.usage,
           })
         }
       }
@@ -834,10 +1455,38 @@ export class TestRunService {
     readonly caseId: string
     readonly sessionId: string
     readonly phase: "execution" | "grading"
+    readonly run: Awaited<ReturnType<TestRunRepository["getRow"]>>
+    readonly runCase: SkillTestRunCaseRow
+    readonly selection: FrozenTestRunSelection
     readonly timeoutMs: number
   }): Promise<MonitoredSessionResult> {
     let finalOutput = ""
     let usage: StoredTestRunUsage | null = null
+    const skillToolEvidence: number[] = []
+    const bundledScripts = new Map<string, number[]>()
+    const declaredBundledScripts = new Set(
+      input.selection.skill.files
+        .map((file) => file.relativePath.replaceAll("\\", "/"))
+        .filter((relativePath) => relativePath.startsWith("scripts/")),
+    )
+    const observation = (): ExecutionObservations => ({
+      skillInvocationObserved:
+        input.phase === "grading" ||
+        (input.run.mode === "target_vs_no_skill" &&
+          input.runCase.side === "BASELINE")
+          ? "NOT_APPLICABLE"
+          : skillToolEvidence.length > 0
+            ? "OBSERVED"
+            : "NOT_OBSERVED",
+      skillToolCallCount: skillToolEvidence.length,
+      bundledScriptUses: [...bundledScripts.entries()].map(
+        ([relativePath, evidenceSequences]) => ({
+          relativePath,
+          count: evidenceSequences.length,
+          evidenceSequences,
+        }),
+      ),
+    })
     const seen = new Set<number>()
     let resolveResult:
       | ((value: MonitoredSessionResult) => void)
@@ -874,6 +1523,7 @@ export class TestRunService {
         status: "FAILED",
         finalOutput,
         usage,
+        observations: observation(),
         error: {
           code:
             input.phase === "execution"
@@ -893,12 +1543,35 @@ export class TestRunService {
         sessionId: input.sessionId,
         sourceSequence: event.sequence,
         phase: input.phase,
+        mode: input.run.mode,
+        side: input.runCase.side,
+        ...subjectFacts(input.run, input.runCase, input.selection),
+        evalRevisionCaseId: input.runCase.evalRevisionCaseId,
+        externalId: input.runCase.externalId,
         type: event.type,
         payload: event.payload,
       })
       if (mapped) this.eventBus.publish([mapped])
+      if (input.phase === "execution" && mapped) {
+        for (const toolUse of toolUsesFromEvent(event)) {
+          if (toolUse.name === "Skill") {
+            skillToolEvidence.push(mapped.sequence)
+          }
+          for (const relativePath of extractObservedBundledScriptPaths(
+            toolUse.input,
+            input.selection.revision.skillName,
+            declaredBundledScripts,
+          )) {
+            const evidence = bundledScripts.get(relativePath) ?? []
+            evidence.push(mapped.sequence)
+            bundledScripts.set(relativePath, evidence)
+          }
+        }
+      }
       const text = assistantText(event)
-      if (text !== null) finalOutput = text
+      if (text !== null) {
+        finalOutput = String(sanitizeTestRunPublicValue(text))
+      }
       usage = usageFromEvent(event) ?? usage
       if (settled) return
 
@@ -908,6 +1581,7 @@ export class TestRunService {
           status: "COMPLETED",
           finalOutput,
           usage,
+          observations: observation(),
           error: null,
         }
       } else if (event.type === "turn.canceled") {
@@ -915,6 +1589,7 @@ export class TestRunService {
           status: "CANCELED",
           finalOutput,
           usage,
+          observations: observation(),
           error: eventError(
             event,
             "TEST_RUN_CANCELED",
@@ -926,6 +1601,7 @@ export class TestRunService {
           status: "INTERRUPTED",
           finalOutput,
           usage,
+          observations: observation(),
           error: eventError(
             event,
             "CLAUDE_RUNTIME_INTERRUPTED",
@@ -940,6 +1616,7 @@ export class TestRunService {
           status: "FAILED",
           finalOutput,
           usage,
+          observations: observation(),
           error: eventError(
             event,
             "CLAUDE_EXECUTION_FAILED",

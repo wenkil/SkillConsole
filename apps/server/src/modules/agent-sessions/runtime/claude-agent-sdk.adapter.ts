@@ -3,6 +3,8 @@ import {
   type Query,
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk"
+import { existsSync } from "node:fs"
+import path from "node:path"
 
 import type {
   AgentRuntimeAdapter,
@@ -40,6 +42,90 @@ function classifyRuntimeFailure(error: unknown): AgentRuntimeFailure {
   }
 }
 
+export function strictTestRunSandbox(
+  input: OpenAgentRuntimeSessionInput,
+) {
+  const roots =
+    process.platform === "win32"
+      ? "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+          .split("")
+          .map((drive) => `${drive}:\\`)
+          .filter((root) => existsSync(root))
+      : ["/"]
+  const runtimeReadCandidates =
+    process.platform === "win32"
+      ? [
+          input.cwd,
+          path.dirname(process.execPath),
+          input.environment?.SystemRoot,
+          input.environment?.SystemRoot
+            ? path.join(input.environment.SystemRoot, "System32")
+            : undefined,
+          ...(input.environment?.PATH ?? input.environment?.Path ?? "")
+            .split(path.delimiter)
+            .filter(Boolean),
+        ]
+      : [
+          input.cwd,
+          path.dirname(process.execPath),
+          "/bin",
+          "/lib",
+          "/lib64",
+          "/usr/bin",
+          "/usr/lib",
+          "/usr/lib64",
+          "/usr/local/bin",
+          "/usr/local/lib",
+          "/usr/share",
+          "/nix/store",
+          "/etc/ssl/certs",
+          "/etc/alternatives",
+          "/dev/null",
+          ...(input.environment?.PATH ?? "").split(path.delimiter),
+        ]
+  const runtimeReadPaths = runtimeReadCandidates
+    .filter((value): value is string => Boolean(value))
+    .map((value) => path.resolve(value))
+    .filter((value) => path.parse(value).root !== value)
+    .filter((value) => existsSync(value))
+  const protectedEnvironmentNames = [
+    ...new Set([
+      ...(input.protectedEnvironmentNames ?? []),
+      ...Object.keys(input.environment ?? {}).filter((name) =>
+        /(?:api[_-]?key|auth|authorization|credential|password|secret|token|oauth)/iu.test(
+          name,
+        ),
+      ),
+    ]),
+  ]
+  return {
+    enabled: true,
+    failIfUnavailable: true,
+    autoAllowBashIfSandboxed: false,
+    allowUnsandboxedCommands: false,
+    enableWeakerNestedSandbox: false,
+    network: {
+      allowedDomains: [],
+      deniedDomains: ["*"],
+      strictAllowlist: true,
+      allowLocalBinding: false,
+      allowAllUnixSockets: false,
+    },
+    filesystem: {
+      denyRead: roots,
+      allowRead: [...new Set(runtimeReadPaths.map((value) => path.resolve(value)))],
+      denyWrite: roots,
+      allowWrite: [path.join(input.cwd, "outputs")],
+    },
+    credentials: {
+      envVars: protectedEnvironmentNames.map((name) => ({
+        name,
+        mode: "deny" as const,
+      })),
+    },
+  }
+}
+
 class ClaudeAgentSdkSession implements AgentRuntimeSession {
   private readonly inputQueue = new AsyncMessageQueue<SDKUserMessage>()
   private readonly abortController = new AbortController()
@@ -56,7 +142,17 @@ class ClaudeAgentSdkSession implements AgentRuntimeSession {
       options: {
         abortController: this.abortController,
         cwd: input.cwd,
-        settingSources: ["project"],
+        ...(input.environment ? { env: { ...input.environment } } : {}),
+        ...(input.sandboxPolicy === "test_run_strict_v1"
+          ? { sandbox: strictTestRunSandbox(input) }
+          : {}),
+        settingSources: input.isolateSettings ? [] : ["project"],
+        ...(input.availableTools
+          ? { tools: [...input.availableTools] }
+          : {}),
+        ...(input.enabledSkills
+          ? { skills: [...input.enabledSkills] }
+          : {}),
         ...(input.allowedTools
           ? { allowedTools: [...input.allowedTools] }
           : {}),

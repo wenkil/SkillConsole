@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   ArrowLeft,
+  Cpu,
   FileDown,
   Fingerprint,
   ListTree,
@@ -9,7 +10,7 @@ import {
   ScrollText,
   Square,
 } from "lucide-react"
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useNavigate } from "react-router-dom"
 
@@ -23,6 +24,7 @@ import {
   type TestRunAssertionStatus,
   type TestRunBenchmarkSide,
   type TestRunCase,
+  type TestRunLogFilters,
 } from "@/features/test-runs/model/test-run"
 import type { SkillWorkspace } from "@/features/workbench-home/model/workbench"
 import { Button } from "@/shared/components/ui/button"
@@ -113,6 +115,15 @@ function CaseSidePanel({
     readonly finalOutput: string
     readonly assertions: string
     readonly artifacts: string
+    readonly observability: string
+    readonly skillInvocation: string
+    readonly skillToolCalls: string
+    readonly bundledScripts: string
+    readonly usage: string
+    readonly usageTokens: string
+    readonly usageCost: string
+    readonly usageDuration: string
+    readonly usageTurns: string
   }
 }) {
   if (!runCase) {
@@ -137,6 +148,31 @@ function CaseSidePanel({
               runCase.assessmentError?.message}
           </div>
         ) : null}
+        <div>
+          <span className="font-mono text-[9px] text-muted-foreground uppercase">
+            {labels.usage}
+          </span>
+          {runCase.usage || runCase.gradingUsage ? (
+            <div className="mt-1.5 grid grid-cols-4 gap-px border border-rule bg-rule font-mono text-[9px]">
+              <span className="bg-background p-2">
+                {labels.usageTokens}
+              </span>
+              <span className="bg-background p-2">
+                {labels.usageCost}
+              </span>
+              <span className="bg-background p-2">
+                {labels.usageDuration}
+              </span>
+              <span className="bg-background p-2">
+                {labels.usageTurns}
+              </span>
+            </div>
+          ) : (
+            <span className="mt-1.5 block text-xs text-muted-foreground">
+              —
+            </span>
+          )}
+        </div>
         <div>
           <span className="font-mono text-[9px] text-muted-foreground uppercase">
             {labels.finalOutput}
@@ -207,6 +243,39 @@ function CaseSidePanel({
             )}
           </div>
         </div>
+        <div>
+          <span className="font-mono text-[9px] text-muted-foreground uppercase">
+            {labels.observability}
+          </span>
+          <div className="mt-1.5 grid gap-2 border border-rule-soft p-3 font-mono text-[9px]">
+            <div className="flex items-center justify-between gap-3">
+              <span>{labels.skillInvocation}</span>
+              <strong>{runCase.skillInvocationObserved ?? "—"}</strong>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>{labels.skillToolCalls}</span>
+              <strong>{runCase.skillToolCallCount}</strong>
+            </div>
+            {runCase.bundledScriptUses.length > 0 ? (
+              <div>
+                <span className="text-muted-foreground">
+                  {labels.bundledScripts}
+                </span>
+                {runCase.bundledScriptUses.map((script) => (
+                  <div
+                    className="mt-1 flex items-center justify-between gap-3"
+                    key={script.relativePath}
+                  >
+                    <code className="truncate" title={script.relativePath}>
+                      {script.relativePath}
+                    </code>
+                    <span>×{script.count}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
       </div>
     </section>
   )
@@ -223,12 +292,30 @@ export function TestRunDetailView({
 }) {
   const { t } = useTranslation("testRuns")
   const navigate = useNavigate()
-  const controller = useTestRunDetailController(workspace.id, runId)
   const [tab, setTab] = useState<"results" | "logs">("results")
   const [requestedExternalId, setRequestedExternalId] = useState<
     number | null
   >(null)
-  const [logCaseId, setLogCaseId] = useState("")
+  const [logSide, setLogSide] = useState<"" | "TARGET" | "BASELINE">("")
+  const [logExternalId, setLogExternalId] = useState("")
+  const [logPhase, setLogPhase] = useState<
+    "" | "execution" | "grading" | "orchestration"
+  >("")
+  const logFilters = useMemo<TestRunLogFilters>(
+    () => ({
+      ...(logSide ? { side: logSide } : {}),
+      ...(logExternalId
+        ? { externalId: Number(logExternalId) }
+        : {}),
+      ...(logPhase ? { phase: logPhase } : {}),
+    }),
+    [logExternalId, logPhase, logSide],
+  )
+  const controller = useTestRunDetailController(
+    workspace.id,
+    runId,
+    logFilters,
+  )
 
   if (controller.loading) {
     return (
@@ -279,10 +366,51 @@ export function TestRunDetailView({
     run.progress.totalCases === 0
       ? 0
       : (run.progress.completedCases / run.progress.totalCases) * 100
-  const visibleEvents = logCaseId
-    ? controller.events.filter((event) => event.caseId === logCaseId)
-    : controller.events
   const benchmarkComparable = isBenchmarkComparable(run.benchmark)
+  const versionComparison =
+    run.mode === "version_vs_version" &&
+    run.baseline.kind === "skill_version"
+  const targetLabel = versionComparison
+    ? t("detail.candidate", {
+        name: run.target.skillVersionName,
+        revision: run.target.skillVersionNumber,
+      })
+    : t("detail.target")
+  const baselineLabel = run.baseline.kind === "skill_version"
+    ? t("detail.versionBaseline", {
+        name: run.baseline.skillVersionName,
+        revision: run.baseline.skillVersionNumber,
+      })
+    : t("detail.baseline")
+  const sidePanels = versionComparison
+    ? [
+        {
+          key: "baseline",
+          runCase: baseline,
+          benchmark: run.benchmark?.baseline ?? null,
+          label: baselineLabel,
+        },
+        {
+          key: "target",
+          runCase: target,
+          benchmark: run.benchmark?.target ?? null,
+          label: targetLabel,
+        },
+      ]
+    : [
+        {
+          key: "target",
+          runCase: target,
+          benchmark: run.benchmark?.target ?? null,
+          label: targetLabel,
+        },
+        {
+          key: "baseline",
+          runCase: baseline,
+          benchmark: run.benchmark?.baseline ?? null,
+          label: baselineLabel,
+        },
+      ]
 
   return (
     <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
@@ -301,14 +429,30 @@ export function TestRunDetailView({
             </button>
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <h1 className="text-2xl font-[790] tracking-[-0.035em]">
-                {run.target.draftContentRevision
+                {versionComparison
+                  ? t("detail.versionComparisonTitle", {
+                      candidate: run.target.skillVersionNumber,
+                      baseline:
+                        run.baseline.kind === "skill_version"
+                          ? run.baseline.skillVersionNumber
+                          : "—",
+                    })
+                  : run.target.draftContentRevision
                   ? t("detail.draftRevision", {
                       revision: run.target.draftContentRevision,
                     })
-                  : (run.target.skillVersionName ?? "—")} × EVALS R
+                  : (run.target.skillVersionName ?? "—")}
+                {" × EVALS R"}
                 {run.target.evalRevisionNumber}
               </h1>
               <TestRunStatusBadge status={run.status} t={t} />
+              <span className="border border-rule px-2 py-1 font-mono text-[9px] font-bold">
+                {t(
+                  versionComparison
+                    ? "detail.versionComparisonMode"
+                    : "detail.skillEffectMode",
+                )}
+              </span>
             </div>
             <p className="mt-1.5 font-mono text-[9px] text-muted-foreground">
               RUN {run.id}
@@ -317,6 +461,14 @@ export function TestRunDetailView({
               {t("detail.confirmedVersion")}: {run.target.skillVersionName
                 ? `${run.target.skillVersionName} · #${run.target.skillVersionNumber}`
                 : "—"}
+            </p>
+            <p className="mt-1 font-mono text-[9px] text-muted-foreground">
+              BASELINE:{" "}
+              {run.baseline.kind === "no_skill"
+                ? "No-Skill"
+                : `${run.baseline.skillVersionName} · #${run.baseline.skillVersionNumber}`}
+              {" · "}
+              {run.executionPolicy}
             </p>
           </div>
           {isActiveTestRun(run.status) ? (
@@ -373,22 +525,17 @@ export function TestRunDetailView({
           </div>
         ) : null}
         <div className="grid grid-cols-2 gap-3">
-          <BenchmarkCard
-            label={t("detail.target")}
-            labels={{
-              passRate: t("detail.passRate"),
-              coverage: t("detail.coverage"),
-            }}
-            side={run.benchmark?.target ?? null}
-          />
-          <BenchmarkCard
-            label={t("detail.baseline")}
-            labels={{
-              passRate: t("detail.passRate"),
-              coverage: t("detail.coverage"),
-            }}
-            side={run.benchmark?.baseline ?? null}
-          />
+          {sidePanels.map((panel) => (
+            <BenchmarkCard
+              key={panel.key}
+              label={panel.label}
+              labels={{
+                passRate: t("detail.passRate"),
+                coverage: t("detail.coverage"),
+              }}
+              side={panel.benchmark}
+            />
+          ))}
         </div>
       </div>
 
@@ -452,38 +599,71 @@ export function TestRunDetailView({
           </aside>
 
           <div className="min-h-0 overflow-y-auto p-5">
-            {target ? (
+            {target || baseline ? (
               <section className="mb-4 border border-rule-soft bg-paper-muted p-4">
                 <div className="font-mono text-[9px] text-muted-foreground uppercase">
                   {t("detail.userTask")}
                 </div>
-                <p className="mt-2 text-sm leading-6">{target.prompt}</p>
+                <p className="mt-2 text-sm leading-6">
+                  {(target ?? baseline)?.prompt}
+                </p>
                 <div className="mt-3 font-mono text-[9px] text-muted-foreground">
-                  INPUT {target.inputFingerprint}
+                  INPUT {(target ?? baseline)?.inputFingerprint}
+                </div>
+                <div className="mt-1 font-mono text-[9px] text-muted-foreground">
+                  TARGET {target?.participantExecutionFingerprint ?? "-"}
+                </div>
+                <div className="mt-1 font-mono text-[9px] text-muted-foreground">
+                  BASELINE {baseline?.participantExecutionFingerprint ?? "-"}
                 </div>
               </section>
             ) : null}
             <div className="grid grid-cols-2 gap-4">
-              <CaseSidePanel
-                empty={t("detail.noCase")}
-                labels={{
-                  finalOutput: t("detail.finalOutput"),
-                  assertions: t("detail.assertions"),
-                  artifacts: t("detail.artifacts"),
-                }}
-                runCase={target}
-                title={t("detail.target")}
-              />
-              <CaseSidePanel
-                empty={t("detail.noCase")}
-                labels={{
-                  finalOutput: t("detail.finalOutput"),
-                  assertions: t("detail.assertions"),
-                  artifacts: t("detail.artifacts"),
-                }}
-                runCase={baseline}
-                title={t("detail.baseline")}
-              />
+              {sidePanels.map((panel) => (
+                <CaseSidePanel
+                  empty={t("detail.noCase")}
+                  key={panel.key}
+                  labels={{
+                    finalOutput: t("detail.finalOutput"),
+                    assertions: t("detail.assertions"),
+                    artifacts: t("detail.artifacts"),
+                    observability: t("detail.observability"),
+                    skillInvocation: t("detail.skillInvocation"),
+                    skillToolCalls: t("detail.skillToolCalls", {
+                      count: panel.runCase?.skillToolCallCount ?? 0,
+                    }),
+                    bundledScripts: t("detail.bundledScripts"),
+                    usage: t("detail.usage"),
+                    usageTokens: t("detail.usageTokens", {
+                      count:
+                        (panel.runCase?.usage?.inputTokens ?? 0) +
+                        (panel.runCase?.usage?.outputTokens ?? 0) +
+                        (panel.runCase?.gradingUsage?.inputTokens ?? 0) +
+                        (panel.runCase?.gradingUsage?.outputTokens ?? 0),
+                    }),
+                    usageCost: t("detail.usageCost", {
+                      value: (
+                        (panel.runCase?.usage?.totalCostUsd ?? 0) +
+                        (panel.runCase?.gradingUsage?.totalCostUsd ?? 0)
+                      ).toFixed(4),
+                    }),
+                    usageDuration: t("detail.usageDuration", {
+                      seconds: (
+                        ((panel.runCase?.usage?.durationMs ?? 0) +
+                          (panel.runCase?.gradingUsage?.durationMs ?? 0)) /
+                        1_000
+                      ).toFixed(1),
+                    }),
+                    usageTurns: t("detail.usageTurns", {
+                      count:
+                        (panel.runCase?.usage?.numTurns ?? 0) +
+                        (panel.runCase?.gradingUsage?.numTurns ?? 0),
+                    }),
+                  }}
+                  runCase={panel.runCase}
+                  title={panel.label}
+                />
+              ))}
             </div>
           </div>
         </div>
@@ -494,28 +674,102 @@ export function TestRunDetailView({
               <ScrollText className="size-4" />
               {t("detail.logs")}
             </span>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                aria-label={t("detail.allSides")}
+                className="h-7 border border-white/25 bg-trace px-2 font-mono text-[9px] text-white outline-none"
+                onChange={(event) =>
+                  setLogSide(
+                    event.target.value as "" | "TARGET" | "BASELINE",
+                  )
+                }
+                value={logSide}
+              >
+                <option value="">{t("detail.allSides")}</option>
+                <option value="BASELINE">{baselineLabel}</option>
+                <option value="TARGET">{targetLabel}</option>
+              </select>
               <select
                 aria-label={t("detail.cases")}
-                className="h-7 max-w-64 border border-white/25 bg-trace px-2 font-mono text-[9px] text-white outline-none"
-                onChange={(event) => setLogCaseId(event.target.value)}
-                value={logCaseId}
+                className="h-7 border border-white/25 bg-trace px-2 font-mono text-[9px] text-white outline-none"
+                onChange={(event) =>
+                  setLogExternalId(event.target.value)
+                }
+                value={logExternalId}
               >
                 <option value="">{t("detail.allCases")}</option>
-                {run.cases.map((runCase) => (
-                  <option key={runCase.id} value={runCase.id}>
-                    EVAL {String(runCase.externalId).padStart(2, "0")} ·{" "}
-                    {runCase.side}
+                {externalIds.map((externalId) => (
+                  <option key={externalId} value={externalId}>
+                    EVAL {String(externalId).padStart(2, "0")}
                   </option>
                 ))}
               </select>
+              <select
+                aria-label={t("detail.allPhases")}
+                className="h-7 border border-white/25 bg-trace px-2 font-mono text-[9px] text-white outline-none"
+                onChange={(event) =>
+                  setLogPhase(
+                    event.target.value as
+                      | ""
+                      | "execution"
+                      | "grading"
+                      | "orchestration",
+                  )
+                }
+                value={logPhase}
+              >
+                <option value="">{t("detail.allPhases")}</option>
+                <option value="execution">
+                  {t("detail.phaseExecution")}
+                </option>
+                <option value="grading">
+                  {t("detail.phaseGrading")}
+                </option>
+                <option value="orchestration">
+                  {t("detail.phaseOrchestration")}
+                </option>
+              </select>
               <span className="font-mono text-[9px] text-white/55">
-                {visibleEvents.length}
+                {controller.events.length}
               </span>
             </div>
           </header>
           <div className="min-h-0 flex-1 overflow-y-auto p-4 font-mono text-[10px]">
-            {visibleEvents.length === 0 ? (
+            {controller.hasEarlierEvents ? (
+              <div className="mb-3 text-center">
+                <Button
+                  className="rounded-none border-white/25 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                  disabled={controller.loadingEarlierEvents}
+                  onClick={() => {
+                    void controller.actions.loadEarlierEvents()
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  {controller.loadingEarlierEvents
+                    ? t("detail.loadingLogs")
+                    : t("detail.loadEarlierLogs")}
+                </Button>
+              </div>
+            ) : null}
+            {controller.logsError ? (
+              <div className="flex items-center justify-between gap-3 border border-destructive/60 p-3 text-destructive">
+                {t("detail.logsError")}
+                <button
+                  className="underline"
+                  onClick={controller.actions.retryLogs}
+                  type="button"
+                >
+                  {t("states.retry")}
+                </button>
+              </div>
+            ) : controller.logsLoading ? (
+              <div className="flex items-center gap-2 text-white/55">
+                <LoaderCircle className="size-3 animate-spin" />
+                {t("detail.loadingLogs")}
+              </div>
+            ) : controller.events.length === 0 ? (
               <div className="flex items-center gap-2 text-white/55">
                 {isActiveTestRun(run.status) ? (
                   <LoaderCircle className="size-3 animate-spin" />
@@ -523,7 +777,7 @@ export function TestRunDetailView({
                 {t("detail.noLogs")}
               </div>
             ) : (
-              visibleEvents.map((event) => (
+              controller.events.map((event) => (
                 <article
                   className="grid grid-cols-[3.5rem_10rem_minmax(0,1fr)] gap-3 border-b border-white/10 py-2.5"
                   key={event.sequence}
@@ -551,7 +805,71 @@ export function TestRunDetailView({
         </section>
       )}
 
-      <footer className="shrink-0 border-t border-foreground bg-paper-muted px-5 py-2">
+      <footer className="grid shrink-0 grid-cols-2 gap-6 border-t border-foreground bg-paper-muted px-5 py-2">
+        <details>
+          <summary className="flex cursor-pointer items-center gap-2 font-mono text-[9px] font-bold uppercase">
+            <Cpu className="size-3.5" />
+            {t("detail.environment")}
+          </summary>
+          {run.environment.status === "legacy_unavailable" ? (
+            <p className="mt-2 text-[10px] text-muted-foreground">
+              {t("detail.legacyEnvironment")}
+            </p>
+          ) : (
+            <div className="mt-2 grid gap-2 font-mono text-[8px] text-muted-foreground">
+              <div className="grid grid-cols-[7rem_minmax(0,1fr)]">
+                <span>{t("detail.runtime")}</span>
+                <code>
+                  {run.environment.nodeVersion} · {run.environment.platform}/
+                  {run.environment.architecture} · SDK{" "}
+                  {run.environment.sdkVersion}
+                </code>
+              </div>
+              <div className="grid grid-cols-[7rem_minmax(0,1fr)]">
+                <span>{t("detail.model")}</span>
+                <code>{run.environment.model}</code>
+              </div>
+              <div className="grid grid-cols-[7rem_minmax(0,1fr)]">
+                <span>{t("detail.executionLimits")}</span>
+                <code>
+                  {run.environment.executionLimits.maxTurns} turns · US$
+                  {run.environment.executionLimits.maxBudgetUsd} ·{" "}
+                  {Math.round(
+                    run.environment.executionLimits.timeoutMs / 1_000,
+                  )}
+                  s
+                </code>
+              </div>
+              <div className="grid grid-cols-[7rem_minmax(0,1fr)]">
+                <span>{t("detail.gradingLimits")}</span>
+                <code>
+                  {run.environment.gradingLimits.maxTurns} turns · US$
+                  {run.environment.gradingLimits.maxBudgetUsd} ·{" "}
+                  {Math.round(
+                    run.environment.gradingLimits.timeoutMs / 1_000,
+                  )}
+                  s
+                </code>
+              </div>
+              <div className="grid grid-cols-[7rem_minmax(0,1fr)]">
+                <span>{t("detail.capabilities")}</span>
+                <div>
+                  {run.environment.runtimeCapabilities.map((capability) => (
+                    <div key={capability.capability}>
+                      {capability.capability}:{" "}
+                      {capability.commands
+                        .map(
+                          (command) =>
+                            `${command.name}=${command.available ? command.version ?? "available" : "missing"}`,
+                        )
+                        .join(", ")}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </details>
         <details>
           <summary className="flex cursor-pointer items-center gap-2 font-mono text-[9px] font-bold uppercase">
             <Fingerprint className="size-3.5" />
@@ -561,8 +879,8 @@ export function TestRunDetailView({
             {Object.entries(run.traceability).map(([key, value]) => (
               <div className="grid grid-cols-[10rem_minmax(0,1fr)]" key={key}>
                 <span>{key}</span>
-                <code className="truncate" title={value}>
-                  {value}
+                <code className="truncate" title={value ?? undefined}>
+                  {value ?? "—"}
                 </code>
               </div>
             ))}

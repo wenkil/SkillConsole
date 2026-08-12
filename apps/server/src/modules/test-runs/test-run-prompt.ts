@@ -1,6 +1,11 @@
 import type { SnapshotManifestFile } from "../skill-workspaces/snapshot-manifest.js"
 import { formatEvidenceWithLineNumbers } from "./test-run-grader-protocol.js"
 
+export const testRunExecutionPromptVersion =
+  "skill-test-execution-prompt-v1" as const
+export const testRunGraderProtocolVersion =
+  "skill-test-grader-protocol-v2" as const
+
 export function buildExecutionPrompt(input: {
   readonly userPrompt: string
   readonly inputPaths: readonly string[]

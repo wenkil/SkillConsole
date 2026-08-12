@@ -6,6 +6,16 @@ const NullableDateTimeSchema = Type.Union([
   Type.Null(),
 ])
 
+export const TestRunModeSchema = Type.Union([
+  Type.Literal("target_vs_no_skill"),
+  Type.Literal("version_vs_version"),
+])
+
+const TestRunExecutionPolicySchema = Type.Union([
+  Type.Literal("target_then_no_skill_serial_v1"),
+  Type.Literal("paired_serial_alternating_v1"),
+])
+
 export const TestRunStatusSchema = Type.Union([
   Type.Literal("PREPARING"),
   Type.Literal("RUNNING"),
@@ -85,15 +95,26 @@ export const TestRunStartHeadersSchema = Type.Object(
   { additionalProperties: true },
 )
 
-export const StartTestRunBodySchema = Type.Object(
-  {
-    draftId: Type.String({ format: "uuid" }),
-    draftContentRevision: Type.Integer({ minimum: 1 }),
-    evalRevisionId: Type.String({ format: "uuid" }),
-    mode: Type.Literal("target_vs_no_skill"),
-  },
-  { additionalProperties: false },
-)
+export const StartTestRunBodySchema = Type.Union([
+  Type.Object(
+    {
+      draftId: Type.String({ format: "uuid" }),
+      draftContentRevision: Type.Integer({ minimum: 1 }),
+      evalRevisionId: Type.String({ format: "uuid" }),
+      mode: Type.Literal("target_vs_no_skill"),
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
+      baselineVersionId: Type.String({ format: "uuid" }),
+      candidateVersionId: Type.String({ format: "uuid" }),
+      evalRevisionId: Type.String({ format: "uuid" }),
+      mode: Type.Literal("version_vs_version"),
+    },
+    { additionalProperties: false },
+  ),
+])
 
 const TestRunErrorSchema = Type.Object(
   {
@@ -138,6 +159,80 @@ const TestRunTargetSchema = Type.Object(
   { additionalProperties: false },
 )
 
+const TestRunBaselineSchema = Type.Union([
+  Type.Object(
+    {
+      kind: Type.Literal("no_skill"),
+      skillVersionId: Type.Null(),
+      skillSnapshotId: Type.Null(),
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
+      kind: Type.Literal("skill_version"),
+      skillVersionId: Type.String({ format: "uuid" }),
+      skillVersionName: Type.String({ minLength: 1 }),
+      skillVersionNumber: Type.Integer({ minimum: 1 }),
+      skillSnapshotId: Type.String({ format: "uuid" }),
+      skillManifestHash: HashSchema,
+    },
+    { additionalProperties: false },
+  ),
+])
+
+const RuntimeLimitSnapshotSchema = Type.Object(
+  {
+    maxTurns: Type.Integer({ minimum: 1 }),
+    maxBudgetUsd: Type.Number({ minimum: 0 }),
+    timeoutMs: Type.Integer({ minimum: 1 }),
+  },
+  { additionalProperties: false },
+)
+
+const RuntimeCapabilitySnapshotSchema = Type.Object(
+  {
+    capability: Type.String({ minLength: 1 }),
+    commands: Type.Array(
+      Type.Object(
+        {
+          name: Type.String({ minLength: 1 }),
+          available: Type.Boolean(),
+          version: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
+        },
+        { additionalProperties: false },
+      ),
+    ),
+  },
+  { additionalProperties: false },
+)
+
+const TestRunEnvironmentSchema = Type.Union([
+  Type.Object(
+    { status: Type.Literal("legacy_unavailable") },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
+      status: Type.Literal("captured"),
+      nodeVersion: Type.String({ minLength: 1 }),
+      platform: Type.String({ minLength: 1 }),
+      architecture: Type.String({ minLength: 1 }),
+      sdkVersion: Type.String({ minLength: 1 }),
+      model: Type.String({ minLength: 1 }),
+      apiEndpointHash: Type.Union([HashSchema, Type.Null()]),
+      executionLimits: RuntimeLimitSnapshotSchema,
+      gradingLimits: RuntimeLimitSnapshotSchema,
+      executionPromptVersion: Type.String({ minLength: 1 }),
+      graderProtocolVersion: Type.String({ minLength: 1 }),
+      toolPermissionPolicyVersion: Type.String({ minLength: 1 }),
+      executionPolicy: TestRunExecutionPolicySchema,
+      runtimeCapabilities: Type.Array(RuntimeCapabilitySnapshotSchema),
+    },
+    { additionalProperties: false },
+  ),
+])
+
 const TestRunTraceabilitySchema = Type.Object(
   {
     protocolVersion: Type.String({ minLength: 1 }),
@@ -145,11 +240,18 @@ const TestRunTraceabilitySchema = Type.Object(
     skillCreatorCommit: Type.String({ pattern: "^[0-9a-f]{40}$" }),
     skillCreatorTreeHash: HashSchema,
     configurationFingerprint: HashSchema,
+    semanticConfigurationFingerprint: HashSchema,
+    executionSettingsFingerprint: HashSchema,
+    gradingSettingsFingerprint: HashSchema,
     environmentFingerprint: HashSchema,
     skillManifestHash: HashSchema,
+    baselineSkillManifestHash: Type.Union([HashSchema, Type.Null()]),
     evalManifestHash: HashSchema,
     comparabilityFingerprint: HashSchema,
     runInputFingerprint: HashSchema,
+    executionPromptVersion: Type.String({ minLength: 1 }),
+    graderProtocolVersion: Type.String({ minLength: 1 }),
+    toolPermissionPolicyVersion: Type.String({ minLength: 1 }),
   },
   { additionalProperties: false },
 )
@@ -166,6 +268,11 @@ const BenchmarkSideSchema = Type.Object(
     inputTokens: Type.Integer({ minimum: 0 }),
     outputTokens: Type.Integer({ minimum: 0 }),
     totalCostUsd: Type.Number({ minimum: 0 }),
+    gradingDurationMs: Type.Number({ minimum: 0 }),
+    gradingInputTokens: Type.Integer({ minimum: 0 }),
+    gradingOutputTokens: Type.Integer({ minimum: 0 }),
+    gradingTotalCostUsd: Type.Number({ minimum: 0 }),
+    gradingNumTurns: Type.Integer({ minimum: 0 }),
   },
   { additionalProperties: false },
 )
@@ -182,9 +289,12 @@ export const TestRunSchema = Type.Object(
   {
     id: Type.String({ format: "uuid" }),
     workspaceId: Type.String({ format: "uuid" }),
-    mode: Type.Literal("target_vs_no_skill"),
+    mode: TestRunModeSchema,
+    executionPolicy: TestRunExecutionPolicySchema,
     status: TestRunStatusSchema,
     target: TestRunTargetSchema,
+    baseline: TestRunBaselineSchema,
+    environment: TestRunEnvironmentSchema,
     traceability: TestRunTraceabilitySchema,
     progress: Type.Object(
       {
@@ -289,6 +399,7 @@ const TestRunCaseSchema = Type.Object(
     ),
     files: Type.Array(Type.String({ minLength: 1, maxLength: 512 })),
     inputFingerprint: HashSchema,
+    participantExecutionFingerprint: HashSchema,
     executionStatus: TestRunCaseExecutionStatusSchema,
     assessmentStatus: TestRunCaseAssessmentStatusSchema,
     finalOutput: Type.Union([
@@ -296,6 +407,24 @@ const TestRunCaseSchema = Type.Object(
       Type.Null(),
     ]),
     usage: Type.Union([TestRunUsageSchema, Type.Null()]),
+    gradingUsage: Type.Union([TestRunUsageSchema, Type.Null()]),
+    skillInvocationObserved: Type.Union([
+      Type.Literal("OBSERVED"),
+      Type.Literal("NOT_OBSERVED"),
+      Type.Literal("NOT_APPLICABLE"),
+      Type.Null(),
+    ]),
+    skillToolCallCount: Type.Integer({ minimum: 0 }),
+    bundledScriptUses: Type.Array(
+      Type.Object(
+        {
+          relativePath: Type.String({ minLength: 1, maxLength: 512 }),
+          count: Type.Integer({ minimum: 1 }),
+          evidenceSequences: Type.Array(Type.Integer({ minimum: 1 })),
+        },
+        { additionalProperties: false },
+      ),
+    ),
     executionError: Type.Union([CaseErrorSchema, Type.Null()]),
     assessmentError: Type.Union([CaseErrorSchema, Type.Null()]),
     assertionResults: Type.Array(AssertionResultSchema),
@@ -356,6 +485,50 @@ export const TestRunEventSchema = Type.Object(
     ]),
     occurredAt: Type.String({ format: "date-time" }),
     payload: Type.Record(Type.String(), Type.Unknown()),
+  },
+  { additionalProperties: false },
+)
+
+export const TestRunLogsQuerySchema = Type.Object(
+  {
+    beforeSequence: Type.Optional(Type.Integer({ minimum: 1 })),
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })),
+    side: Type.Optional(
+      Type.Union([Type.Literal("TARGET"), Type.Literal("BASELINE")]),
+    ),
+    externalId: Type.Optional(Type.Integer({ minimum: 1 })),
+    phase: Type.Optional(
+      Type.Union([
+        Type.Literal("execution"),
+        Type.Literal("grading"),
+        Type.Literal("orchestration"),
+      ]),
+    ),
+  },
+  { additionalProperties: false },
+)
+
+export const TestRunLogPageSchema = Type.Object(
+  {
+    items: Type.Array(TestRunEventSchema),
+    pagination: Type.Object(
+      {
+        limit: Type.Integer({ minimum: 1, maximum: 200 }),
+        hasMore: Type.Boolean(),
+        nextBeforeSequence: Type.Union([
+          Type.Integer({ minimum: 1 }),
+          Type.Null(),
+        ]),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  { additionalProperties: false },
+)
+
+export const TestRunEventsQuerySchema = Type.Object(
+  {
+    afterSequence: Type.Optional(Type.Integer({ minimum: 0 })),
   },
   { additionalProperties: false },
 )

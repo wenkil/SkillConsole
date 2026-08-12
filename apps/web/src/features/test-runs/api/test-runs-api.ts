@@ -2,6 +2,8 @@ import type {
   StartTestRunInput,
   TestRunDetail,
   TestRunEvent,
+  TestRunLogFilters,
+  TestRunLogPage,
   TestRunPage,
   TestRunView,
 } from "@/features/test-runs/model/test-run"
@@ -58,14 +60,40 @@ export function cancelTestRun(runId: string): Promise<TestRunView> {
   return readJson(`${runBaseUrl(runId)}/cancel`, { method: "POST" })
 }
 
+export function listTestRunLogs(
+  runId: string,
+  input: TestRunLogFilters & {
+    beforeSequence?: number
+    limit?: number
+  } = {},
+): Promise<TestRunLogPage> {
+  const query = new URLSearchParams()
+  if (input.beforeSequence !== undefined) {
+    query.set("beforeSequence", String(input.beforeSequence))
+  }
+  query.set("limit", String(input.limit ?? 200))
+  if (input.side) query.set("side", input.side)
+  if (input.externalId !== undefined) {
+    query.set("externalId", String(input.externalId))
+  }
+  if (input.phase) query.set("phase", input.phase)
+  return readJson(`${runBaseUrl(runId)}/logs?${query}`)
+}
+
 const streamedEventTypes = [
   "run.created",
+  "run.preflight.started",
+  "run.preflight.completed",
+  "run.preflight.failed",
   "run.started",
   "run.canceling",
   "run.completed",
   "run.canceled",
   "run.interrupted",
   "run.failed",
+  "pair.started",
+  "pair.completed",
+  "case.queued",
   "case.preparing",
   "case.execution.started",
   "case.execution.completed",
@@ -99,10 +127,14 @@ const streamedEventTypes = [
 
 export function subscribeToTestRun(
   runId: string,
+  afterSequence: number,
   onEvent: (event: TestRunEvent) => void,
   onConnectionError: () => void,
 ): () => void {
-  const source = new EventSource(`${runBaseUrl(runId)}/events`)
+  const query = new URLSearchParams({
+    afterSequence: String(Math.max(0, afterSequence)),
+  })
+  const source = new EventSource(`${runBaseUrl(runId)}/events?${query}`)
   const handleEvent = (rawEvent: Event) => {
     if (!(rawEvent instanceof MessageEvent)) return
     try {

@@ -7,8 +7,13 @@ FROM ${NODE_IMAGE} AS runtime-base
 # Skills may declare Python/Pandoc-backed transformations. Keep the development,
 # migration, and production server images on the same explicit capability set.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends python3 python-is-python3 pandoc \
+  && apt-get install -y --no-install-recommends python3 python-is-python3 pandoc bubblewrap socat \
   && rm -rf /var/lib/apt/lists/*
+
+COPY apps/server/docker-entrypoint.sh /usr/local/bin/skillconsole-entrypoint
+RUN chmod 0755 /usr/local/bin/skillconsole-entrypoint
+
+ENTRYPOINT ["/usr/local/bin/skillconsole-entrypoint"]
 
 FROM runtime-base AS dependencies
 
@@ -55,6 +60,9 @@ COPY --from=build /workspace/apps/server/dist apps/server/dist
 COPY apps/server/migrations apps/server/migrations
 COPY apps/server/config apps/server/config
 COPY apps/server/resources apps/server/resources
+
+RUN mkdir -p /workspace/var /home/node/.claude \
+  && chown -R node:node /workspace/var /home/node/.claude
 
 EXPOSE 3000
 

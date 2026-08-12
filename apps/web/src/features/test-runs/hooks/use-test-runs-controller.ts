@@ -1,4 +1,5 @@
 import {
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -10,6 +11,7 @@ import type { EvalRevision } from "@/features/evals/model/evals"
 import {
   cancelTestRun,
   getTestRun,
+  listTestRunLogs,
   listTestRuns,
   startTestRun,
   subscribeToTestRun,
@@ -17,13 +19,41 @@ import {
 import type {
   TestRunDetail,
   TestRunEvent,
+  TestRunLogFilters,
+  TestRunMode,
 } from "@/features/test-runs/model/test-run"
+import { isActiveTestRun } from "@/features/test-runs/model/test-run"
+import { listSkillVersions } from "@/features/version-browser/api/version-browser-api"
+import type { SkillVersionBrowser } from "@/features/version-browser/model/version-browser"
 import type { SkillWorkspace } from "@/features/workbench-home/model/workbench"
-
-const maxVisibleEvents = 300
 
 function runListRootKey(workspaceId: string) {
   return ["skill-workspaces", workspaceId, "test-runs"] as const
+}
+
+export function getVersionComparisonDefaults(
+  versions: readonly SkillVersionBrowser[],
+): {
+  baselineVersionId: string
+  candidateVersionId: string
+} {
+  const readyVersions = versions
+    .filter((version) => version.snapshot.state === "READY")
+    .sort(
+      (left, right) =>
+        left.sequenceNumber - right.sequenceNumber ||
+        left.createdAt.localeCompare(right.createdAt),
+    )
+  const baseline =
+    readyVersions.find((version) => version.isComparisonBaseline) ??
+    readyVersions[0]
+  const candidate = [...readyVersions]
+    .reverse()
+    .find((version) => version.id !== baseline?.id)
+  return {
+    baselineVersionId: baseline?.id ?? "",
+    candidateVersionId: candidate?.id ?? "",
+  }
 }
 
 function runListKey(workspaceId: string, page: number, pageSize: number) {
@@ -40,6 +70,11 @@ export function useTestRunsListController(
   const [requestedRevisionId, setRequestedRevisionId] = useState(
     initialEvalRevisionId ?? "",
   )
+  const [mode, setMode] = useState<TestRunMode>("target_vs_no_skill")
+  const [requestedBaselineVersionId, setRequestedBaselineVersionId] =
+    useState("")
+  const [requestedCandidateVersionId, setRequestedCandidateVersionId] =
+    useState("")
   const startAttempt = useRef<{
     readonly signature: string
     readonly idempotencyKey: string
@@ -52,6 +87,10 @@ export function useTestRunsListController(
   const revisionsQuery = useQuery({
     queryKey: ["skill-workspaces", workspace.id, "eval-revisions"],
     queryFn: () => listEvalRevisions(workspace.id),
+  })
+  const versionsQuery = useQuery({
+    queryKey: ["skill-workspaces", workspace.id, "versions"],
+    queryFn: () => listSkillVersions(workspace.id),
   })
   const revisions = useMemo(
     () => revisionsQuery.data ?? [],
@@ -67,22 +106,81 @@ export function useTestRunsListController(
       null,
     [revisions, selectedRevisionId],
   )
+  const readyVersions = useMemo(
+    () =>
+      (versionsQuery.data ?? [])
+        .filter((version) => version.snapshot.state === "READY")
+        .sort(
+          (left, right) =>
+            left.sequenceNumber - right.sequenceNumber ||
+            left.createdAt.localeCompare(right.createdAt),
+        ),
+    [versionsQuery.data],
+  )
+  const versionDefaults = useMemo(
+    () => getVersionComparisonDefaults(readyVersions),
+    [readyVersions],
+  )
+  const baselineVersionId = readyVersions.some(
+    (version) => version.id === requestedBaselineVersionId,
+  )
+    ? requestedBaselineVersionId
+    : versionDefaults.baselineVersionId
+  const candidateVersionId = readyVersions.some(
+    (version) =>
+      version.id === requestedCandidateVersionId &&
+      version.id !== baselineVersionId,
+  )
+    ? requestedCandidateVersionId
+    : ([...readyVersions]
+        .reverse()
+        .find((version) => version.id !== baselineVersionId)?.id ?? "")
+  const baselineVersion =
+    readyVersions.find((version) => version.id === baselineVersionId) ??
+    null
+  const candidateVersion =
+    readyVersions.find((version) => version.id === candidateVersionId) ??
+    null
   const draft = workspace.activeDraft
   const hasActiveRun = (runsQuery.data?.summary.active ?? 0) > 0
 
   const startMutation = useMutation({
     mutationFn: () => {
-      if (!draft || !selectedRevisionId) {
-        throw new Error(
-          "The current Skill working copy and a published Evals revision are required.",
-        )
+      if (!selectedRevisionId) {
+        throw new Error("A published Evals revision is required.")
       }
-      const input = {
-        draftId: draft.id,
-        draftContentRevision: draft.contentRevision,
-        evalRevisionId: selectedRevisionId,
-        mode: "target_vs_no_skill" as const,
-      }
+      const input =
+        mode === "target_vs_no_skill"
+          ? (() => {
+              if (!draft) {
+                throw new Error(
+                  "The current Skill working copy is required.",
+                )
+              }
+              return {
+                draftId: draft.id,
+                draftContentRevision: draft.contentRevision,
+                evalRevisionId: selectedRevisionId,
+                mode,
+              }
+            })()
+          : (() => {
+              if (
+                !baselineVersionId ||
+                !candidateVersionId ||
+                baselineVersionId === candidateVersionId
+              ) {
+                throw new Error(
+                  "Two different READY Skill versions are required.",
+                )
+              }
+              return {
+                baselineVersionId,
+                candidateVersionId,
+                evalRevisionId: selectedRevisionId,
+                mode,
+              }
+            })()
       const signature = JSON.stringify(input)
       if (startAttempt.current?.signature !== signature) {
         startAttempt.current = {
@@ -125,6 +223,14 @@ export function useTestRunsListController(
     },
     draft,
     revisions,
+    versions: readyVersions,
+    versionsLoading: versionsQuery.isPending,
+    versionsError: versionsQuery.isError,
+    mode,
+    baselineVersion,
+    baselineVersionId,
+    candidateVersion,
+    candidateVersionId,
     selectedRevision,
     selectedRevisionId,
     hasActiveRun,
@@ -142,11 +248,15 @@ export function useTestRunsListController(
         setPage(1)
       },
       selectRevision: setRequestedRevisionId,
+      selectMode: setMode,
+      selectBaselineVersion: setRequestedBaselineVersionId,
+      selectCandidateVersion: setRequestedCandidateVersionId,
       start: () => startMutation.mutateAsync(),
       retry: () => {
         void Promise.all([
           runsQuery.refetch(),
           revisionsQuery.refetch(),
+          versionsQuery.refetch(),
         ])
       },
       clearMutationError: startMutation.reset,
@@ -157,6 +267,7 @@ export function useTestRunsListController(
 export function useTestRunDetailController(
   workspaceId: string,
   runId: string,
+  logFilters: TestRunLogFilters,
 ) {
   const queryClient = useQueryClient()
   const [eventState, setEventState] = useState<{
@@ -168,12 +279,65 @@ export function useTestRunDetailController(
     queryFn: () => getTestRun(runId),
   })
   const loadedRunId = runQuery.data?.id ?? null
+  const logsQuery = useInfiniteQuery({
+    queryKey: ["test-runs", runId, "logs", logFilters],
+    queryFn: ({ pageParam }) =>
+      listTestRunLogs(runId, {
+        ...logFilters,
+        ...(pageParam === undefined
+          ? {}
+          : { beforeSequence: pageParam }),
+        limit: 200,
+      }),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: (lastPage) =>
+      lastPage.pagination.hasMore
+        ? (lastPage.pagination.nextBeforeSequence ?? undefined)
+        : undefined,
+    enabled: loadedRunId === runId,
+  })
+  const historyEvents = useMemo(
+    () =>
+      (logsQuery.data?.pages ?? [])
+        .flatMap((page) => page.items)
+        .sort((left, right) => left.sequence - right.sequence),
+    [logsQuery.data?.pages],
+  )
+  const streamAfterSequence =
+    historyEvents.at(-1)?.sequence ?? 0
+  const terminalHistoryEvent = historyEvents.find((event) =>
+    [
+      "run.completed",
+      "run.canceled",
+      "run.interrupted",
+      "run.failed",
+    ].includes(event.type),
+  )
 
   useEffect(() => {
-    if (loadedRunId !== runId) return
+    if (
+      loadedRunId !== runId ||
+      !logsQuery.isSuccess ||
+      !runQuery.data ||
+      !isActiveTestRun(runQuery.data.status) ||
+      terminalHistoryEvent
+    ) {
+      if (
+        terminalHistoryEvent &&
+        runQuery.data &&
+        isActiveTestRun(runQuery.data.status)
+      ) {
+        void queryClient.invalidateQueries({
+          queryKey: ["test-runs", runId],
+          exact: true,
+        })
+      }
+      return
+    }
     let unsubscribe: () => void = () => undefined
     unsubscribe = subscribeToTestRun(
       runId,
+      streamAfterSequence,
       (event) => {
         setEventState((current) => {
           const currentEvents =
@@ -189,7 +353,6 @@ export function useTestRunDetailController(
             runId,
             events: [...currentEvents, event]
               .sort((left, right) => left.sequence - right.sequence)
-              .slice(-maxVisibleEvents),
           }
         })
         if (
@@ -198,6 +361,7 @@ export function useTestRunDetailController(
         ) {
           void queryClient.invalidateQueries({
             queryKey: ["test-runs", runId],
+            exact: true,
           })
           void queryClient.invalidateQueries({
             queryKey: runListRootKey(workspaceId),
@@ -217,11 +381,21 @@ export function useTestRunDetailController(
       () => {
         void queryClient.invalidateQueries({
           queryKey: ["test-runs", runId],
+          exact: true,
         })
       },
     )
     return unsubscribe
-  }, [loadedRunId, queryClient, runId, workspaceId])
+  }, [
+    loadedRunId,
+    logsQuery.isSuccess,
+    queryClient,
+    runId,
+    runQuery.data,
+    streamAfterSequence,
+    terminalHistoryEvent,
+    workspaceId,
+  ])
 
   const cancelMutation = useMutation({
     mutationFn: () => cancelTestRun(runId),
@@ -236,11 +410,52 @@ export function useTestRunDetailController(
     },
   })
 
+  const events = useMemo(() => {
+    const uniqueEvents = new Map<number, TestRunEvent>()
+    const liveEvents =
+      eventState.runId === runId ? eventState.events : []
+    for (const event of [...historyEvents, ...liveEvents]) {
+      const eventCase = runQuery.data?.cases.find(
+        (runCase) => runCase.id === event.caseId,
+      )
+      const eventPhase =
+        event.type.startsWith("execution.") ||
+        event.type.startsWith("case.execution.")
+        ? "execution"
+        : event.type.startsWith("grading.") ||
+            event.type.startsWith("case.assessment.")
+          ? "grading"
+          : "orchestration"
+      if (
+        (logFilters.side && eventCase?.side !== logFilters.side) ||
+        (logFilters.externalId !== undefined &&
+          eventCase?.externalId !== logFilters.externalId) ||
+        (logFilters.phase && eventPhase !== logFilters.phase)
+      ) {
+        continue
+      }
+      uniqueEvents.set(event.sequence, event)
+    }
+    return [...uniqueEvents.values()].sort(
+      (left, right) => left.sequence - right.sequence,
+    )
+  }, [
+    eventState,
+    historyEvents,
+    logFilters,
+    runId,
+    runQuery.data?.cases,
+  ])
+
   return {
     run: runQuery.data ?? null,
-    events: eventState.runId === runId ? eventState.events : [],
+    events,
     loading: runQuery.isPending,
     error: runQuery.isError,
+    logsLoading: logsQuery.isPending,
+    logsError: logsQuery.isError,
+    hasEarlierEvents: logsQuery.hasNextPage,
+    loadingEarlierEvents: logsQuery.isFetchingNextPage,
     mutationPending: cancelMutation.isPending,
     mutationError:
       cancelMutation.error instanceof Error
@@ -249,6 +464,8 @@ export function useTestRunDetailController(
     actions: {
       cancel: () => cancelMutation.mutateAsync(),
       retry: () => void runQuery.refetch(),
+      retryLogs: () => void logsQuery.refetch(),
+      loadEarlierEvents: () => logsQuery.fetchNextPage(),
       clearMutationError: cancelMutation.reset,
     },
   }

@@ -22,6 +22,11 @@ import {
 } from "../skill-workspaces/snapshot-manifest.js"
 import { readSkillName } from "../skill-workspaces/skill-metadata.js"
 import type { FrozenTestRunSelection } from "./test-run.repository.js"
+import type { TestRunRuntimeCapabilitySnapshot } from "./test-run.domain.js"
+import {
+  containsPublicRuntimeLeakContent,
+  sanitizeTestRunPublicValue,
+} from "./test-run-public-safety.js"
 
 const internalIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -51,6 +56,16 @@ const runtimeCapabilityPatterns: readonly {
   },
 ]
 
+const sandboxRequirement: RuntimeCapabilityRequirement = {
+  capability: "Command Sandbox",
+  commands:
+    process.platform === "win32"
+      ? ["sdk-native-windows"]
+      : process.platform === "darwin"
+        ? ["sandbox-exec"]
+        : ["bwrap"],
+}
+
 export function detectRuntimeCapabilityRequirements(
   textFiles: readonly string[],
 ): readonly RuntimeCapabilityRequirement[] {
@@ -76,6 +91,114 @@ function commandExists(command: string): Promise<boolean> {
   })
 }
 
+function commandVersion(command: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    execFile(
+      command,
+      ["--version"],
+      { timeout: 5_000, windowsHide: true, maxBuffer: 16 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) {
+          resolve(null)
+          return
+        }
+        const firstLine = `${stdout}\n${stderr}`
+          .split(/\r?\n/u)
+          .map((line) => line.trim())
+          .find(Boolean)
+        resolve(
+          firstLine
+            ? String(
+                sanitizeTestRunPublicValue(firstLine.slice(0, 160)),
+              )
+            : null,
+        )
+      },
+    )
+  })
+}
+
+function commandSucceeds(
+  command: string,
+  args: readonly string[],
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    execFile(
+      command,
+      [...args],
+      { timeout: 5_000, windowsHide: true, maxBuffer: 16 * 1024 },
+      (error) => resolve(!error),
+    )
+  })
+}
+
+async function captureSandboxCapability(): Promise<
+  TestRunRuntimeCapabilitySnapshot
+> {
+  if (process.platform === "win32") {
+    return {
+      capability: sandboxRequirement.capability,
+      commands: [
+        {
+          name: "sdk-native-windows",
+          available: true,
+          version: "claude-agent-sdk-native-windows",
+        },
+      ],
+    }
+  }
+  const command = process.platform === "darwin" ? "sandbox-exec" : "bwrap"
+  const discovered = await commandExists(command)
+  const functional = discovered
+    ? await commandSucceeds(
+        command,
+        process.platform === "darwin"
+          ? ["-p", "(version 1)(allow default)", "true"]
+          : [
+              "--ro-bind",
+              "/",
+              "/",
+              "--dev-bind",
+              "/dev",
+              "/dev",
+              "--proc",
+              "/proc",
+              "--",
+              "true",
+            ],
+      )
+    : false
+  const version =
+    discovered && process.platform !== "darwin"
+      ? await commandVersion(command)
+      : discovered
+        ? "sandbox-exec"
+        : null
+  return {
+    capability: sandboxRequirement.capability,
+    commands: [
+      resolveRuntimeCommandSnapshot(
+        command,
+        discovered && functional,
+        version,
+      ),
+    ],
+  }
+}
+
+export function resolveRuntimeCommandSnapshot(
+  name: string,
+  discovered: boolean,
+  version: string | null,
+): TestRunRuntimeCapabilitySnapshot["commands"][number] {
+  const available = discovered && version !== null
+  return {
+    name,
+    available,
+    version: available ? version : null,
+  }
+}
+
 function assertInternalId(id: string): void {
   if (!internalIdPattern.test(id)) {
     throw new Error("An internal test run identifier is invalid.")
@@ -97,33 +220,6 @@ function assertWithinRoot(root: string, target: string): void {
 
 function sha256(content: Buffer | string): string {
   return createHash("sha256").update(content).digest("hex")
-}
-
-function containsSensitiveValue(
-  content: Buffer,
-  sensitiveValues: readonly string[],
-): boolean {
-  const contentText = content.toString("utf8")
-  return sensitiveValues.some((value) => {
-    if (value.length < 4) return false
-    const variants = new Set([
-      value,
-      value.replaceAll("\\", "/"),
-      value.replaceAll("/", "\\"),
-    ])
-    if (
-      [...variants].some((variant) =>
-        content.includes(Buffer.from(variant, "utf8")),
-      )
-    ) {
-      return true
-    }
-    return /^[a-zA-Z]:[\\/]/.test(value)
-      ? [...variants].some((variant) =>
-          contentText.toLowerCase().includes(variant.toLowerCase()),
-        )
-      : false
-  })
 }
 
 async function assertFileHash(
@@ -200,6 +296,11 @@ export interface PreparedTestRunCaseWorkspace {
   readonly inputPaths: readonly string[]
 }
 
+export interface TestRunPreflightResult {
+  readonly runtimeCapabilities: readonly TestRunRuntimeCapabilitySnapshot[]
+  readonly missing: readonly RuntimeCapabilityRequirement[]
+}
+
 export class TestRunStorage {
   readonly root: string
   private readonly snapshots: LocalSnapshotStorage
@@ -269,7 +370,7 @@ export class TestRunStorage {
   async prepareCase(
     runId: string,
     caseId: string,
-    side: "TARGET" | "BASELINE",
+    installSkill: boolean,
     selection: FrozenTestRunSelection,
     evalFiles: readonly string[],
   ): Promise<PreparedTestRunCaseWorkspace> {
@@ -281,11 +382,17 @@ export class TestRunStorage {
       mkdir(path.join(workspace, ".claude"), { recursive: true }),
       mkdir(path.join(workspace, "inputs"), { recursive: true }),
       mkdir(path.join(workspace, "outputs"), { recursive: true }),
+      mkdir(path.join(workspace, "outputs", ".tmp"), {
+        recursive: true,
+      }),
       mkdir(path.join(grading, ".claude"), { recursive: true }),
+      mkdir(path.join(grading, "outputs", ".tmp"), {
+        recursive: true,
+      }),
     ])
 
     try {
-      if (side === "TARGET") {
+      if (installSkill) {
         const skillRoot = path.join(
           workspace,
           ".claude",
@@ -360,67 +467,107 @@ export class TestRunStorage {
     }
   }
 
-  async assertRuntimeCapabilities(
-    runId: string,
-    caseId: string,
-    side: "TARGET" | "BASELINE",
-    selection: FrozenTestRunSelection,
-  ): Promise<void> {
-    if (side !== "TARGET") return
-
-    const workspace = this.getWorkspacePath(runId, caseId)
-    const skillRoot = path.join(
-      workspace,
-      ".claude",
-      "skills",
-      selection.revision.skillName,
+  async captureRuntimeCapabilities(): Promise<
+    readonly TestRunRuntimeCapabilitySnapshot[]
+  > {
+    const supportedRequirements = runtimeCapabilityPatterns.map(
+      ({ requirement }) => requirement,
     )
-    const textFiles: string[] = []
+    const capabilities = await Promise.all(
+      supportedRequirements.map(async (requirement) => {
+        const commands = await Promise.all(
+          requirement.commands.map(async (command) => {
+            const discovered = await commandExists(command)
+            const version = discovered
+              ? await commandVersion(command)
+              : null
+            return resolveRuntimeCommandSnapshot(
+              command,
+              discovered,
+              version,
+            )
+          }),
+        )
+        return {
+          capability: requirement.capability,
+          commands,
+        }
+      }),
+    )
+    return [...capabilities, await captureSandboxCapability()]
+  }
+
+  async assertRuntimeCapabilities(
+    selection: FrozenTestRunSelection,
+    runtimeCapabilities: readonly TestRunRuntimeCapabilitySnapshot[],
+  ): Promise<TestRunPreflightResult> {
+    const scanFacts = selection.skill.files.map((file) => file.relativePath)
     for (const file of selection.skill.files) {
-      if (file.contentKind !== "text") continue
-      const filePath = path.join(skillRoot, ...file.relativePath.split("/"))
-      assertWithinRoot(skillRoot, filePath)
-      textFiles.push(await readFile(filePath, "utf8"))
+      const filePath = this.snapshots.getSnapshotFilePath(
+        selection.skill.snapshotId,
+        file.relativePath,
+      )
+      await assertFileHash(filePath, file.sha256)
+      if (file.contentKind === "text") {
+        scanFacts.push(await readFile(filePath, "utf8"))
+      }
     }
 
-    const requirements = detectRuntimeCapabilityRequirements(textFiles)
-    const missing = (
-      await Promise.all(
-        requirements.map(async (requirement) => ({
-          requirement,
-          available: await Promise.all(
-            requirement.commands.map((command) => commandExists(command)),
-          ),
-        })),
-      )
-    )
-      .filter(({ available }) => !available.some(Boolean))
-      .map(({ requirement }) => ({
-        capability: requirement.capability,
-        commands: requirement.commands,
-      }))
+    const requirements = [
+      ...detectRuntimeCapabilityRequirements(scanFacts),
+      sandboxRequirement,
+    ]
+    return {
+      runtimeCapabilities,
+      missing: requirements.filter((requirement) => {
+        const capability = runtimeCapabilities.find(
+          (item) => item.capability === requirement.capability,
+        )
+        return !capability?.commands.some((command) => command.available)
+      }),
+    }
+  }
 
-    if (missing.length > 0) {
+  async preflightSelection(
+    selection: FrozenTestRunSelection,
+    runtimeCapabilities: readonly TestRunRuntimeCapabilitySnapshot[],
+  ): Promise<TestRunPreflightResult> {
+    const skillName = await readSkillName(
+      this.snapshots.getSnapshotFilePath(
+        selection.skill.snapshotId,
+        "SKILL.md",
+      ),
+    )
+    if (skillName !== selection.revision.skillName) {
       throw new DomainError({
-        code: "TEST_RUN_RUNTIME_CAPABILITY_MISSING",
-        message: `The test run environment is missing required capability: ${missing
-          .map((item) => `${item.capability} (${item.commands.join(" or ")})`)
-          .join(", ")}.`,
+        code: "TEST_RUN_SKILL_NAME_MISMATCH",
+        message:
+          "The selected Skill version name does not match the Evals revision target.",
         kind: "precondition_failed",
-        details: { missing },
       })
     }
+    for (const file of selection.files) {
+      await assertFileHash(
+        this.evals.getRevisionFilePath(
+          selection.revision.suiteId,
+          selection.revision.id,
+          file.relativePath,
+        ),
+        file.sha256,
+      )
+    }
+    return this.assertRuntimeCapabilities(selection, runtimeCapabilities)
   }
 
   async verifyImmutableInputs(
     runId: string,
     caseId: string,
-    side: "TARGET" | "BASELINE",
+    installSkill: boolean,
     selection: FrozenTestRunSelection,
     evalFiles: readonly string[],
   ): Promise<void> {
     const workspace = this.getWorkspacePath(runId, caseId)
-    if (side === "TARGET") {
+    if (installSkill) {
       const skillRoot = path.join(
         workspace,
         ".claude",
@@ -454,6 +601,10 @@ export class TestRunStorage {
       this.getWorkspacePath(runId, caseId),
       "outputs",
     )
+    await rm(path.join(outputRoot, ".tmp"), {
+      recursive: true,
+      force: true,
+    })
     const candidates = await listRegularFiles(outputRoot)
     if (candidates.length > this.limits.maxFiles) {
       throw new Error("The test run produced too many Artifact files.")
@@ -471,7 +622,7 @@ export class TestRunStorage {
       const content = await readFile(
         this.getArtifactPath(runId, caseId, artifact.relativePath),
       )
-      if (containsSensitiveValue(content, sensitiveValues)) {
+      if (containsPublicRuntimeLeakContent(content, sensitiveValues)) {
         const outputRoot = path.join(
           this.getWorkspacePath(runId, caseId),
           "outputs",
@@ -565,6 +716,22 @@ export class TestRunStorage {
           "settings.json",
         ),
         { force: true },
+      ),
+      rm(
+        path.join(
+          this.getWorkspacePath(runId, caseId),
+          "outputs",
+          ".tmp",
+        ),
+        { recursive: true, force: true },
+      ),
+      rm(
+        path.join(
+          this.getGradingPath(runId, caseId),
+          "outputs",
+          ".tmp",
+        ),
+        { recursive: true, force: true },
       ),
     ])
   }
