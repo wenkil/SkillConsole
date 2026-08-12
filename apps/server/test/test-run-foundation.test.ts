@@ -7,13 +7,18 @@ import test from "node:test"
 
 import { AgentSessionWorkspaceStore } from "../src/modules/agent-sessions/session-workspace.js"
 import { buildExecutionPrompt } from "../src/modules/test-runs/test-run-prompt.js"
+import {
+  formatEvidenceWithLineNumbers,
+  resolveEvidenceAnchors,
+  TestRunGraderProtocolError,
+} from "../src/modules/test-runs/test-run-grader-protocol.js"
 import { TestRunScorer } from "../src/modules/test-runs/test-run-scorer.js"
 import { TestRunStorage } from "../src/modules/test-runs/test-run-storage.js"
 
 test("test run scorer requires one independently evidenced result per assertion", () => {
   const scorer = new TestRunScorer()
   const result = scorer.parse(
-    JSON.stringify({
+    `\`\`\`json\n${JSON.stringify({
       assertions: [
         {
           index: 1,
@@ -29,12 +34,13 @@ test("test run scorer requires one independently evidenced result per assertion"
             {
               source: "assistant_output",
               reference: "final-output",
-              excerpt: "Summary complete.",
+              startLine: 2,
+              endLine: 2,
             },
           ],
         },
       ],
-    }),
+    })}\n\`\`\``,
     ["Contains a summary", "Uses the requested structure"],
   )
 
@@ -86,7 +92,10 @@ test("test run scorer requires one independently evidenced result per assertion"
         }),
         ["First"],
       ),
-    /failed validation/i,
+    (error: unknown) =>
+      error instanceof TestRunGraderProtocolError &&
+      error.code === "TEST_RUN_GRADER_SCHEMA_INVALID" &&
+      /failed validation/i.test(error.message),
   )
   assert.throws(
     () =>
@@ -101,7 +110,8 @@ test("test run scorer requires one independently evidenced result per assertion"
                 {
                   source: "assistant_output",
                   reference: "final-output",
-                  excerpt: "Summary complete.",
+                  startLine: 1,
+                  endLine: 1,
                 },
               ],
             },
@@ -109,7 +119,86 @@ test("test run scorer requires one independently evidenced result per assertion"
         })}`,
         ["First"],
       ),
-    /exactly one JSON object/i,
+    (error: unknown) =>
+      error instanceof TestRunGraderProtocolError &&
+      error.code === "TEST_RUN_GRADER_JSON_INVALID" &&
+      /not valid JSON/i.test(error.message),
+  )
+})
+
+test("test run grader protocol resolves line anchors from original evidence", () => {
+  assert.equal(
+    formatEvidenceWithLineNumbers("Heading\r\nSummary complete."),
+    "L1: Heading\nL2: Summary complete.",
+  )
+
+  const resolved = resolveEvidenceAnchors(
+    [
+      {
+        assertionIndex: 0,
+        status: "PASSED",
+        reason: "The summary is present.",
+        evidence: [
+          {
+            source: "assistant_output",
+            reference: "final-output",
+            startLine: 2,
+            endLine: 2,
+          },
+          {
+            source: "artifact",
+            reference: "summary.txt",
+            startLine: 1,
+            endLine: 2,
+          },
+        ],
+      },
+    ],
+    "Heading\r\nSummary complete.",
+    [
+      {
+        relativePath: "summary.txt",
+        content: "First line\nSecond line",
+      },
+    ],
+  )
+
+  assert.deepEqual(resolved[0]?.evidence, [
+    {
+      source: "assistant_output",
+      reference: "final-output#L2-L2",
+      excerpt: "Summary complete.",
+    },
+    {
+      source: "artifact",
+      reference: "summary.txt#L1-L2",
+      excerpt: "First line\nSecond line",
+    },
+  ])
+  assert.throws(
+    () =>
+      resolveEvidenceAnchors(
+        [
+          {
+            assertionIndex: 0,
+            status: "PASSED",
+            reason: "Invalid citation.",
+            evidence: [
+              {
+                source: "artifact",
+                reference: "summary.txt",
+                startLine: 3,
+                endLine: 3,
+              },
+            ],
+          },
+        ],
+        "Summary complete.",
+        [{ relativePath: "summary.txt", content: "Only one line" }],
+      ),
+    (error: unknown) =>
+      error instanceof TestRunGraderProtocolError &&
+      error.code === "TEST_RUN_GRADER_EVIDENCE_INVALID",
   )
 })
 

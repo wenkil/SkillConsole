@@ -1,4 +1,5 @@
 import type { SnapshotManifestFile } from "../skill-workspaces/snapshot-manifest.js"
+import { formatEvidenceWithLineNumbers } from "./test-run-grader-protocol.js"
 
 export function buildExecutionPrompt(input: {
   readonly userPrompt: string
@@ -30,14 +31,22 @@ Execution contract:
 function artifactDescription(
   artifact: SnapshotManifestFile & { readonly content?: string | null },
 ): string {
-  return JSON.stringify({
-    path: artifact.relativePath,
-    sha256: artifact.sha256,
-    byteSize: artifact.byteSize,
-    mediaTypeHint: artifact.mediaTypeHint,
-    contentKind: artifact.contentKind,
-    contentExcerpt: artifact.content ?? null,
-  })
+  return `<artifact>
+${JSON.stringify({
+  path: artifact.relativePath,
+  sha256: artifact.sha256,
+  byteSize: artifact.byteSize,
+  mediaTypeHint: artifact.mediaTypeHint,
+  contentKind: artifact.contentKind,
+})}
+<line_numbered_content>
+${
+  artifact.content === null || artifact.content === undefined
+    ? "[text evidence unavailable]"
+    : formatEvidenceWithLineNumbers(artifact.content)
+}
+</line_numbered_content>
+</artifact>`
 }
 
 export function buildGraderPrompt(input: {
@@ -68,7 +77,10 @@ ${JSON.stringify({
 </test_case>
 
 <executor_final_output>
-${input.finalOutput}
+reference: final-output
+<line_numbered_content>
+${formatEvidenceWithLineNumbers(input.finalOutput)}
+</line_numbered_content>
 </executor_final_output>
 
 <artifacts>
@@ -86,7 +98,8 @@ Return exactly one JSON object with this shape:
         {
           "source": "assistant_output | artifact",
           "reference": "final-output or artifact relative path",
-          "excerpt": "short supporting excerpt or null"
+          "startLine": 1,
+          "endLine": 2
         }
       ]
     }
@@ -99,6 +112,8 @@ Requirements:
 - Use PASSED only when concrete evidence proves the assertion.
 - Use FAILED when evidence contradicts the assertion.
 - Use INSUFFICIENT_EVIDENCE when the available evidence cannot establish either outcome.
+- Cite only the displayed line numbers. startLine and endLine are one-based, inclusive, and must belong to the same referenced source.
+- Do not copy, paraphrase, or invent evidence excerpts; the server resolves cited lines from the original source.
 - Do not use tools, Markdown fences, commentary, scores, or an overall winner.
 `
 }

@@ -16,8 +16,10 @@ import { useNavigate } from "react-router-dom"
 import { TestRunStatusBadge } from "@/features/test-runs/components/test-run-status"
 import { useTestRunDetailController } from "@/features/test-runs/hooks/use-test-runs-controller"
 import {
+  getCoverageRate,
   getPassRate,
   isActiveTestRun,
+  isBenchmarkComparable,
   type TestRunAssertionStatus,
   type TestRunBenchmarkSide,
   type TestRunCase,
@@ -58,10 +60,16 @@ function AssertionStatus({
 function BenchmarkCard({
   label,
   side,
+  labels,
 }: {
   label: string
   side: TestRunBenchmarkSide | null
+  labels: {
+    readonly passRate: string
+    readonly coverage: string
+  }
 }) {
+  const coverage = side ? getCoverageRate(side) : null
   return (
     <article className="border border-foreground bg-paper-raised p-4">
       <span className="font-mono text-[9px] font-bold text-muted-foreground uppercase">
@@ -70,12 +78,19 @@ function BenchmarkCard({
       <strong className="mt-2 block text-3xl tracking-[-0.04em]">
         {side ? formatRate(side) : "—"}
       </strong>
-      <div className="mt-3 grid grid-cols-3 gap-px border border-rule bg-rule font-mono text-[9px]">
+      <span className="mt-1 block font-mono text-[9px] text-muted-foreground">
+        {labels.passRate} · {labels.coverage}{" "}
+        {coverage === null ? "—" : `${Math.round(coverage * 100)}%`}
+      </span>
+      <div className="mt-3 grid grid-cols-4 gap-px border border-rule bg-rule font-mono text-[9px]">
         <span className="bg-background p-2 text-status-passed">
           PASS {side?.passed ?? "—"}
         </span>
         <span className="bg-background p-2 text-status-failed">
           FAIL {side?.failed ?? "—"}
+        </span>
+        <span className="bg-background p-2 text-status-blocked">
+          I/E {side?.insufficientEvidence ?? "—"}
         </span>
         <span className="bg-background p-2 text-muted-foreground">
           N/E {side?.notEvaluated ?? "—"}
@@ -267,6 +282,7 @@ export function TestRunDetailView({
   const visibleEvents = logCaseId
     ? controller.events.filter((event) => event.caseId === logCaseId)
     : controller.events
+  const benchmarkComparable = isBenchmarkComparable(run.benchmark)
 
   return (
     <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
@@ -342,15 +358,38 @@ export function TestRunDetailView({
         </div>
       ) : null}
 
-      <div className="grid shrink-0 grid-cols-2 gap-3 border-b border-foreground bg-paper-muted/40 px-6 py-4">
-        <BenchmarkCard
-          label={t("detail.target")}
-          side={run.benchmark?.target ?? null}
-        />
-        <BenchmarkCard
-          label={t("detail.baseline")}
-          side={run.benchmark?.baseline ?? null}
-        />
+      <div className="shrink-0 border-b border-foreground bg-paper-muted/40 px-6 py-4">
+        {run.benchmark && !benchmarkComparable ? (
+          <div className="mb-3 flex items-start gap-2 border border-status-blocked/50 bg-status-blocked/5 p-3 text-[11px] leading-5">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-blocked" />
+            <div>
+              <strong className="block">
+                {t("detail.notComparableTitle")}
+              </strong>
+              <span className="text-muted-foreground">
+                {t("detail.notComparableDescription")}
+              </span>
+            </div>
+          </div>
+        ) : null}
+        <div className="grid grid-cols-2 gap-3">
+          <BenchmarkCard
+            label={t("detail.target")}
+            labels={{
+              passRate: t("detail.passRate"),
+              coverage: t("detail.coverage"),
+            }}
+            side={run.benchmark?.target ?? null}
+          />
+          <BenchmarkCard
+            label={t("detail.baseline")}
+            labels={{
+              passRate: t("detail.passRate"),
+              coverage: t("detail.coverage"),
+            }}
+            side={run.benchmark?.baseline ?? null}
+          />
+        </div>
       </div>
 
       <div

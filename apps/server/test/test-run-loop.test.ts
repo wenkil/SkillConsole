@@ -71,7 +71,7 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
     if (this.input.cwd.includes(`${path.sep}eval-generations${path.sep}`)) {
       responseText = await this.generateEvals()
     } else if (this.input.allowedTools?.length === 0) {
-      responseText = JSON.stringify({
+      responseText = `\`\`\`json\n${JSON.stringify({
         assertions: [
           {
             index: 0,
@@ -81,12 +81,13 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
               {
                 source: "artifact",
                 reference: "summary.txt",
-                excerpt: "controlled fixture",
+                startLine: 1,
+                endLine: 1,
               },
             ],
           },
         ],
-      })
+      })}\n\`\`\``
     } else {
       responseText = await this.executeCase()
     }

@@ -204,7 +204,28 @@ export function getPassRate(side: TestRunBenchmarkSide): number | null {
   const total =
     side.passed +
     side.failed +
-    side.insufficientEvidence +
-    side.notEvaluated
+    side.insufficientEvidence
   return total === 0 ? null : side.passed / total
+}
+
+export function getCoverageRate(
+  side: TestRunBenchmarkSide,
+): number | null {
+  const evaluated =
+    side.passed + side.failed + side.insufficientEvidence
+  const total = evaluated + side.notEvaluated
+  return total === 0 ? null : evaluated / total
+}
+
+export function isBenchmarkComparable(
+  benchmark: TestRunView["benchmark"],
+): boolean {
+  if (!benchmark) return false
+  const sides = [benchmark.target, benchmark.baseline]
+  return sides.every(
+    (side) =>
+      side.executionFailed === 0 &&
+      side.notEvaluated === 0 &&
+      getCoverageRate(side) === 1,
+  )
 }

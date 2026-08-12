@@ -19,7 +19,11 @@ import {
 import { StartTestRunDialog } from "@/features/test-runs/components/start-test-run-dialog"
 import { TestRunStatusBadge } from "@/features/test-runs/components/test-run-status"
 import { useTestRunsListController } from "@/features/test-runs/hooks/use-test-runs-controller"
-import { getPassRate } from "@/features/test-runs/model/test-run"
+import {
+  getCoverageRate,
+  getPassRate,
+  isBenchmarkComparable,
+} from "@/features/test-runs/model/test-run"
 import type { SkillWorkspace } from "@/features/workbench-home/model/workbench"
 import { Button } from "@/shared/components/ui/button"
 
@@ -224,18 +228,43 @@ export function TestRunsWorkbenchView({
                       {run.progress.completedCases} / {run.progress.totalCases}
                     </td>
                     <td className="px-4 py-3.5 font-mono text-[10px]">
-                      {formatRate(
-                        run.benchmark
-                          ? getPassRate(run.benchmark.target)
-                          : null,
-                      )}
+                      <strong className="block">
+                        {formatRate(
+                          run.benchmark
+                            ? getPassRate(run.benchmark.target)
+                            : null,
+                        )}
+                      </strong>
+                      {run.benchmark ? (
+                        <span className="mt-1 block text-[8px] text-muted-foreground">
+                          {t("list.coverage", {
+                            value: formatRate(
+                              getCoverageRate(run.benchmark.target),
+                            ),
+                          })}
+                          {!isBenchmarkComparable(run.benchmark)
+                            ? ` · ${t("list.notComparable")}`
+                            : ""}
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3.5 font-mono text-[10px]">
-                      {formatRate(
-                        run.benchmark
-                          ? getPassRate(run.benchmark.baseline)
-                          : null,
-                      )}
+                      <strong className="block">
+                        {formatRate(
+                          run.benchmark
+                            ? getPassRate(run.benchmark.baseline)
+                            : null,
+                        )}
+                      </strong>
+                      {run.benchmark ? (
+                        <span className="mt-1 block text-[8px] text-muted-foreground">
+                          {t("list.coverage", {
+                            value: formatRate(
+                              getCoverageRate(run.benchmark.baseline),
+                            ),
+                          })}
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3.5">
                       <time className="font-mono text-[10px]">

@@ -26,6 +26,10 @@ import type {
 } from "./test-run.domain.js"
 import { TestRunEventBus } from "./test-run-event-bus.js"
 import {
+  resolveEvidenceAnchors,
+  TestRunGraderProtocolError,
+} from "./test-run-grader-protocol.js"
+import {
   buildExecutionPrompt,
   buildGraderPrompt,
 } from "./test-run-prompt.js"
@@ -35,12 +39,11 @@ import {
 } from "./test-run.repository.js"
 import { createTestRunToolPermissionPolicy } from "./test-run-permissions.js"
 import {
-  type ParsedAssertionResult,
   TestRunScorer,
 } from "./test-run-scorer.js"
 import { TestRunStorage } from "./test-run-storage.js"
 
-export const testRunProtocolVersion = "skill-test-run-v1"
+export const testRunProtocolVersion = "skill-test-run-v2"
 const maxFinalOutputCharacters = 200_000
 const executionLimits = {
   maxTurns: 32,
@@ -186,45 +189,6 @@ function usageFromEvent(
     durationMs: number(event.payload.durationMs),
     durationApiMs: number(event.payload.durationApiMs),
     numTurns: number(event.payload.numTurns),
-  }
-}
-
-function validateEvidenceReferences(
-  results: readonly ParsedAssertionResult[],
-  finalOutput: string,
-  artifacts: readonly {
-    readonly relativePath: string
-    readonly content: string | null
-  }[],
-): void {
-  const artifactsByPath = new Map(
-    artifacts.map((artifact) => [artifact.relativePath, artifact]),
-  )
-  for (const result of results) {
-    for (const item of result.evidence) {
-      if (item.source === "assistant_output") {
-        if (
-          item.reference !== "final-output" ||
-          (item.excerpt !== null && !finalOutput.includes(item.excerpt))
-        ) {
-          throw new Error(
-            "The grader cited assistant evidence that is not present.",
-          )
-        }
-        continue
-      }
-      const artifact = artifactsByPath.get(item.reference)
-      if (
-        !artifact ||
-        (item.excerpt !== null &&
-          (artifact.content === null ||
-            !artifact.content.includes(item.excerpt)))
-      ) {
-        throw new Error(
-          "The grader cited Artifact evidence that is not present.",
-        )
-      }
-    }
   }
 }
 
@@ -820,32 +784,43 @@ export class TestRunService {
             "The independent grader did not complete.",
         })
       } else {
-        const parsed = this.options.scorer.parse(
-          result.finalOutput,
-          runCase.assertions,
-        )
-        validateEvidenceReferences(
-          parsed,
-          finalOutput,
-          artifacts.map((artifact) => ({
-            relativePath: artifact.relativePath,
-            content:
-              evidenceByPath.get(artifact.relativePath)?.content ?? null,
-          })),
-        )
-        await this.options.repository.completeAssessment(
-          runCase.id,
-          parsed.map((item) => ({
-            id: randomUUID(),
-            assertionIndex: item.assertionIndex,
-            assertion:
-              runCase.assertions[item.assertionIndex] ??
-              `Assertion ${item.assertionIndex + 1}`,
-            status: item.status,
-            reason: item.reason,
-            evidence: item.evidence,
-          })),
-        )
+        try {
+          const parsed = this.options.scorer.parse(
+            result.finalOutput,
+            runCase.assertions,
+          )
+          const resolved = resolveEvidenceAnchors(
+            parsed,
+            finalOutput,
+            artifacts.map((artifact) => ({
+              relativePath: artifact.relativePath,
+              content:
+                evidenceByPath.get(artifact.relativePath)?.content ?? null,
+            })),
+          )
+          await this.options.repository.completeAssessment(
+            runCase.id,
+            resolved.map((item) => ({
+              id: randomUUID(),
+              assertionIndex: item.assertionIndex,
+              assertion:
+                runCase.assertions[item.assertionIndex] ??
+                `Assertion ${item.assertionIndex + 1}`,
+              status: item.status,
+              reason: item.reason,
+              evidence: item.evidence,
+            })),
+          )
+        } catch (error) {
+          if (!(error instanceof TestRunGraderProtocolError)) {
+            throw error
+          }
+          await this.options.repository.failAssessment({
+            caseId: runCase.id,
+            code: error.code,
+            message: error.message,
+          })
+        }
       }
       await this.publishNewEvents(runId)
     } finally {

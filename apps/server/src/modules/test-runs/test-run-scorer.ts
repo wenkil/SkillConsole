@@ -4,8 +4,13 @@ import { fileURLToPath } from "node:url"
 
 import type {
   AssertionResultStatus,
-  StoredAssertionEvidence,
 } from "../../infrastructure/database/index.js"
+import {
+  type ParsedAssertionResult,
+  TestRunGraderProtocolError,
+} from "./test-run-grader-protocol.js"
+
+export type { ParsedAssertionResult } from "./test-run-grader-protocol.js"
 
 const graderPath = fileURLToPath(
   new URL(
@@ -25,27 +30,32 @@ const allowedEvidenceSources = new Set([
   "artifact",
 ])
 
-export interface ParsedAssertionResult {
-  readonly assertionIndex: number
-  readonly status: Exclude<AssertionResultStatus, "NOT_EVALUATED">
-  readonly reason: string
-  readonly evidence: readonly StoredAssertionEvidence[]
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
 function parseJson(text: string): unknown {
   const trimmed = text.trim()
+  const fenced = trimmed.match(
+    /^```(?:json)?[ \t]*(?:\r\n|\n|\r)([\s\S]*?)(?:\r\n|\n|\r)```$/i,
+  )
+  const normalized = fenced?.[1]?.trim() ?? trimmed
   try {
-    return JSON.parse(trimmed) as unknown
+    return JSON.parse(normalized) as unknown
   } catch (error) {
-    throw new Error(
-      "The grader response was not exactly one JSON object.",
+    throw new TestRunGraderProtocolError(
+      "TEST_RUN_GRADER_JSON_INVALID",
+      "The grader response was not valid JSON. One outer JSON Markdown fence is allowed.",
       { cause: error },
     )
   }
+}
+
+function invalidSchema(message: string): never {
+  throw new TestRunGraderProtocolError(
+    "TEST_RUN_GRADER_SCHEMA_INVALID",
+    message,
+  )
 }
 
 export class TestRunScorer {
@@ -68,17 +78,19 @@ export class TestRunScorer {
   ): readonly ParsedAssertionResult[] {
     const parsed = parseJson(response)
     if (!isRecord(parsed) || !Array.isArray(parsed.assertions)) {
-      throw new Error("The grader response has an invalid root structure.")
+      return invalidSchema(
+        "The grader response has an invalid root structure.",
+      )
     }
     if (parsed.assertions.length !== assertions.length) {
-      throw new Error(
+      return invalidSchema(
         "The grader response does not contain one result per assertion.",
       )
     }
 
     const results = parsed.assertions.map((rawResult) => {
       if (!isRecord(rawResult)) {
-        throw new Error("A grader assertion result is invalid.")
+        return invalidSchema("A grader assertion result is invalid.")
       }
       const index = rawResult.index
       const status = rawResult.status
@@ -97,41 +109,46 @@ export class TestRunScorer {
         reason.length > 10_000 ||
         !Array.isArray(rawResult.evidence)
       ) {
-        throw new Error("A grader assertion result failed validation.")
+        return invalidSchema(
+          "A grader assertion result failed validation.",
+        )
       }
       const evidence = rawResult.evidence.map((rawEvidence) => {
         if (!isRecord(rawEvidence)) {
-          throw new Error("A grader evidence item is invalid.")
+          return invalidSchema("A grader evidence item is invalid.")
         }
         const source = rawEvidence.source
         const reference =
           typeof rawEvidence.reference === "string"
             ? rawEvidence.reference.trim()
             : ""
-        const excerpt =
-          typeof rawEvidence.excerpt === "string"
-            ? rawEvidence.excerpt
-            : rawEvidence.excerpt === null
-              ? null
-              : undefined
+        const startLine = rawEvidence.startLine
+        const endLine = rawEvidence.endLine
         if (
           typeof source !== "string" ||
           !allowedEvidenceSources.has(source) ||
           !reference ||
           reference.length > 512 ||
-          (typeof excerpt === "string" && excerpt.length > 4_000) ||
-          excerpt === undefined
+          typeof startLine !== "number" ||
+          !Number.isSafeInteger(startLine) ||
+          startLine < 1 ||
+          typeof endLine !== "number" ||
+          !Number.isSafeInteger(endLine) ||
+          endLine < startLine
         ) {
-          throw new Error("A grader evidence item failed validation.")
+          return invalidSchema(
+            "A grader evidence item failed validation.",
+          )
         }
         return {
           source: source as "assistant_output" | "artifact",
           reference,
-          excerpt,
+          startLine,
+          endLine,
         }
       })
       if (status !== "INSUFFICIENT_EVIDENCE" && evidence.length === 0) {
-        throw new Error(
+        return invalidSchema(
           "A conclusive grader result must cite concrete evidence.",
         )
       }
@@ -150,7 +167,9 @@ export class TestRunScorer {
       indexes.size !== assertions.length ||
       assertions.some((_, index) => !indexes.has(index))
     ) {
-      throw new Error("The grader response contains duplicate indexes.")
+      return invalidSchema(
+        "The grader response contains duplicate indexes.",
+      )
     }
     return [...results].sort(
       (left, right) => left.assertionIndex - right.assertionIndex,
