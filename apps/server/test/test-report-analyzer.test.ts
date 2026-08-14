@@ -143,7 +143,7 @@ function createReport(): StructuredTestReportV1 {
     reportRevisionNumber: 1,
     runId,
     workspaceId,
-    reportType: "TARGET_VS_NO_SKILL",
+    reportType: "skill_effect",
     status: "AVAILABLE",
     sourceFingerprint,
     generatedAt: now,
@@ -214,15 +214,23 @@ function createReport(): StructuredTestReportV1 {
       runtimeCapabilities: [],
     },
     traceability: {
+      protocolVersion: "skill-test-run-v2",
+      sdkVersion: "0.3.220",
+      skillCreatorCommit: "a".repeat(40),
+      skillCreatorTreeHash: "b".repeat(64),
+      configurationFingerprint: "c".repeat(64),
       evalManifestHash: "c".repeat(64),
       semanticConfigurationFingerprint: "d".repeat(64),
+      executionSettingsFingerprint: "e".repeat(64),
+      gradingSettingsFingerprint: "f".repeat(64),
       environmentFingerprint: "e".repeat(64),
+      skillManifestHash: "b".repeat(64),
+      baselineSkillManifestHash: null,
       comparabilityFingerprint: "f".repeat(64),
+      runInputFingerprint: "e".repeat(64),
       executionPromptVersion: "execution-v1",
       graderProtocolVersion: "grader-v1",
       toolPermissionPolicyVersion: "tools-v1",
-      skillCreatorFingerprint: "g".repeat(64),
-      sourceSettingsFingerprint: "h".repeat(64),
     },
     comparability: {
       status: "COMPARABLE",
@@ -464,6 +472,11 @@ class FakeAnalysisRepository {
     return this.current
   }
 
+  async getRow(reportId: string) {
+    assert.equal(reportId, this.report.reportId)
+    return { id: reportId, runId: this.report.runId }
+  }
+
   async listAnalyses(reportId: string) {
     assert.equal(reportId, this.report.reportId)
     return [this.current]
@@ -527,6 +540,7 @@ class FakeAnalyzerAgentSessions {
   readonly verifiedWorkspaceHashes: string[] = []
   readonly assertedConfigurationFingerprints: string[] = []
   readonly protocolAnnotations: string[] = []
+  readonly registeredRunReports: { readonly runId: string; readonly reportId: string }[] = []
   readonly workspaceInputs: {
     readonly task: Readonly<Record<string, unknown>>
     readonly report: StructuredTestReportV1
@@ -636,6 +650,10 @@ class FakeAnalyzerAgentSessions {
 
   getSystemPrompt(role: "test-report-analyzer") {
     return this.prompts.load(role)
+  }
+
+  async registerRunReport(runId: string, reportId: string): Promise<void> {
+    this.registeredRunReports.push({ runId, reportId })
   }
 
   subscribe(
@@ -871,9 +889,11 @@ test("Analyzer publishes a cited revision through a project-settings Agent Sessi
     assert.equal("persistSession" in input, false)
     assert.deepEqual(input.origin, {
       type: "report_analyzer",
+      runId: harness.report.runId,
       reportId: revision.reportId,
       analysisId: revision.id,
       revisionId: harness.repository.current.reportRevisionId,
+      phase: "analysis",
     })
     assert.equal(
       harness.agentSessions.workspaceInputs[0]!.task.outputPath,

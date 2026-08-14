@@ -125,17 +125,25 @@ export type AgentSessionOrigin =
       readonly type: "test_run_execution"
       readonly runId: string
       readonly caseId: string
+      readonly externalId: number
+      readonly side: "TARGET" | "BASELINE"
+      readonly phase: "execution"
     }
   | {
       readonly type: "test_run_grader"
       readonly runId: string
       readonly caseId: string
+      readonly externalId: number
+      readonly side: "TARGET" | "BASELINE"
+      readonly phase: "grading"
     }
   | {
       readonly type: "report_analyzer"
+      readonly runId: string
       readonly reportId: string
       readonly analysisId: string
       readonly revisionId: string
+      readonly phase: "analysis"
     }
   | { readonly type: "generic" }
 
@@ -211,7 +219,6 @@ export interface OpenAgentRuntimeSessionInput {
   readonly sessionStore: SessionStore
   readonly resumeSessionId?: string
   readonly maxTurns?: number
-  readonly maxBudgetUsd?: number
   readonly environment?: Readonly<Record<string, string | undefined>>
   readonly protectedEnvironmentNames?: readonly string[]
   readonly systemPrompt?: string

@@ -94,6 +94,11 @@
     "downloadHtml": "Download HTML",
     "downloadMarkdown": "Download Markdown",
     "documentTitle": "Static test report",
+    "metadata": {
+      "reportId": "Report ID",
+      "runId": "Source Run",
+      "revision": "Report revision"
+    },
     "tabs": {
       "label": "Report content",
       "facts": "Fact report",

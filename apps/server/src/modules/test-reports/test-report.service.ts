@@ -1,6 +1,7 @@
 import { DomainError } from "../../core/errors/domain-error.js"
 import type { TestRunEvent } from "../test-runs/test-run.domain.js"
 import type { TestRunService } from "../test-runs/test-run.service.js"
+import type { AgentSessionService } from "../agent-sessions/agent-session.service.js"
 import type {
   TestReportCaseQuery,
   TestReportListQuery,
@@ -32,6 +33,7 @@ interface TestReportLogger {
 export interface TestReportServiceOptions {
   readonly repository: TestReportRepository
   readonly testRuns: TestRunService
+  readonly agentSessions?: AgentSessionService
   readonly logger: TestReportLogger
 }
 
@@ -57,6 +59,7 @@ export class TestReportService {
     try {
       await this.options.repository.ensurePendingReports()
       for (const reportId of await this.options.repository.listPendingOrExpired()) {
+        await this.registerReportLogById(reportId)
         this.launch(reportId)
       }
     } catch (error) {
@@ -70,11 +73,15 @@ export class TestReportService {
     const inserted = await this.options.repository.ensurePendingReports(
       workspaceId,
     )
-    for (const reportId of inserted) this.launch(reportId)
+    for (const reportId of inserted) {
+      await this.registerReportLogById(reportId)
+      this.launch(reportId)
+    }
     for (const reportId of await this.options.repository.listPendingOrExpired(
       50,
       workspaceId,
     )) {
+      await this.registerReportLogById(reportId)
       this.launch(reportId)
     }
     return this.options.repository.list(workspaceId, query)
@@ -82,6 +89,7 @@ export class TestReportService {
 
   async get(reportId: string) {
     const report = await this.options.repository.getRow(reportId)
+    await this.registerReportLog(report.runId, report.id)
     if (report.status === "GENERATION_PENDING") {
       try {
         await this.generate(reportId)
@@ -97,6 +105,7 @@ export class TestReportService {
 
   async getByRun(runId: string) {
     const report = await this.options.repository.ensureForRun(runId)
+    await this.registerReportLog(report.runId, report.id)
     if (report.status === "GENERATION_PENDING") {
       try {
         await this.generate(report.id)
@@ -180,13 +189,29 @@ export class TestReportService {
     if (!terminalEventTypes.has(event.type) || this.shuttingDown) return
     void this.options.repository
       .ensureForRun(event.runId)
-      .then((report) => this.launch(report.id))
+      .then(async (report) => {
+        await this.registerReportLog(report.runId, report.id)
+        this.launch(report.id)
+      })
       .catch((error: unknown) => {
         this.options.logger.error(
           { runId: event.runId, error },
           "Terminal test Run could not create its report",
         )
       })
+  }
+
+  private async registerReportLog(
+    runId: string,
+    reportId: string,
+  ): Promise<void> {
+    await this.options.agentSessions?.registerRunReport(runId, reportId)
+  }
+
+  private async registerReportLogById(reportId: string): Promise<void> {
+    if (!this.options.agentSessions) return
+    const report = await this.options.repository.getRow(reportId)
+    await this.registerReportLog(report.runId, report.id)
   }
 
   private launch(reportId: string): void {

@@ -58,12 +58,12 @@ const maxFinalOutputCharacters = 200_000
 const executionLimits = {
   maxTurns: 32,
   maxBudgetUsd: 1.5,
-  timeoutMs: 120_000,
+  timeoutMs: 1_800_000,
 } as const
 const gradingLimits = {
   maxTurns: 12,
   maxBudgetUsd: 0.5,
-  timeoutMs: 60_000,
+  timeoutMs: 1_800_000,
 } as const
 
 interface TestRunLogger {
@@ -1097,6 +1097,9 @@ export class TestRunService {
           type: "test_run_execution",
           runId,
           caseId: runCase.id,
+          externalId: runCase.externalId,
+          side: runCase.side,
+          phase: "execution",
         },
         prompt: buildExecutionPrompt(),
         workspaceLocator: workspace.locator,
@@ -1104,7 +1107,6 @@ export class TestRunService {
         systemPromptRole: "test-run-execution",
         expectedSystemPromptFingerprint: executionSystemPrompt.sha256,
         maxTurns: executionLimits.maxTurns,
-        maxBudgetUsd: executionLimits.maxBudgetUsd,
         environment: caseRuntimeEnvironment.values,
         protectedEnvironmentNames:
           caseRuntimeEnvironment.protectedNames,
@@ -1388,6 +1390,9 @@ export class TestRunService {
         type: "test_run_grader",
         runId,
         caseId: runCase.id,
+        externalId: runCase.externalId,
+        side: runCase.side,
+        phase: "grading",
       },
       prompt: buildGraderPrompt(),
       workspaceLocator: gradingLocator,
@@ -1395,7 +1400,6 @@ export class TestRunService {
       systemPromptRole: "test-run-grader",
       expectedSystemPromptFingerprint: graderSystemPrompt.sha256,
       maxTurns: gradingLimits.maxTurns,
-      maxBudgetUsd: gradingLimits.maxBudgetUsd,
       environment: graderRuntimeEnvironment.values,
       protectedEnvironmentNames:
         graderRuntimeEnvironment.protectedNames,

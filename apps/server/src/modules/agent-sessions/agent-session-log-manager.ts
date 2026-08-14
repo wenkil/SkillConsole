@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import { existsSync } from "node:fs"
 import {
   chmod,
   mkdir,
@@ -81,7 +82,7 @@ interface LogCollector {
 
 interface SessionLogHandle {
   readonly sessionId: string
-  readonly root: string
+  root: string
   readonly runtimeRoot: string
   readonly origin: AgentSessionOrigin
   readonly rawWriter: AgentSessionJsonlWriter
@@ -95,18 +96,150 @@ interface SessionLogHandle {
   metadataWrite: Promise<void>
 }
 
-function originKey(origin: AgentSessionOrigin): string {
-  switch (origin.type) {
-    case "eval_generation":
-      return origin.taskId
-    case "test_run_execution":
-    case "test_run_grader":
-      return `${origin.runId}:${origin.caseId}`
-    case "report_analyzer":
-      return `${origin.reportId}:${origin.analysisId}:${origin.revisionId}`
-    case "generic":
-      return "generic"
+type GroupedSessionOrigin = Extract<
+  AgentSessionOrigin,
+  { readonly type: "test_run_execution" | "test_run_grader" | "report_analyzer" }
+>
+
+interface RunLogManifestSession {
+  readonly agentSessionId: string
+  readonly sdkSessionId: string | null
+  readonly relativePath: string
+  readonly origin: AgentSessionOrigin
+  readonly status: AgentSessionLogStatus
+  readonly updatedAt: string
+}
+
+interface RunLogManifestSideSessions {
+  readonly execution: RunLogManifestSession | null
+  readonly grading: RunLogManifestSession | null
+}
+
+interface RunLogManifestCase {
+  readonly caseKey: string
+  readonly externalId: number
+  readonly targetCaseId: string | null
+  readonly baselineCaseId: string | null
+  readonly sessions: {
+    readonly target: RunLogManifestSideSessions
+    readonly baseline: RunLogManifestSideSessions
   }
+}
+
+interface RunLogManifestReport {
+  readonly reportId: string
+  readonly url: string
+  readonly relativePath: string
+  readonly analyses: readonly {
+    readonly analysisId: string
+    readonly revisionId: string
+  }[]
+}
+
+interface RunLogManifest {
+  readonly schemaVersion: "run-log-manifest.v1"
+  readonly runId: string
+  readonly createdAt: string
+  readonly updatedAt: string
+  readonly cases: readonly RunLogManifestCase[]
+  readonly report: RunLogManifestReport | null
+}
+
+function isGroupedSessionOrigin(
+  origin: AgentSessionOrigin,
+): origin is GroupedSessionOrigin {
+  if (origin.type === "test_run_execution" || origin.type === "test_run_grader") {
+    return (
+      typeof origin.runId === "string" &&
+      typeof origin.caseId === "string" &&
+      Number.isSafeInteger(origin.externalId) &&
+      (origin.side === "TARGET" || origin.side === "BASELINE") &&
+      (origin.phase === "execution" || origin.phase === "grading")
+    )
+  }
+  return (
+    origin.type === "report_analyzer" &&
+    typeof origin.runId === "string" &&
+    typeof origin.reportId === "string" &&
+    typeof origin.analysisId === "string" &&
+    typeof origin.revisionId === "string" &&
+    origin.phase === "analysis"
+  )
+}
+
+function groupedRunId(origin: AgentSessionOrigin): string | null {
+  return isGroupedSessionOrigin(origin) ? origin.runId : null
+}
+
+function caseKey(externalId: number): string {
+  return `case-${String(externalId).padStart(3, "0")}`
+}
+
+function canonicalRelativePath(
+  origin: AgentSessionOrigin,
+  sessionLeaf: string,
+): string | null {
+  if (!isGroupedSessionOrigin(origin)) return null
+  if (!/^[A-Za-z0-9._-]+$/u.test(sessionLeaf)) {
+    throw new Error("Claude SDK Session ID is not a safe path segment.")
+  }
+  if (origin.type === "report_analyzer") {
+    return path.posix.join(
+      origin.runId,
+      "report",
+      origin.reportId,
+      "analyses",
+      origin.analysisId,
+      sessionLeaf,
+    )
+  }
+  return path.posix.join(
+    origin.runId,
+    "cases",
+    caseKey(origin.externalId),
+    origin.side.toLowerCase(),
+    origin.phase,
+    sessionLeaf,
+  )
+}
+
+function emptyRunLogManifest(runId: string): RunLogManifest {
+  const now = new Date().toISOString()
+  return {
+    schemaVersion: "run-log-manifest.v1",
+    runId,
+    createdAt: now,
+    updatedAt: now,
+    cases: [],
+    report: null,
+  }
+}
+
+function emptyRunLogManifestSideSessions(): RunLogManifestSideSessions {
+  return { execution: null, grading: null }
+}
+
+function metadataContext(origin: AgentSessionOrigin): Readonly<Record<string, unknown>> {
+  if (origin.type === "test_run_execution" || origin.type === "test_run_grader") {
+    return {
+      runId: origin.runId,
+      caseKey: caseKey(origin.externalId),
+      caseId: origin.caseId,
+      externalId: origin.externalId,
+      side: origin.side,
+      phase: origin.phase,
+    }
+  }
+  if (origin.type === "report_analyzer") {
+    return {
+      runId: origin.runId,
+      reportId: origin.reportId,
+      analysisId: origin.analysisId,
+      revisionId: origin.revisionId,
+      phase: origin.phase,
+    }
+  }
+  return {}
 }
 
 function numericRecord(value: unknown): Readonly<Record<string, number>> | null {
@@ -235,6 +368,7 @@ export class AgentSessionLogManager {
   private readonly logsRoot: string
   private readonly runtimeRoot: string
   private readonly handles = new Map<string, SessionLogHandle>()
+  private readonly manifestWrites = new Map<string, Promise<void>>()
 
   constructor(
     dataRoot: string,
@@ -253,6 +387,29 @@ export class AgentSessionLogManager {
       chmod(this.runtimeRoot, 0o700).catch(() => undefined),
     ])
     await this.recover()
+  }
+
+  async registerRunReport(runId: string, reportId: string): Promise<void> {
+    const previous = this.manifestWrites.get(runId) ?? Promise.resolve()
+    const next = previous.then(async () => {
+      const manifestPath = path.join(this.logsRoot, runId, "manifest.json")
+      const manifest = await this.readRunManifest(manifestPath, runId)
+      const existingReport = manifest.report?.reportId === reportId
+        ? manifest.report
+        : null
+      await atomicWriteJson(manifestPath, {
+        ...manifest,
+        updatedAt: new Date().toISOString(),
+        report: {
+          reportId,
+          url: `/reports/${reportId}`,
+          relativePath: path.posix.join("report", reportId),
+          analyses: existingReport?.analyses ?? [],
+        },
+      } satisfies RunLogManifest)
+    })
+    this.manifestWrites.set(runId, next.catch(() => undefined))
+    await next
   }
 
   async prepare(sessionId: string, origin: AgentSessionOrigin): Promise<void> {
@@ -289,6 +446,7 @@ export class AgentSessionLogManager {
       aborted: false,
     })
     await this.writeMetadata(handle, "WRITING")
+    await this.writeRunManifest(handle, "WRITING")
     this.handles.set(sessionId, handle)
   }
 
@@ -347,6 +505,7 @@ export class AgentSessionLogManager {
     await this.bindSdkSessionId(handle, sdkSessionId)
     handle.model = model
     await this.writeMetadata(handle, "WRITING")
+    await this.writeRunManifest(handle, "WRITING")
   }
 
   async finalize(
@@ -415,6 +574,17 @@ export class AgentSessionLogManager {
       handle.diagnosticWriter.close(),
       handle.transcriptStore.close(),
     ])
+    const movedToCanonicalPath = await this.moveToCanonicalPath(handle)
+    if (movedToCanonicalPath) {
+      await this.writeMetadata(
+        handle,
+        status,
+        terminal,
+        error,
+        artifactSummary,
+      )
+    }
+    await this.writeRunManifest(handle, status)
     await this.indexArtifacts(handle, status)
     const finalizedAt = new Date()
     await this.database
@@ -434,12 +604,13 @@ export class AgentSessionLogManager {
     sessionId: string,
     protocolStatus: "VALID" | "INVALID" | "NOT_APPLICABLE",
   ): Promise<void> {
-    const filePath = path.join(this.logsRoot, sessionId, "final-output.json")
+    const root = await this.resolveExistingSessionRoot(sessionId)
+    const filePath = path.join(root, "final-output.json")
     const current = JSON.parse(await readFile(filePath, "utf8")) as Record<string, unknown>
     await atomicWriteJson(filePath, { ...current, protocolStatus })
     const finalInfo = await stat(filePath)
     const finalSha256 = await sha256File(filePath)
-    const metadataPath = path.join(this.logsRoot, sessionId, "metadata.json")
+    const metadataPath = path.join(root, "metadata.json")
     const metadata = JSON.parse(
       await readFile(metadataPath, "utf8"),
     ) as Record<string, unknown>
@@ -520,7 +691,11 @@ export class AgentSessionLogManager {
     origin: AgentSessionOrigin,
     input?: { readonly sdkSessionId?: string | null; readonly model?: string | null },
   ): SessionLogHandle {
-    const root = path.join(this.logsRoot, sessionId)
+    const root = this.resolveSessionRoot(
+      sessionId,
+      origin,
+      input?.sdkSessionId ?? null,
+    )
     const handle = {} as SessionLogHandle
     Object.assign(handle, {
       sessionId,
@@ -587,6 +762,71 @@ export class AgentSessionLogManager {
     return handle
   }
 
+  private resolveSessionRoot(
+    sessionId: string,
+    origin: AgentSessionOrigin,
+    sdkSessionId: string | null,
+  ): string {
+    const legacyRoot = path.join(this.logsRoot, sessionId)
+    const canonicalRelative = canonicalRelativePath(
+      origin,
+      sdkSessionId ?? `pending-${sessionId}`,
+    )
+    if (!canonicalRelative) return legacyRoot
+
+    const canonicalRoot = path.join(this.logsRoot, canonicalRelative)
+    const pendingRoot = path.join(
+      this.logsRoot,
+      canonicalRelativePath(origin, `pending-${sessionId}`) ?? canonicalRelative,
+    )
+    if (existsSync(canonicalRoot)) return canonicalRoot
+    if (existsSync(pendingRoot)) return pendingRoot
+    if (existsSync(legacyRoot)) return legacyRoot
+    return sdkSessionId ? canonicalRoot : pendingRoot
+  }
+
+  private async resolveExistingSessionRoot(sessionId: string): Promise<string> {
+    const handle = this.handles.get(sessionId)
+    if (handle) return handle.root
+    const [row] = await this.database
+      .select({ origin: agentSessions.origin, sdkSessionId: agentSessions.sdkSessionId })
+      .from(agentSessions)
+      .where(eq(agentSessions.id, sessionId))
+      .limit(1)
+    if (!row?.origin) {
+      throw new Error("Agent Session log metadata is unavailable.")
+    }
+    return this.resolveSessionRoot(
+      sessionId,
+      row.origin as unknown as AgentSessionOrigin,
+      row.sdkSessionId,
+    )
+  }
+
+  private async moveToCanonicalPath(handle: SessionLogHandle): Promise<boolean> {
+    if (!handle.sdkSessionId) return false
+    const relativePath = canonicalRelativePath(handle.origin, handle.sdkSessionId)
+    if (!relativePath) return false
+    const target = path.join(this.logsRoot, relativePath)
+    if (path.resolve(target) === path.resolve(handle.root)) return false
+    if (existsSync(target)) {
+      this.logger.error(
+        {
+          sessionId: handle.sessionId,
+          sdkSessionId: handle.sdkSessionId,
+          currentPath: handle.root,
+          targetPath: target,
+        },
+        "Canonical Agent Session log path already exists.",
+      )
+      return false
+    }
+    await mkdir(path.dirname(target), { recursive: true, mode: 0o700 })
+    await rename(handle.root, target)
+    handle.root = target
+    return true
+  }
+
   private async bindSdkSessionId(
     handle: SessionLogHandle,
     sdkSessionId: string,
@@ -599,6 +839,122 @@ export class AgentSessionLogManager {
     await this.writeMetadata(handle, "WRITING")
   }
 
+  private writeRunManifest(
+    handle: SessionLogHandle,
+    status: AgentSessionLogStatus,
+  ): Promise<void> {
+    const origin = handle.origin
+    const runId = groupedRunId(origin)
+    if (!runId) return Promise.resolve()
+    const entry: RunLogManifestSession = {
+      agentSessionId: handle.sessionId,
+      sdkSessionId: handle.sdkSessionId,
+      relativePath: path.relative(this.logsRoot, handle.root).split(path.sep).join("/"),
+      origin,
+      status,
+      updatedAt: new Date().toISOString(),
+    }
+    const previous = this.manifestWrites.get(runId) ?? Promise.resolve()
+    const next = previous.then(async () => {
+      const manifestPath = path.join(this.logsRoot, runId, "manifest.json")
+      const manifest = await this.readRunManifest(manifestPath, runId)
+      let cases = [...manifest.cases]
+      let report = manifest.report
+      if (origin.type === "test_run_execution" ||
+          origin.type === "test_run_grader") {
+        const existingCase = cases.find(
+          (item) => item.externalId === origin.externalId,
+        )
+        const currentSessions = existingCase?.sessions ?? {
+          target: emptyRunLogManifestSideSessions(),
+          baseline: emptyRunLogManifestSideSessions(),
+        }
+        const side = origin.side.toLowerCase() as "target" | "baseline"
+        const nextSideSessions: RunLogManifestSideSessions = {
+          ...currentSessions[side],
+          [origin.phase]: entry,
+        }
+        const nextSessions = side === "target"
+          ? { ...currentSessions, target: nextSideSessions }
+          : { ...currentSessions, baseline: nextSideSessions }
+        const nextCase: RunLogManifestCase = {
+          caseKey: caseKey(origin.externalId),
+          externalId: origin.externalId,
+          targetCaseId:
+            origin.side === "TARGET"
+              ? origin.caseId
+              : existingCase?.targetCaseId ?? null,
+          baselineCaseId:
+            origin.side === "BASELINE"
+              ? origin.caseId
+              : existingCase?.baselineCaseId ?? null,
+          sessions: nextSessions,
+        }
+        cases = [
+          ...cases.filter(
+            (item) => item.externalId !== origin.externalId,
+          ),
+          nextCase,
+        ].sort((left, right) => left.externalId - right.externalId)
+      }
+      if (origin.type === "report_analyzer") {
+        const existingReport = report?.reportId === origin.reportId
+          ? report
+          : null
+        const analyses = existingReport?.analyses ?? []
+        report = {
+          reportId: origin.reportId,
+          url: existingReport?.url ?? `/reports/${origin.reportId}`,
+          relativePath:
+            existingReport?.relativePath ??
+            path.posix.join("report", origin.reportId),
+          analyses: [
+            ...analyses.filter(
+              (item) => item.analysisId !== origin.analysisId,
+            ),
+            {
+              analysisId: origin.analysisId,
+              revisionId: origin.revisionId,
+            },
+          ],
+        }
+      }
+      await atomicWriteJson(manifestPath, {
+        ...manifest,
+        updatedAt: new Date().toISOString(),
+        cases,
+        report,
+      } satisfies RunLogManifest)
+    })
+    this.manifestWrites.set(runId, next.catch(() => undefined))
+    return next
+  }
+
+  private async readRunManifest(
+    manifestPath: string,
+    runId: string,
+  ): Promise<RunLogManifest> {
+    try {
+      const content = await readFile(manifestPath, "utf8")
+      const parsed = JSON.parse(content) as Partial<RunLogManifest>
+      return {
+        schemaVersion: "run-log-manifest.v1",
+        runId,
+        createdAt: typeof parsed.createdAt === "string"
+          ? parsed.createdAt
+          : new Date().toISOString(),
+        updatedAt: typeof parsed.updatedAt === "string"
+          ? parsed.updatedAt
+          : new Date().toISOString(),
+        cases: Array.isArray(parsed.cases) ? parsed.cases : [],
+        report: parsed.report ?? null,
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+      return emptyRunLogManifest(runId)
+    }
+  }
+
   private writeMetadata(
     handle: SessionLogHandle,
     status: AgentSessionLogStatus,
@@ -609,13 +965,22 @@ export class AgentSessionLogManager {
     const next = handle.metadataWrite.then(() => atomicWriteJson(
       path.join(handle.root, "metadata.json"),
       {
-        schemaVersion: "agent-session-log.v1",
+        schemaVersion: isGroupedSessionOrigin(handle.origin)
+          ? "agent-session-log.v2"
+          : "agent-session-log.v1",
         agentSessionId: handle.sessionId,
         sdkSessionId: handle.sdkSessionId,
+        ...metadataContext(handle.origin),
         origin: handle.origin,
+        relativePath: path.relative(this.logsRoot, handle.root).split(path.sep).join("/"),
+        runtimeLocator: path
+          .relative(path.dirname(this.logsRoot), handle.runtimeRoot)
+          .split(path.sep)
+          .join("/"),
         model: handle.model,
         status,
         startedAt: handle.startedAt,
+        finishedAt: terminal ? new Date().toISOString() : null,
         updatedAt: new Date().toISOString(),
         ...(terminal ? { terminal } : {}),
         ...(error ? { error } : {}),

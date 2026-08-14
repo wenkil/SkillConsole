@@ -49,7 +49,6 @@ export interface CreateAgentSessionInWorkspaceInput {
   readonly systemPromptRole: AgentSystemPromptRole
   readonly expectedSystemPromptFingerprint: string
   readonly maxTurns?: number
-  readonly maxBudgetUsd?: number
   readonly environment?: Readonly<Record<string, string | undefined>>
   readonly protectedEnvironmentNames?: readonly string[]
   readonly additionalRedactedValues?: readonly string[]
@@ -152,9 +151,6 @@ export class AgentSessionService {
         ...(input.maxTurns !== undefined
           ? { maxTurns: input.maxTurns }
           : {}),
-        ...(input.maxBudgetUsd !== undefined
-          ? { maxBudgetUsd: input.maxBudgetUsd }
-          : {}),
         ...(input.environment ? { environment: input.environment } : {}),
         ...(input.protectedEnvironmentNames
           ? {
@@ -174,6 +170,10 @@ export class AgentSessionService {
     } catch (error) {
       throw this.classifyWorkspacePreparationFailure(error)
     }
+  }
+
+  async registerRunReport(runId: string, reportId: string): Promise<void> {
+    await this.logs.registerRunReport(runId, reportId)
   }
 
   async get(sessionId: string): Promise<AgentSessionView> {
@@ -345,7 +345,6 @@ export class AgentSessionService {
     readonly cwd: string
     readonly sdkSessionId: string | null
     readonly maxTurns?: number
-    readonly maxBudgetUsd?: number
     readonly environment?: Readonly<Record<string, string | undefined>>
     readonly protectedEnvironmentNames?: readonly string[]
     readonly systemPrompt?: string
@@ -376,9 +375,6 @@ export class AgentSessionService {
       },
       ...(input.maxTurns !== undefined
         ? { maxTurns: input.maxTurns }
-        : {}),
-      ...(input.maxBudgetUsd !== undefined
-        ? { maxBudgetUsd: input.maxBudgetUsd }
         : {}),
       ...(input.environment ? { environment: input.environment } : {}),
       ...(input.protectedEnvironmentNames
@@ -488,7 +484,6 @@ export class AgentSessionService {
     readonly workspaceLocator: string
     readonly cwd: string
     readonly maxTurns?: number
-    readonly maxBudgetUsd?: number
     readonly environment?: Readonly<Record<string, string | undefined>>
     readonly protectedEnvironmentNames?: readonly string[]
     readonly systemPrompt?: string
@@ -519,9 +514,6 @@ export class AgentSessionService {
           : {}),
         ...(input.maxTurns !== undefined
           ? { maxTurns: input.maxTurns }
-          : {}),
-        ...(input.maxBudgetUsd !== undefined
-          ? { maxBudgetUsd: input.maxBudgetUsd }
           : {}),
         ...(input.environment ? { environment: input.environment } : {}),
         ...(input.protectedEnvironmentNames

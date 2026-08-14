@@ -94,6 +94,11 @@
     "downloadHtml": "下载 HTML",
     "downloadMarkdown": "下载 Markdown",
     "documentTitle": "静态测试报告",
+    "metadata": {
+      "reportId": "报告 ID",
+      "runId": "来源任务",
+      "revision": "报告修订"
+    },
     "tabs": {
       "label": "报告内容",
       "facts": "事实报告",

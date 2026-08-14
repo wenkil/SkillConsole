@@ -104,28 +104,30 @@ export function TestReportDetailView({
 
   return (
     <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-foreground bg-background px-5 py-3">
+      <header className="shrink-0 border-b border-foreground bg-background px-6 py-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <Link
-              className="flex items-center gap-1.5 font-mono text-[9px] text-muted-foreground hover:text-foreground"
+              className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground hover:text-foreground"
               to={`/workbenches/${workspace.id}/reports`}
             >
               <ArrowLeft className="size-3" />
               {t("detail.back")}
             </Link>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-xl font-[790] tracking-[-0.03em]">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <h1 className="truncate text-2xl font-[790] tracking-[-0.03em]">
                 {report.report?.title ??
                   `${report.baselineLabel} → ${report.targetLabel}`}
               </h1>
               <TestReportStatusBadge status={report.status} />
-              <span className="border border-rule px-2 py-1 font-mono text-[9px] font-bold">
+              <span className="border border-rule px-2 py-1 font-mono text-[10px] font-bold">
                 {t(`type.${report.reportType}`)}
               </span>
             </div>
-            <p className="mt-1 font-mono text-[8px] text-muted-foreground">
-              REPORT {report.id} · RUN {report.runId}
+            <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] text-muted-foreground">
+              <span>{t("detail.metadata.reportId")} {report.id}</span>
+              <span>{t("detail.metadata.runId")} {report.runId}</span>
+              <span>{t("detail.metadata.revision")} R{report.report?.reportRevisionNumber ?? "—"}</span>
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -157,14 +159,14 @@ export function TestReportDetailView({
 
       <div
         aria-label={t("detail.tabs.label")}
-        className="flex shrink-0 border-b border-foreground bg-paper-muted px-5"
+        className="flex shrink-0 border-b border-foreground bg-paper-muted px-6"
         role="tablist"
       >
         {(["facts", "analysis"] as const).map((tab) => (
           <button
             aria-controls={`test-report-${tab}-panel`}
             aria-selected={activeTab === tab}
-            className={`border-x border-t px-4 py-2.5 font-mono text-[10px] font-bold uppercase transition-colors ${
+            className={`border-x border-t px-5 py-3 font-mono text-xs font-bold uppercase transition-colors ${
               activeTab === tab
                 ? "border-foreground bg-background text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground"
@@ -179,7 +181,7 @@ export function TestReportDetailView({
             {tab === "analysis" ? <Bot className="mr-1.5 inline size-3" /> : null}
             {t(`detail.tabs.${tab}`)}
             {tab === "analysis" && report.analysisStatus !== "NOT_REQUESTED" ? (
-              <span className="ml-2 border border-current px-1 py-0.5 text-[8px]">
+              <span className="ml-2 border border-current px-1 py-0.5 text-[9px]">
                 {t(`analysis.status.${report.analysisStatus}`)}
               </span>
             ) : null}
@@ -249,7 +251,7 @@ export function TestReportDetailView({
       ) : (
         <AnalyzerPanel controller={analyzer} locale={locale} />
       )}
-      <footer className="flex shrink-0 items-center gap-2 border-t border-foreground bg-paper-muted px-4 py-2 font-mono text-[8px] text-muted-foreground">
+      <footer className="flex shrink-0 items-center gap-2 border-t border-foreground bg-paper-muted px-6 py-2.5 font-mono text-[10px] text-muted-foreground">
         <FileText className="size-3" />
         {t(
           activeTab === "facts"
@@ -284,17 +286,17 @@ function AnalyzerPanel({
   return (
     <section
       aria-labelledby="test-report-analysis-tab"
-      className="grid min-h-0 flex-1 grid-cols-[minmax(260px,340px)_minmax(0,1fr)] overflow-hidden"
+      className="grid min-h-0 flex-1 grid-cols-[minmax(300px,360px)_minmax(0,1fr)] overflow-hidden"
       id="test-report-analysis-panel"
       role="tabpanel"
     >
-      <aside className="min-h-0 overflow-y-auto border-r border-foreground bg-paper-muted p-4">
+      <aside className="min-h-0 overflow-y-auto border-r border-foreground bg-paper-muted p-5">
         <div className="border border-technical/50 bg-technical/6 p-3">
           <div className="flex items-start gap-2">
             <Bot className="mt-0.5 size-4 shrink-0 text-technical" />
             <div>
-              <h2 className="text-sm font-[760]">{t("analysis.title")}</h2>
-              <p className="mt-1 text-[10px] leading-4 text-muted-foreground">
+              <h2 className="text-base font-[760]">{t("analysis.title")}</h2>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 {t("analysis.disclaimer")}
               </p>
             </div>
@@ -303,12 +305,12 @@ function AnalyzerPanel({
 
         {controller.analyses.length > 0 ? (
           <label className="mt-4 block">
-            <span className="font-mono text-[9px] font-bold uppercase">
+            <span className="font-mono text-[10px] font-bold uppercase">
               {t("analysis.revision.label")}
             </span>
             <select
               aria-label={t("analysis.revision.label")}
-              className="mt-1.5 h-9 w-full border border-rule bg-background px-2 font-mono text-[10px]"
+              className="mt-1.5 h-10 w-full border border-rule bg-background px-3 font-mono text-xs"
               onChange={(event) =>
                 controller.actions.selectAnalysis(event.target.value)
               }
@@ -327,22 +329,22 @@ function AnalyzerPanel({
         ) : null}
 
         <div className="mt-5 flex items-center justify-between gap-2">
-          <h3 className="font-mono text-[9px] font-bold uppercase">
+          <h3 className="font-mono text-[10px] font-bold uppercase">
             {t("analysis.selection.title")}
           </h3>
-          <span className="font-mono text-[8px] text-muted-foreground">
+          <span className="font-mono text-[10px] text-muted-foreground">
             {t("analysis.selection.count", {
               selected: controller.selectedCaseIds.length,
               total: controller.selectableCases.length,
             })}
           </span>
         </div>
-        <p className="mt-1 text-[10px] leading-4 text-muted-foreground">
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
           {t("analysis.selection.description")}
         </p>
         <div className="mt-2 flex flex-wrap gap-1">
           <Button
-            className="h-7 rounded-none px-2 text-[9px]"
+            className="h-8 rounded-none px-3 text-[10px]"
             onClick={controller.actions.selectDefaultCases}
             type="button"
             variant="outline"
@@ -350,7 +352,7 @@ function AnalyzerPanel({
             {t("analysis.selection.default")}
           </Button>
           <Button
-            className="h-7 rounded-none px-2 text-[9px]"
+            className="h-8 rounded-none px-3 text-[10px]"
             onClick={controller.actions.selectAllCases}
             type="button"
             variant="outline"
@@ -358,7 +360,7 @@ function AnalyzerPanel({
             {t("analysis.selection.all")}
           </Button>
           <Button
-            className="h-7 rounded-none px-2 text-[9px]"
+            className="h-8 rounded-none px-3 text-[10px]"
             onClick={controller.actions.clearCases}
             type="button"
             variant="outline"
@@ -369,7 +371,7 @@ function AnalyzerPanel({
         <div className="mt-2 grid gap-1.5">
           {controller.selectableCases.map((item) => (
             <label
-              className="flex cursor-pointer items-start gap-2 border border-rule-soft bg-background px-2.5 py-2 text-[10px]"
+              className="flex cursor-pointer items-start gap-2 border border-rule-soft bg-background px-3 py-2.5 text-xs"
               key={item.evalRevisionCaseId}
             >
               <input
@@ -386,7 +388,7 @@ function AnalyzerPanel({
                 <strong className="block truncate">
                   #{item.externalId} · {item.name}
                 </strong>
-                <span className="font-mono text-[8px] text-muted-foreground">
+                <span className="font-mono text-[10px] text-muted-foreground">
                   {item.issueIds.length > 0
                     ? t("analysis.selection.issues", {
                         count: item.issueIds.length,
@@ -398,12 +400,12 @@ function AnalyzerPanel({
           ))}
         </div>
         {controller.selectableCases.length === 0 ? (
-          <p className="mt-2 border border-rule-soft bg-background p-3 text-[10px] text-muted-foreground">
+          <p className="mt-2 border border-rule-soft bg-background p-3 text-xs text-muted-foreground">
             {t("analysis.selection.unavailable")}
           </p>
         ) : null}
         {controller.mutationError ? (
-          <p className="mt-3 text-[10px] text-destructive" role="alert">
+          <p className="mt-3 text-xs text-destructive" role="alert">
             {controller.mutationError}
           </p>
         ) : null}
@@ -460,22 +462,22 @@ function AnalyzerPanel({
           />
         ) : (
           <>
-            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-rule bg-paper-raised px-4 py-3">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-rule bg-paper-raised px-6 py-5">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <strong className="text-sm">
+                  <strong className="text-base">
                     {t("analysis.revision.title", {
                       revision: analysis.revisionNumber,
                     })}
                   </strong>
-                  <span className="border border-rule px-2 py-1 font-mono text-[8px] font-bold">
+                  <span className="border border-rule px-2 py-1 font-mono text-[10px] font-bold">
                     {t(`analysis.status.${analysis.status}`)}
                   </span>
-                  <span className="border border-technical/50 bg-technical/6 px-2 py-1 font-mono text-[8px] font-bold text-technical">
+                  <span className="border border-technical/50 bg-technical/6 px-2 py-1 font-mono text-[10px] font-bold text-technical">
                     {t("analysis.modelGenerated")}
                   </span>
                 </div>
-                <p className="mt-1 font-mono text-[8px] text-muted-foreground">
+                <p className="mt-2 font-mono text-[10px] leading-5 text-muted-foreground">
                   {t("analysis.meta", {
                     model: analysis.modelId || "—",
                     configuredModel: analysis.configuredModelId || "—",
@@ -483,7 +485,7 @@ function AnalyzerPanel({
                     count: analysis.selectedEvalRevisionCaseIds.length,
                   })}
                 </p>
-                <p className="mt-1 font-mono text-[8px] text-muted-foreground">
+                <p className="mt-1 font-mono text-[10px] leading-5 text-muted-foreground">
                   {t("analysis.runtimePolicy", {
                     schema: analysis.runtimePolicy.schemaVersion,
                     capability:
@@ -498,7 +500,7 @@ function AnalyzerPanel({
                   })}
                 </p>
                 {analysis.usage ? (
-                  <p className="mt-1 font-mono text-[8px] text-muted-foreground">
+                  <p className="mt-1 font-mono text-[10px] leading-5 text-muted-foreground">
                     {t("analysis.usage", {
                       input: analysis.usage.inputTokens.toLocaleString(),
                       output: analysis.usage.outputTokens.toLocaleString(),

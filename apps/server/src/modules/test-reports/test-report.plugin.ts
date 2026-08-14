@@ -16,6 +16,7 @@ const testReportModulePlugin: FastifyPluginAsyncTypebox = async (
   const service = new TestReportService({
     repository,
     testRuns: application.testRunService,
+    agentSessions: application.agentSessionService,
     logger: application.log,
   })
   const analysisService = new TestReportAnalysisService({

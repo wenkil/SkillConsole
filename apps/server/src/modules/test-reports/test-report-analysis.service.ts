@@ -318,6 +318,7 @@ export class TestReportAnalysisService {
     await this.options.repository.failInterruptedAnalyses()
     await this.workspace.cleanupStale()
     for (const analysisId of await this.options.repository.listPendingAnalyses()) {
+      await this.registerAnalysisReport(analysisId)
       this.launch(analysisId)
     }
   }
@@ -342,6 +343,7 @@ export class TestReportAnalysisService {
         kind: "conflict",
       })
     }
+    await this.options.agentSessions.registerRunReport(detail.runId, reportId)
     const selectedSet = new Set(selectedEvalRevisionCaseIds)
     if (
       selectedSet.size === 0 ||
@@ -406,10 +408,15 @@ export class TestReportAnalysisService {
   }
 
   async list(reportId: string) {
+    await this.options.agentSessions.registerRunReport(
+      (await this.options.repository.getRow(reportId)).runId,
+      reportId,
+    )
     return this.options.repository.listAnalyses(reportId)
   }
 
   async get(analysisId: string) {
+    await this.registerAnalysisReport(analysisId)
     return this.options.repository.getAnalysis(analysisId)
   }
 
@@ -624,6 +631,12 @@ export class TestReportAnalysisService {
     this.workers.set(analysisId, worker)
   }
 
+  private async registerAnalysisReport(analysisId: string): Promise<void> {
+    const analysis = await this.options.repository.getAnalysis(analysisId)
+    const report = await this.options.repository.getRow(analysis.reportId)
+    await this.options.agentSessions.registerRunReport(report.runId, report.id)
+  }
+
   private async run(analysisId: string): Promise<void> {
     const revision = await this.options.repository.getAnalysis(analysisId)
     if (revision.status !== "PENDING") return
@@ -737,9 +750,11 @@ export class TestReportAnalysisService {
       session = await this.options.agentSessions.createInWorkspace({
         origin: {
           type: "report_analyzer",
+          runId: report.runId,
           reportId: revision.reportId,
           analysisId,
           revisionId: revision.reportRevisionId,
+          phase: "analysis",
         },
         prompt,
         systemPromptRole: "test-report-analyzer",
@@ -747,7 +762,6 @@ export class TestReportAnalysisService {
         workspaceLocator: prepared.locator,
         expectedConfigurationFingerprint,
         maxTurns: revision.runtimePolicy.maxTurns,
-        maxBudgetUsd: revision.runtimePolicy.maxBudgetUsd,
         environment: environment.values,
         protectedEnvironmentNames: environment.protectedNames,
         additionalRedactedValues: [

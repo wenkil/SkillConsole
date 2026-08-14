@@ -23,7 +23,10 @@ import {
   getCombinedTestReportDocumentFilename,
   renderCombinedTestReportHtml,
 } from "../src/modules/test-reports/test-report-combined-renderer.js"
-import type { RenderableTestReportAnalysis } from "../src/modules/test-reports/test-report-analysis-renderer.js"
+import {
+  renderTestReportAnalysisHtml,
+  type RenderableTestReportAnalysis,
+} from "../src/modules/test-reports/test-report-analysis-renderer.js"
 import { StructuredTestReportSchema } from "../src/modules/test-reports/test-report.contract.js"
 import { TestReportService } from "../src/modules/test-reports/test-report.service.js"
 import type { TestReportRepository } from "../src/modules/test-reports/test-report.repository.js"
@@ -737,6 +740,7 @@ test("static HTML and Markdown documents share one safe structured Revision", ()
   assert.match(html, /<html lang="zh-CN">/)
   assert.match(html, /测试报告/)
   assert.match(html, /逐 Eval 结果/)
+  assert.match(html, /技术详情/)
   assert.match(html, /输出一致性/)
   assert.match(html, /样本不足/)
   assert.match(html, /观察到的 Skill 工具调用/)
@@ -750,6 +754,11 @@ test("static HTML and Markdown documents share one safe structured Revision", ()
       `/workbenches/${base.workspaceId}/runs/${base.runId}\\?externalId=1`,
     ),
   )
+  assert.ok(html.indexOf("概览") < html.indexOf("逐 Eval 结果"))
+  assert.ok(html.indexOf("逐 Eval 结果") < html.indexOf("Usage 与 Artifact"))
+  assert.ok(html.indexOf("Usage 与 Artifact") < html.indexOf("技术详情"))
+  assert.match(html, /<details class="technical-details">/)
+  assert.doesNotMatch(html, /<section><h2>问题与变化<\/h2>/)
 
   assert.match(markdown, /^# &lt;script&gt;/)
   assert.match(markdown, /## 指标概览/)
@@ -821,11 +830,14 @@ test("combined HTML binds one fact Report Revision to one AI Analysis Revision",
   } satisfies RenderableTestReportAnalysis
 
   const html = renderCombinedTestReportHtml(analysis, report, "zh-CN")
+  const analysisHtml = renderTestReportAnalysisHtml(analysis, report, "zh-CN")
   const filename = getCombinedTestReportDocumentFilename(analysis, report)
 
   assert.equal([...html.matchAll(/<!doctype html>/g)].length, 1)
   assert.match(html, /确定性事实报告/)
   assert.match(html, /第二部分 · AI 分析/)
+  assert.match(analysisHtml, /font-size:16px/)
+  assert.match(analysisHtml, /class="analysis-document"/)
   assert.match(html, /Selected Case improved/)
   assert.match(
     html,
