@@ -34,13 +34,10 @@ import type { TestReportRepository } from "../src/modules/test-reports/test-repo
 const now = "2026-08-13T00:00:00.000Z"
 const sourceFingerprint = "a".repeat(64)
 const analyzerRuntimePolicy = {
-  schemaVersion: "test-report-analyzer-runtime-policy.v3",
-  maxTurns: 32,
-  maxBudgetUsd: 0.75,
-  timeoutMs: 240_000,
+  schemaVersion: "test-report-analyzer-runtime-policy.v4",
+  timeoutMs: 1_800_000,
   cancellationGraceMs: 5_000,
   maxInputCharacters: 500_000,
-  maxResponseCharacters: 200_000,
   capabilitySource: "project_settings",
   promptControlledFileAccess: true,
 } as const
@@ -197,16 +194,8 @@ function createReport(): StructuredTestReportV1 {
       sdkVersion: "0.3.220",
       model: "configured-analyzer-model",
       apiEndpointHash: null,
-      executionLimits: {
-        maxTurns: 32,
-        maxBudgetUsd: 1.5,
-        timeoutMs: 120_000,
-      },
-      gradingLimits: {
-        maxTurns: 12,
-        maxBudgetUsd: 0.5,
-        timeoutMs: 60_000,
-      },
+      executionLimits: { timeoutMs: 120_000 },
+      gradingLimits: { timeoutMs: 60_000 },
       executionPromptVersion: "execution-v1",
       graderProtocolVersion: "grader-v1",
       toolPermissionPolicyVersion: "tools-v1",

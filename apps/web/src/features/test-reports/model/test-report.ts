@@ -81,19 +81,15 @@ export interface TestReportAnalysis {
   readonly actualModelId: string | null
   readonly semanticConfigurationFingerprint: string
   readonly promptVersion: string
-  readonly inputFingerprint: string
-  readonly runtimePolicy: {
-    readonly schemaVersion: string
-    readonly maxTurns: number
-    readonly maxBudgetUsd: number
-    readonly timeoutMs: number
-    readonly cancellationGraceMs: number
-    readonly capabilitySource: "project_settings"
-    readonly promptControlledFileAccess: boolean
-    readonly persistSession?: boolean
-    readonly maxInputCharacters: number
-    readonly maxResponseCharacters: number
-  }
+    readonly inputFingerprint: string
+    readonly runtimePolicy: {
+      readonly schemaVersion: string
+      readonly timeoutMs: number
+      readonly cancellationGraceMs: number
+      readonly capabilitySource: "project_settings"
+      readonly promptControlledFileAccess: boolean
+      readonly maxInputCharacters: number
+    }
   readonly runtimePolicyFingerprint: string
   readonly analysis: TestReportAnalysisSnapshot | null
   readonly usage: TestReportAnalysisUsage | null

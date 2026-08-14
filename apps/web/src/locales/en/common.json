@@ -16,8 +16,6 @@
     "CLAUDE_API_ERROR": "The Claude API returned an unknown error. Try again later.",
     "CLAUDE_MAX_OUTPUT_TOKENS": "Claude reached the maximum output token limit. Reduce the task scope and try again.",
     "CLAUDE_PERMISSION_DENIED": "Claude does not have permission to use a required tool. Check the tool permissions.",
-    "CLAUDE_MAX_TURNS_REACHED": "Claude reached the maximum number of turns. Adjust the task or increase the turn limit.",
-    "CLAUDE_MAX_BUDGET_EXCEEDED": "Claude reached the spending limit for this task. Adjust the budget and try again.",
     "CLAUDE_STRUCTURED_OUTPUT_FAILED": "Claude could not produce valid structured output after repeated attempts.",
     "CLAUDE_BLOCKING_LIMIT_REACHED": "Claude reached a blocking usage limit. Wait for the limit to reset and try again.",
     "CLAUDE_RAPID_REFILL_BLOCKED": "Claude stopped because requests were refilling too quickly. Try again later.",

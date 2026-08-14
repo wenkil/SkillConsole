@@ -52,16 +52,8 @@ function createRun(
       sdkVersion: "0.3.220",
       model: "sdk_default",
       apiEndpointHash: null,
-      executionLimits: {
-        maxTurns: 32,
-        maxBudgetUsd: 1.5,
-        timeoutMs: 120_000,
-      },
-      gradingLimits: {
-        maxTurns: 12,
-        maxBudgetUsd: 0.5,
-        timeoutMs: 60_000,
-      },
+      executionLimits: { timeoutMs: 120_000 },
+      gradingLimits: { timeoutMs: 60_000 },
       executionPromptVersion: "execution-prompt-v2",
       graderProtocolVersion: "grader-protocol-v2",
       toolPermissionPolicyVersion: "tool-permission-policy-v2",

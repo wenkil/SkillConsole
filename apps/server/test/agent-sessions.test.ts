@@ -434,15 +434,13 @@ test("classifies every Claude SDK assistant error and terminal reason", () => {
     stop_hook_prevented: "CLAUDE_HOOK_BLOCKED",
     hook_stopped: "CLAUDE_HOOK_BLOCKED",
     tool_deferred: "CLAUDE_TOOL_DEFERRED",
-    max_turns: "CLAUDE_MAX_TURNS_REACHED",
     background_requested: "CLAUDE_BACKGROUND_TASK_UNSUPPORTED",
     completed: null,
-    budget_exhausted: "CLAUDE_MAX_BUDGET_EXCEEDED",
     structured_output_retry_exhausted:
       "CLAUDE_STRUCTURED_OUTPUT_FAILED",
     tool_deferred_unavailable: "CLAUDE_TOOL_UNAVAILABLE",
     turn_setup_failed: "CLAUDE_TURN_SETUP_FAILED",
-  } satisfies Record<TerminalReason, string | null>
+  } satisfies Partial<Record<TerminalReason, string | null>>
 
   for (const [terminalReason, expectedCode] of Object.entries(
     terminalCases,
@@ -470,10 +468,8 @@ test("classifies every Claude SDK assistant error and terminal reason", () => {
   }
 })
 
-test("maps Claude limits and disguised successful errors to failed turns", () => {
+test("maps structured output and disguised successful errors to failed turns", () => {
   const subtypeCases = {
-    error_max_turns: "CLAUDE_MAX_TURNS_REACHED",
-    error_max_budget_usd: "CLAUDE_MAX_BUDGET_EXCEEDED",
     error_max_structured_output_retries:
       "CLAUDE_STRUCTURED_OUTPUT_FAILED",
   } as const

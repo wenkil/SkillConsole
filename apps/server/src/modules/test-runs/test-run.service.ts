@@ -56,13 +56,9 @@ export const testRunProtocolVersion = "skill-test-run-v3"
 const projectSettingsPermissionPolicyVersion = "project-settings-v1"
 const maxFinalOutputCharacters = 200_000
 const executionLimits = {
-  maxTurns: 32,
-  maxBudgetUsd: 1.5,
   timeoutMs: 1_800_000,
 } as const
 const gradingLimits = {
-  maxTurns: 12,
-  maxBudgetUsd: 0.5,
   timeoutMs: 1_800_000,
 } as const
 
@@ -1106,7 +1102,6 @@ export class TestRunService {
         expectedConfigurationFingerprint: run.configurationFingerprint,
         systemPromptRole: "test-run-execution",
         expectedSystemPromptFingerprint: executionSystemPrompt.sha256,
-        maxTurns: executionLimits.maxTurns,
         environment: caseRuntimeEnvironment.values,
         protectedEnvironmentNames:
           caseRuntimeEnvironment.protectedNames,
@@ -1399,7 +1394,6 @@ export class TestRunService {
       expectedConfigurationFingerprint: run.configurationFingerprint,
       systemPromptRole: "test-run-grader",
       expectedSystemPromptFingerprint: graderSystemPrompt.sha256,
-      maxTurns: gradingLimits.maxTurns,
       environment: graderRuntimeEnvironment.values,
       protectedEnvironmentNames:
         graderRuntimeEnvironment.protectedNames,

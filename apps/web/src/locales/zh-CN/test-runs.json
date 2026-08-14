@@ -91,9 +91,6 @@
     "versionComparisonSummary": "配对串行版本对比",
     "versionComparisonSummaryDescription": "同一个 Eval 的两个版本连续运行；每个 Eval 交替先运行 Baseline 或 Candidate，避免固定顺序偏差。",
     "executionCount": "{{count}} 个执行 Case + {{count}} 个评分会话",
-    "budgetCeiling": "理论上限 US${{amount}}",
-    "timeCeiling": "串行超时上限约 {{minutes}} 分钟",
-    "estimateDisclaimer": "按当前 v1 运行限制计算；实际 Token、成本和耗时通常更低，并以冻结后的运行环境为准。",
     "confirmTitle": "确认本次执行选择",
     "confirmSkillEffect": "我确认冻结当前工作副本，并使用 EVALS R{{revision}}（{{count}} 个用例）执行 Skill 效果测试。",
     "confirmVersionComparison": "我确认使用 {{candidate}} 与 {{baseline}}，以及 EVALS R{{revision}}（{{count}} 个用例）执行版本对比。",
@@ -156,8 +153,8 @@
     "legacyEnvironment": "历史运行未保存环境快照。",
     "runtime": "Runtime",
     "model": "模型",
-    "executionLimits": "执行限制",
-    "gradingLimits": "评分限制",
+    "executionLimits": "执行超时",
+    "gradingLimits": "评分超时",
     "capabilities": "运行能力"
   },
   "states": {

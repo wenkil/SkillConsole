@@ -156,7 +156,7 @@
     "failedTitle": "AI analysis failed",
     "failedDescription": "Failure does not affect the fact report. You can create a new Analysis Revision with the same Cases.",
     "meta": "Actual model {{model}} · configured model {{configuredModel}} · Prompt {{prompt}} · {{count}} Cases",
-    "runtimePolicy": "Runtime {{schema}} · capabilities from {{capability}} · budget ceiling ${{budget}} · timeout {{timeout}}",
+    "runtimePolicy": "Runtime {{schema}} · capabilities from {{capability}} · timeout {{timeout}}",
     "usage": "{{input}} input · {{output}} output Tokens · ${{cost}} · {{duration}} · {{turns}} turns",
     "logs": {
       "title": "Live Analyzer logs",

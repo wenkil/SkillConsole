@@ -21,7 +21,6 @@ export interface RenderableTestReportAnalysis {
   readonly semanticConfigurationFingerprint: string
   readonly runtimePolicy: {
     readonly schemaVersion: string
-    readonly maxBudgetUsd: number
     readonly timeoutMs: number
   }
   readonly runtimePolicyFingerprint: string
@@ -209,7 +208,7 @@ export function renderTestReportAnalysisHtmlFragment(
   const usage = input.usage
     ? `<dl><div><dt>${escapeHtml(t.tokens)}</dt><dd>${input.usage.inputTokens + input.usage.outputTokens}</dd></div><div><dt>${escapeHtml(t.cost)}</dt><dd>$${input.usage.totalCostUsd.toFixed(4)}</dd></div><div><dt>${escapeHtml(t.duration)}</dt><dd>${escapeHtml(formatDuration(input.usage.durationMs))}</dd></div></dl>`
     : `<p>—</p>`
-  return `<div class="analysis-document"><header class="hero"><div class="eyebrow">${escapeHtml(t.title)}</div><h1>${escapeHtml(report.title)}</h1><p class="notice">${escapeHtml(t.modelNotice)}</p><div class="meta"><span>${escapeHtml(t.analysisRevision)} ${input.revisionNumber}</span><span>${escapeHtml(t.reportRevision)} ${report.reportRevisionNumber}</span><span>${escapeHtml(t.model)} ${escapeHtml(input.modelId)}</span><span>${escapeHtml(t.configuredModel)} ${escapeHtml(input.configuredModelId)}</span><span>${escapeHtml(t.prompt)} ${escapeHtml(input.promptVersion)}</span><span>${escapeHtml(t.runtimePolicy)} ${escapeHtml(input.runtimePolicy.schemaVersion)} · $${input.runtimePolicy.maxBudgetUsd.toFixed(2)} · ${escapeHtml(formatDuration(input.runtimePolicy.timeoutMs))}</span></div></header><section><h1>${escapeHtml(t.summary)}</h1><div class="panel summary">${escapeHtml(input.analysis.summary)}</div></section><section><h1>${escapeHtml(t.priorities)}</h1><div class="findings">${findings || "—"}</div></section><section><h1>${escapeHtml(t.limitations)}</h1><div class="panel">${limitations}</div></section><section><h1>${escapeHtml(t.usage)}</h1><div class="panel">${usage}</div></section></div>`
+  return `<div class="analysis-document"><header class="hero"><div class="eyebrow">${escapeHtml(t.title)}</div><h1>${escapeHtml(report.title)}</h1><p class="notice">${escapeHtml(t.modelNotice)}</p><div class="meta"><span>${escapeHtml(t.analysisRevision)} ${input.revisionNumber}</span><span>${escapeHtml(t.reportRevision)} ${report.reportRevisionNumber}</span><span>${escapeHtml(t.model)} ${escapeHtml(input.modelId)}</span><span>${escapeHtml(t.configuredModel)} ${escapeHtml(input.configuredModelId)}</span><span>${escapeHtml(t.prompt)} ${escapeHtml(input.promptVersion)}</span><span>${escapeHtml(t.runtimePolicy)} ${escapeHtml(input.runtimePolicy.schemaVersion)} · ${escapeHtml(formatDuration(input.runtimePolicy.timeoutMs))}</span></div></header><section><h1>${escapeHtml(t.summary)}</h1><div class="panel summary">${escapeHtml(input.analysis.summary)}</div></section><section><h1>${escapeHtml(t.priorities)}</h1><div class="findings">${findings || "—"}</div></section><section><h1>${escapeHtml(t.limitations)}</h1><div class="panel">${limitations}</div></section><section><h1>${escapeHtml(t.usage)}</h1><div class="panel">${usage}</div></section></div>`
 }
 
 export function renderTestReportAnalysisHtml(
@@ -241,7 +240,7 @@ export function renderTestReportAnalysisMarkdown(
     `- ${t.model}: \`${escapeMarkdown(input.modelId)}\``,
     `- ${t.configuredModel}: \`${escapeMarkdown(input.configuredModelId)}\``,
     `- ${t.prompt}: \`${escapeMarkdown(input.promptVersion)}\``,
-    `- ${t.runtimePolicy}: \`${escapeMarkdown(input.runtimePolicy.schemaVersion)}\` / $${input.runtimePolicy.maxBudgetUsd.toFixed(2)} / ${formatDuration(input.runtimePolicy.timeoutMs)}`,
+    `- ${t.runtimePolicy}: \`${escapeMarkdown(input.runtimePolicy.schemaVersion)}\` / ${formatDuration(input.runtimePolicy.timeoutMs)}`,
     "",
     `## ${t.summary}`,
     "",

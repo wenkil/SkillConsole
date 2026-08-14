@@ -91,9 +91,6 @@
     "versionComparisonSummary": "Paired serial version comparison",
     "versionComparisonSummaryDescription": "Both versions run consecutively for each Eval, alternating whether Baseline or Candidate runs first to reduce fixed-order bias.",
     "executionCount": "{{count}} execution cases + {{count}} grading sessions",
-    "budgetCeiling": "Theoretical ceiling US${{amount}}",
-    "timeCeiling": "Serial timeout ceiling ≈ {{minutes}} min",
-    "estimateDisclaimer": "Calculated from the current v1 limits. Actual tokens, cost, and duration are usually lower and the frozen runtime environment is authoritative.",
     "confirmTitle": "Confirm this run selection",
     "confirmSkillEffect": "I confirm the current working copy and EVALS R{{revision}} ({{count}} cases) for this Skill effect test.",
     "confirmVersionComparison": "I confirm {{candidate}}, {{baseline}}, and EVALS R{{revision}} ({{count}} cases) for this version comparison.",
@@ -156,8 +153,8 @@
     "legacyEnvironment": "No environment Snapshot was stored for this legacy run.",
     "runtime": "Runtime",
     "model": "Model",
-    "executionLimits": "Execution limits",
-    "gradingLimits": "Grading limits",
+    "executionLimits": "Execution timeout",
+    "gradingLimits": "Grading timeout",
     "capabilities": "Runtime capabilities"
   },
   "states": {

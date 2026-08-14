@@ -659,41 +659,17 @@ const TestReportAnalysisSnapshotSchema = Type.Object(
   { additionalProperties: false },
 )
 
-const TestReportAnalyzerRuntimePolicyV2Schema = Type.Object(
+const TestReportAnalyzerRuntimePolicySchema = Type.Object(
   {
-    schemaVersion: Type.Literal("test-report-analyzer-runtime-policy.v2"),
-    maxTurns: Type.Integer({ minimum: 1 }),
-    maxBudgetUsd: Type.Number({ minimum: 0 }),
+    schemaVersion: Type.Literal("test-report-analyzer-runtime-policy.v4"),
     timeoutMs: Type.Integer({ minimum: 1 }),
     cancellationGraceMs: Type.Integer({ minimum: 1 }),
     maxInputCharacters: Type.Integer({ minimum: 1 }),
-    maxResponseCharacters: Type.Integer({ minimum: 1 }),
-    capabilitySource: Type.Literal("project_settings"),
-    promptControlledFileAccess: Type.Literal(true),
-    persistSession: Type.Literal(false),
-  },
-  { additionalProperties: false },
-)
-
-const TestReportAnalyzerRuntimePolicyV3Schema = Type.Object(
-  {
-    schemaVersion: Type.Literal("test-report-analyzer-runtime-policy.v3"),
-    maxTurns: Type.Integer({ minimum: 1 }),
-    maxBudgetUsd: Type.Number({ minimum: 0 }),
-    timeoutMs: Type.Integer({ minimum: 1 }),
-    cancellationGraceMs: Type.Integer({ minimum: 1 }),
-    maxInputCharacters: Type.Integer({ minimum: 1 }),
-    maxResponseCharacters: Type.Integer({ minimum: 1 }),
     capabilitySource: Type.Literal("project_settings"),
     promptControlledFileAccess: Type.Literal(true),
   },
   { additionalProperties: false },
 )
-
-const TestReportAnalyzerRuntimePolicySchema = Type.Union([
-  TestReportAnalyzerRuntimePolicyV2Schema,
-  TestReportAnalyzerRuntimePolicyV3Schema,
-])
 
 export const TestReportAnalysisRevisionSchema = Type.Object(
   {

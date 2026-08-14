@@ -27,8 +27,6 @@ export type SkillInvocationObservation =
   | "NOT_APPLICABLE"
 
 export interface TestRunRuntimeLimitSnapshot {
-  maxTurns: number
-  maxBudgetUsd: number
   timeoutMs: number
 }
 

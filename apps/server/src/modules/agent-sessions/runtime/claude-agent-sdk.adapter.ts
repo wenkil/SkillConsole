@@ -172,9 +172,6 @@ class ClaudeAgentSdkSession implements AgentRuntimeSession {
         sessionStore: input.sessionStore,
         sessionStoreFlush: "eager",
         includePartialMessages: true,
-        ...(input.maxTurns !== undefined
-          ? { maxTurns: input.maxTurns }
-          : {}),
         ...(input.permissionMode
           ? { permissionMode: input.permissionMode }
           : {}),

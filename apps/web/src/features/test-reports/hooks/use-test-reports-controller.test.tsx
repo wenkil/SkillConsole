@@ -65,15 +65,12 @@ function makeAnalysis(
     promptVersion: "test-report-analyzer-v1",
     inputFingerprint: "a".repeat(64),
     runtimePolicy: {
-      schemaVersion: "test-report-analyzer-runtime-policy.v3",
-      maxTurns: 32,
-      maxBudgetUsd: 0.5,
-      timeoutMs: 240_000,
+      schemaVersion: "test-report-analyzer-runtime-policy.v4",
+      timeoutMs: 1_800_000,
       cancellationGraceMs: 1_000,
       capabilitySource: "project_settings",
       promptControlledFileAccess: true,
       maxInputCharacters: 100_000,
-      maxResponseCharacters: 20_000,
     },
     runtimePolicyFingerprint: "c".repeat(64),
     analysis: {

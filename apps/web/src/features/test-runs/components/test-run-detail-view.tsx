@@ -855,8 +855,6 @@ export function TestRunDetailView({
               <div className="grid grid-cols-[7rem_minmax(0,1fr)]">
                 <span>{t("detail.executionLimits")}</span>
                 <code>
-                  {run.environment.executionLimits.maxTurns} turns · US$
-                  {run.environment.executionLimits.maxBudgetUsd} ·{" "}
                   {Math.round(
                     run.environment.executionLimits.timeoutMs / 1_000,
                   )}
@@ -866,8 +864,6 @@ export function TestRunDetailView({
               <div className="grid grid-cols-[7rem_minmax(0,1fr)]">
                 <span>{t("detail.gradingLimits")}</span>
                 <code>
-                  {run.environment.gradingLimits.maxTurns} turns · US$
-                  {run.environment.gradingLimits.maxBudgetUsd} ·{" "}
                   {Math.round(
                     run.environment.gradingLimits.timeoutMs / 1_000,
                   )}

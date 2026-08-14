@@ -42,34 +42,14 @@ export interface TestReportAnalysisV1 {
 
 export interface TestReportAnalysisUsage extends StoredTestRunUsage {}
 
-export interface TestReportAnalyzerRuntimePolicyV2 {
-  readonly schemaVersion: "test-report-analyzer-runtime-policy.v2"
-  readonly maxTurns: number
-  readonly maxBudgetUsd: number
+export interface TestReportAnalyzerRuntimePolicy {
+  readonly schemaVersion: "test-report-analyzer-runtime-policy.v4"
   readonly timeoutMs: number
   readonly cancellationGraceMs: number
   readonly maxInputCharacters: number
-  readonly maxResponseCharacters: number
-  readonly capabilitySource: "project_settings"
-  readonly promptControlledFileAccess: true
-  readonly persistSession: false
-}
-
-export interface TestReportAnalyzerRuntimePolicyV3 {
-  readonly schemaVersion: "test-report-analyzer-runtime-policy.v3"
-  readonly maxTurns: number
-  readonly maxBudgetUsd: number
-  readonly timeoutMs: number
-  readonly cancellationGraceMs: number
-  readonly maxInputCharacters: number
-  readonly maxResponseCharacters: number
   readonly capabilitySource: "project_settings"
   readonly promptControlledFileAccess: true
 }
-
-export type TestReportAnalyzerRuntimePolicy =
-  | TestReportAnalyzerRuntimePolicyV2
-  | TestReportAnalyzerRuntimePolicyV3
 
 export interface CreateTestReportAnalysisInput {
   readonly reportId: string
@@ -79,7 +59,7 @@ export interface CreateTestReportAnalysisInput {
   readonly configurationFingerprint: string
   /** Secret-insensitive model/endpoint fingerprint used in input identity. */
   readonly semanticConfigurationFingerprint: string
-  readonly runtimePolicy: TestReportAnalyzerRuntimePolicyV3
+  readonly runtimePolicy: TestReportAnalyzerRuntimePolicy
   readonly runtimePolicyFingerprint: string
   readonly promptVersion: string
   readonly inputFingerprint: string

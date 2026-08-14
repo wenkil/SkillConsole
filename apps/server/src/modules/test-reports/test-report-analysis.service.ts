@@ -18,7 +18,7 @@ import type {
   TestReportAnalysisLogEvent,
   TestReportAnalysisLogPage,
   TestReportAnalysisRevisionView,
-  TestReportAnalyzerRuntimePolicyV3,
+  TestReportAnalyzerRuntimePolicy,
 } from "./test-report.domain.js"
 import { TestReportAnalysisDiagnostics } from "./test-report-analysis-diagnostics.js"
 import {
@@ -40,16 +40,13 @@ import type { TestReportDocumentLocale } from "./test-report-renderer.js"
 import { TestReportRepository } from "./test-report.repository.js"
 
 const analyzerRuntimePolicy = {
-  schemaVersion: "test-report-analyzer-runtime-policy.v3",
-  maxTurns: 32,
-  maxBudgetUsd: 0.75,
-  timeoutMs: 240_000,
+  schemaVersion: "test-report-analyzer-runtime-policy.v4",
+  timeoutMs: 1_800_000,
   cancellationGraceMs: 5_000,
   maxInputCharacters: 500_000,
-  maxResponseCharacters: 200_000,
   capabilitySource: "project_settings",
   promptControlledFileAccess: true,
-} as const satisfies TestReportAnalyzerRuntimePolicyV3
+} as const satisfies TestReportAnalyzerRuntimePolicy
 
 const terminalAgentEvents = new Set<AgentSessionEvent["type"]>([
   "turn.completed",
@@ -297,7 +294,7 @@ function foldAnalysisEvents(
 export class TestReportAnalysisService {
   private readonly workspace: TestReportAnalysisWorkspace
   private readonly diagnostics: TestReportAnalysisDiagnostics
-  private readonly runtimePolicy: TestReportAnalyzerRuntimePolicyV3
+  private readonly runtimePolicy: TestReportAnalyzerRuntimePolicy
   private readonly workers = new Map<string, Promise<void>>()
   private readonly activeSessions = new Map<string, string>()
   private readonly recordedAgentEventSequences = new Map<string, Set<number>>()
@@ -761,7 +758,6 @@ export class TestReportAnalysisService {
         expectedSystemPromptFingerprint: systemPrompt.sha256,
         workspaceLocator: prepared.locator,
         expectedConfigurationFingerprint,
-        maxTurns: revision.runtimePolicy.maxTurns,
         environment: environment.values,
         protectedEnvironmentNames: environment.protectedNames,
         additionalRedactedValues: [
@@ -1040,14 +1036,11 @@ export class TestReportAnalysisService {
         modelId: model,
       }
     }
-    if (
-      !folded.finalOutput ||
-      folded.finalOutput.length > revision.runtimePolicy.maxResponseCharacters
-    ) {
+    if (!folded.finalOutput) {
       return {
         ok: false,
         code: "TEST_REPORT_ANALYZER_OUTPUT_INVALID",
-        message: "The Analyzer response was empty or exceeded its size limit.",
+        message: "The Analyzer response was empty.",
         usage: folded.usage,
         modelId: model,
       }

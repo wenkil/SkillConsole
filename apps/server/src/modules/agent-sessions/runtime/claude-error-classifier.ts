@@ -36,10 +36,6 @@ const claudeErrorMessages = {
     "Claude reached the maximum output token limit.",
   CLAUDE_PERMISSION_DENIED:
     "Claude was denied permission to use a required tool.",
-  CLAUDE_MAX_TURNS_REACHED:
-    "Claude reached the maximum number of turns.",
-  CLAUDE_MAX_BUDGET_EXCEEDED:
-    "Claude reached the configured spending limit.",
   CLAUDE_STRUCTURED_OUTPUT_FAILED:
     "Claude could not produce valid structured output after retrying.",
   CLAUDE_BLOCKING_LIMIT_REACHED:
@@ -99,18 +95,17 @@ const assistantErrorCodes = {
   max_output_tokens: "CLAUDE_MAX_OUTPUT_TOKENS",
 } satisfies Record<SDKAssistantMessageError, ClaudeErrorCode>
 
-const resultSubtypeCodes = {
+const resultSubtypeCodes: Partial<
+  Record<SDKResultError["subtype"], ClaudeErrorCode | null>
+> = {
   error_during_execution: null,
-  error_max_turns: "CLAUDE_MAX_TURNS_REACHED",
-  error_max_budget_usd: "CLAUDE_MAX_BUDGET_EXCEEDED",
   error_max_structured_output_retries:
     "CLAUDE_STRUCTURED_OUTPUT_FAILED",
-} satisfies Record<
-  SDKResultError["subtype"],
-  ClaudeErrorCode | null
->
+}
 
-const terminalReasonCodes = {
+const terminalReasonCodes: Partial<
+  Record<TerminalReason, ClaudeErrorCode | null>
+> = {
   blocking_limit: "CLAUDE_BLOCKING_LIMIT_REACHED",
   rapid_refill_breaker: "CLAUDE_RAPID_REFILL_BLOCKED",
   prompt_too_long: "CLAUDE_PROMPT_TOO_LONG",
@@ -123,15 +118,13 @@ const terminalReasonCodes = {
   stop_hook_prevented: "CLAUDE_HOOK_BLOCKED",
   hook_stopped: "CLAUDE_HOOK_BLOCKED",
   tool_deferred: "CLAUDE_TOOL_DEFERRED",
-  max_turns: "CLAUDE_MAX_TURNS_REACHED",
   background_requested: "CLAUDE_BACKGROUND_TASK_UNSUPPORTED",
   completed: null,
-  budget_exhausted: "CLAUDE_MAX_BUDGET_EXCEEDED",
   structured_output_retry_exhausted:
     "CLAUDE_STRUCTURED_OUTPUT_FAILED",
   tool_deferred_unavailable: "CLAUDE_TOOL_UNAVAILABLE",
   turn_setup_failed: "CLAUDE_TURN_SETUP_FAILED",
-} satisfies Record<TerminalReason, ClaudeErrorCode | null>
+}
 
 export function createClaudeError(
   code: ClaudeErrorCode,

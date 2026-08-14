@@ -49,7 +49,6 @@ export interface CreateAgentSessionInWorkspaceInput {
   readonly expectedConfigurationFingerprint: string
   readonly systemPromptRole: AgentSystemPromptRole
   readonly expectedSystemPromptFingerprint: string
-  readonly maxTurns?: number
   readonly permissionMode?: AgentRuntimePermissionMode
   readonly tools?: readonly string[]
   readonly allowedTools?: readonly string[]
@@ -154,9 +153,6 @@ export class AgentSessionService {
         cwd,
         systemPrompt: systemPrompt.content,
         origin: input.origin,
-        ...(input.maxTurns !== undefined
-          ? { maxTurns: input.maxTurns }
-          : {}),
         ...(input.permissionMode
           ? { permissionMode: input.permissionMode }
           : {}),
@@ -359,7 +355,6 @@ export class AgentSessionService {
     readonly sessionId: string
     readonly cwd: string
     readonly sdkSessionId: string | null
-    readonly maxTurns?: number
     readonly permissionMode?: AgentRuntimePermissionMode
     readonly tools?: readonly string[]
     readonly allowedTools?: readonly string[]
@@ -393,9 +388,6 @@ export class AgentSessionService {
         await this.logs.recordDiagnostic(input.sessionId, diagnostic)
         await input.onRuntimeDiagnostic?.(diagnostic)
       },
-      ...(input.maxTurns !== undefined
-        ? { maxTurns: input.maxTurns }
-        : {}),
       ...(input.permissionMode
         ? { permissionMode: input.permissionMode }
         : {}),
@@ -512,7 +504,6 @@ export class AgentSessionService {
     readonly prompt: string
     readonly workspaceLocator: string
     readonly cwd: string
-    readonly maxTurns?: number
     readonly permissionMode?: AgentRuntimePermissionMode
     readonly tools?: readonly string[]
     readonly allowedTools?: readonly string[]
@@ -545,9 +536,6 @@ export class AgentSessionService {
         redactedValues: [...new Set(input.redactedValues)],
         ...(input.onRuntimeDiagnostic
           ? { onRuntimeDiagnostic: input.onRuntimeDiagnostic }
-          : {}),
-        ...(input.maxTurns !== undefined
-          ? { maxTurns: input.maxTurns }
           : {}),
         ...(input.permissionMode
           ? { permissionMode: input.permissionMode }

@@ -156,7 +156,7 @@
     "failedTitle": "AI 分析失败",
     "failedDescription": "失败不会影响事实报告。可以使用相同 Case 创建新的 Analysis Revision。",
     "meta": "实际模型 {{model}} · 配置模型 {{configuredModel}} · Prompt {{prompt}} · {{count}} 个 Case",
-    "runtimePolicy": "Runtime {{schema}} · 能力来源 {{capability}} · 预算上限 ${{budget}} · 超时 {{timeout}}",
+    "runtimePolicy": "Runtime {{schema}} · 能力来源 {{capability}} · 超时 {{timeout}}",
     "usage": "输入 {{input}} · 输出 {{output}} Token · ${{cost}} · {{duration}} · {{turns}} 轮",
     "logs": {
       "title": "Analyzer 实时日志",

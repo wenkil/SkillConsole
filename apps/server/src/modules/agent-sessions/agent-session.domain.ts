@@ -44,8 +44,6 @@ export const claudeErrorCodes = [
   "CLAUDE_API_ERROR",
   "CLAUDE_MAX_OUTPUT_TOKENS",
   "CLAUDE_PERMISSION_DENIED",
-  "CLAUDE_MAX_TURNS_REACHED",
-  "CLAUDE_MAX_BUDGET_EXCEEDED",
   "CLAUDE_STRUCTURED_OUTPUT_FAILED",
   "CLAUDE_BLOCKING_LIMIT_REACHED",
   "CLAUDE_RAPID_REFILL_BLOCKED",
@@ -218,7 +216,6 @@ export interface OpenAgentRuntimeSessionInput {
   readonly claudeConfigDir: string
   readonly sessionStore: SessionStore
   readonly resumeSessionId?: string
-  readonly maxTurns?: number
   readonly permissionMode?: AgentRuntimePermissionMode
   readonly tools?: readonly string[]
   readonly allowedTools?: readonly string[]

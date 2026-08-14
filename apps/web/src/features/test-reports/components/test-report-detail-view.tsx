@@ -493,7 +493,6 @@ function AnalyzerPanel({
                       "project_settings"
                         ? "settings.json"
                         : analysis.runtimePolicy.capabilitySource,
-                    budget: analysis.runtimePolicy.maxBudgetUsd.toFixed(2),
                     timeout: formatAnalysisDuration(
                       analysis.runtimePolicy.timeoutMs,
                     ),

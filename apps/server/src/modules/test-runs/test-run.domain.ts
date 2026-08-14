@@ -24,8 +24,6 @@ export const testRunExecutionPolicies = [
 ] as const satisfies readonly TestRunExecutionPolicy[]
 
 export interface TestRunRuntimeLimitSnapshot {
-  readonly maxTurns: number
-  readonly maxBudgetUsd: number
   readonly timeoutMs: number
 }
 

@@ -24,11 +24,6 @@ import {
 } from "@/shared/components/ui/dialog"
 import { cn } from "@/shared/lib/utils"
 
-const executionBudgetUsd = 1.5
-const gradingBudgetUsd = 0.5
-const executionTimeoutMs = 120_000
-const gradingTimeoutMs = 60_000
-
 function versionLabel(version: SkillVersionBrowser): string {
   return `R${version.sequenceNumber} · ${version.name}`
 }
@@ -103,11 +98,6 @@ export function StartTestRunDialog({
   )
   const confirmed = confirmedSelection === selectionSignature
   const executionCaseCount = (selectedRevision?.evalCount ?? 0) * 2
-  const theoreticalBudgetUsd =
-    executionCaseCount * (executionBudgetUsd + gradingBudgetUsd)
-  const theoreticalMinutes = Math.ceil(
-    (executionCaseCount * (executionTimeoutMs + gradingTimeoutMs)) / 60_000,
-  )
 
   const resetConfirmation = () => setConfirmedSelection(null)
 
@@ -360,26 +350,13 @@ export function StartTestRunDialog({
               </p>
               {selectedRevision ? (
                 <>
-                  <div className="mt-3 grid grid-cols-3 gap-px border border-rule bg-rule font-mono text-[9px]">
+                  <div className="mt-3 border border-rule bg-rule font-mono text-[9px]">
                     <span className="bg-background p-2">
                       {t("start.executionCount", {
                         count: executionCaseCount,
                       })}
                     </span>
-                    <span className="bg-background p-2">
-                      {t("start.budgetCeiling", {
-                        amount: theoreticalBudgetUsd.toFixed(2),
-                      })}
-                    </span>
-                    <span className="bg-background p-2">
-                      {t("start.timeCeiling", {
-                        minutes: theoreticalMinutes,
-                      })}
-                    </span>
                   </div>
-                  <span className="mt-1.5 block font-mono text-[8px] text-muted-foreground">
-                    {t("start.estimateDisclaimer")}
-                  </span>
                 </>
               ) : null}
             </div>

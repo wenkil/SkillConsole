@@ -183,8 +183,6 @@ const TestRunBaselineSchema = Type.Union([
 
 const RuntimeLimitSnapshotSchema = Type.Object(
   {
-    maxTurns: Type.Integer({ minimum: 1 }),
-    maxBudgetUsd: Type.Number({ minimum: 0 }),
     timeoutMs: Type.Integer({ minimum: 1 }),
   },
   { additionalProperties: false },
