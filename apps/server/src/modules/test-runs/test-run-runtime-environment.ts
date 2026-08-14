@@ -144,3 +144,27 @@ export function forTestRunWorkspace(
     protectedNames: environment.protectedNames,
   }
 }
+
+/**
+ * Builds the same credential-minimized transport environment used by test
+ * Runs. Report Analyzer sessions reuse this boundary without inheriting the
+ * host process environment or installing project settings in their workspace.
+ */
+export function buildIsolatedAgentRuntimeEnvironment(
+  settings: Buffer,
+  processEnvironment: NodeJS.ProcessEnv = process.env,
+): TestRunRuntimeEnvironment {
+  return buildTestRunRuntimeEnvironment(settings, processEnvironment)
+}
+
+/**
+ * Binds an isolated Agent environment to a controlled workspace. Temporary
+ * files stay under outputs/.tmp so the strong sandbox can remain write-only
+ * outside that directory.
+ */
+export function forIsolatedAgentWorkspace(
+  environment: TestRunRuntimeEnvironment,
+  workspacePath: string,
+): TestRunRuntimeEnvironment {
+  return forTestRunWorkspace(environment, workspacePath)
+}

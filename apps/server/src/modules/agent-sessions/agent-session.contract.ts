@@ -17,6 +17,7 @@ const AgentSessionTurnStatusSchema = Type.Union([
 ])
 const AgentSessionEventTypeSchema = Type.Union([
   Type.Literal("session.started"),
+  Type.Literal("session.initialized"),
   Type.Literal("turn.started"),
   Type.Literal("assistant.message"),
   Type.Literal("tool.completed"),

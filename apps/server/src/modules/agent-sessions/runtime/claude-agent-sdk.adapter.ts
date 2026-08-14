@@ -143,10 +143,18 @@ class ClaudeAgentSdkSession implements AgentRuntimeSession {
         abortController: this.abortController,
         cwd: input.cwd,
         ...(input.environment ? { env: { ...input.environment } } : {}),
-        ...(input.sandboxPolicy === "test_run_strict_v1"
+        ...(input.sandboxPolicy === "test_run_strict_v1" ||
+        input.sandboxPolicy === "report_analyzer_strict_v1"
           ? { sandbox: strictTestRunSandbox(input) }
           : {}),
         settingSources: input.isolateSettings ? [] : ["project"],
+        ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
+        ...(input.persistSession !== undefined
+          ? { persistSession: input.persistSession }
+          : {}),
+        ...(input.strictMcpConfig !== undefined
+          ? { strictMcpConfig: input.strictMcpConfig }
+          : {}),
         ...(input.availableTools
           ? { tools: [...input.availableTools] }
           : {}),

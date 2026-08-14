@@ -13,16 +13,22 @@ import path from "node:path"
 import test from "node:test"
 import { fileURLToPath } from "node:url"
 
-import { eq } from "drizzle-orm"
+import { eq, inArray } from "drizzle-orm"
 import { migrate } from "drizzle-orm/node-postgres/migrator"
 
 import { buildApplication } from "../src/app.js"
 import {
   closeDatabaseClient,
   createDatabaseClient,
+  evalGenerationTasks,
+  evalRevisions,
+  evalSuites,
   skillDraftFiles,
   skillDrafts,
   skillSnapshots,
+  skillTestReportAnalyses,
+  skillTestReports,
+  skillTestReportRevisions,
   skillTestRunEvents,
   skillTestRuns,
   skillVersions,
@@ -106,6 +112,10 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
       await this.input.onEvent(null, {
         type: "initialized",
         sdkSessionId: randomUUID(),
+        model: "claude-fake-test-run",
+        tools: [...(this.input.availableTools ?? [])],
+        skills: [...(this.input.enabledSkills ?? [])],
+        mcpServers: [],
       })
 
       const phase: FakeSessionPhase = this.input.cwd.includes(
@@ -562,6 +572,7 @@ test(
     const draftId = randomUUID()
     const otherWorkspaceId = randomUUID()
     const otherDraftId = randomUUID()
+    const lifecycleAnalysisId = randomUUID()
     const skillContent =
       "---\nname: sample-skill\ndescription: Test Skill\n---\n\nSnapshot marker: baseline-v1\n"
     const candidateSkillContent =
@@ -771,6 +782,53 @@ test(
       assert.equal(terminal.cases.length, 6)
       assert.equal(terminal.benchmark?.target.passed, 3)
       assert.equal(terminal.benchmark?.baseline.passed, 3)
+      let automaticallyGeneratedReport:
+        | { readonly status: string; readonly currentRevisionId: string | null }
+        | undefined
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        ;[automaticallyGeneratedReport] =
+          await application.databaseClient.database
+            .select({
+              status: skillTestReports.status,
+              currentRevisionId: skillTestReports.currentRevisionId,
+            })
+            .from(skillTestReports)
+            .where(eq(skillTestReports.runId, terminal.id))
+            .limit(1)
+        if (
+          automaticallyGeneratedReport &&
+          automaticallyGeneratedReport.status !== "GENERATION_PENDING"
+        ) {
+          break
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+      assert.equal(automaticallyGeneratedReport?.status, "AVAILABLE")
+      assert.ok(automaticallyGeneratedReport?.currentRevisionId)
+      const skillEffectReportResponse = await fetch(
+        `${address}/api/test-runs/${terminal.id}/report`,
+      )
+      assert.equal(skillEffectReportResponse.status, 200)
+      const skillEffectReport = (await skillEffectReportResponse.json()) as {
+        reportType: string
+        status: string
+        report: {
+          schemaVersion: string
+          reportType: string
+          cases: unknown[]
+          metrics: {
+            baseline: { activation: { observedRate: { status: string } } }
+          }
+        }
+      }
+      assert.equal(skillEffectReport.reportType, "skill_effect")
+      assert.equal(skillEffectReport.status, "AVAILABLE")
+      assert.equal(skillEffectReport.report.schemaVersion, "test-report.v1")
+      assert.equal(skillEffectReport.report.cases.length, 3)
+      assert.equal(
+        skillEffectReport.report.metrics.baseline.activation.observedRate.status,
+        "NOT_APPLICABLE",
+      )
       const targetExecutions = agentRuntimeAdapter.executions.slice(
         targetExecutionStart,
         targetExecutionStart + 6,
@@ -1009,6 +1067,26 @@ test(
         ),
         true,
       )
+      const missingCapabilityReportResponse = await fetch(
+        `${address}/api/test-runs/${missingCapabilityRun.id}/report`,
+      )
+      assert.equal(missingCapabilityReportResponse.status, 200)
+      const missingCapabilityReport =
+        (await missingCapabilityReportResponse.json()) as {
+          status: string
+          report: {
+            run: {
+              runStatus: string
+              terminalError: { code: string } | null
+            }
+          }
+        }
+      assert.equal(missingCapabilityReport.status, "PARTIAL")
+      assert.equal(missingCapabilityReport.report.run.runStatus, "FAILED")
+      assert.equal(
+        missingCapabilityReport.report.run.terminalError?.code,
+        "TEST_RUN_RUNTIME_CAPABILITY_MISSING",
+      )
 
       const comparisonSessionStart = agentRuntimeAdapter.sessions.length
       const comparisonExecutionStart =
@@ -1135,6 +1213,210 @@ test(
         true,
       )
       assert.equal(agentRuntimeAdapter.maxActiveSends, 1)
+
+      const comparisonReportResponse = await fetch(
+        `${address}/api/test-runs/${comparison.id}/report`,
+      )
+      assert.equal(comparisonReportResponse.status, 200)
+      const comparisonReport = (await comparisonReportResponse.json()) as {
+        id: string
+        reportType: string
+        status: string
+        comparabilityStatus: string
+        report: {
+          reportRevisionId: string
+          reportType: string
+          cases: Array<{ pairComparability: string }>
+          metrics: { delta: unknown }
+        }
+      }
+      assert.equal(comparisonReport.reportType, "version_comparison")
+      assert.equal(comparisonReport.status, "AVAILABLE")
+      assert.equal(comparisonReport.comparabilityStatus, "COMPARABLE")
+      assert.equal(comparisonReport.report.cases.length, 3)
+      assert.equal(
+        comparisonReport.report.cases.every(
+          (item) => item.pairComparability === "COMPARABLE",
+        ),
+        true,
+      )
+      assert.notEqual(comparisonReport.report.metrics.delta, null)
+      const reportCasesResponse = await fetch(
+        `${address}/api/test-reports/${comparisonReport.id}/cases?pageSize=2`,
+      )
+      assert.equal(reportCasesResponse.status, 200)
+      const reportCases = (await reportCasesResponse.json()) as {
+        items: unknown[]
+        pagination: { total: number; pageCount: number }
+      }
+      assert.equal(reportCases.items.length, 2)
+      assert.equal(reportCases.pagination.total, 3)
+      assert.equal(reportCases.pagination.pageCount, 2)
+      const firstReportCase = comparisonReport.report.cases[0]
+      assert.ok(firstReportCase)
+      const reportCaseDetailResponse = await fetch(
+        `${address}/api/test-reports/${comparisonReport.id}/cases/${comparison.cases[0]!.evalRevisionCaseId}`,
+      )
+      assert.equal(reportCaseDetailResponse.status, 200)
+      const reportCaseDetail = (await reportCaseDetailResponse.json()) as {
+        summary: { evalRevisionCaseId: string }
+        targetCase: { finalOutput: string | null }
+        baselineCase: { finalOutput: string | null }
+      }
+      assert.equal(
+        reportCaseDetail.summary.evalRevisionCaseId,
+        comparison.cases[0]!.evalRevisionCaseId,
+      )
+      assert.ok(reportCaseDetail.targetCase.finalOutput)
+      assert.ok(reportCaseDetail.baselineCase.finalOutput)
+      const regenerateResponse = await fetch(
+        `${address}/api/test-reports/${comparisonReport.id}/regenerate`,
+        {
+          method: "POST",
+          headers: { "idempotency-key": "comparison-report-regenerate-1" },
+        },
+      )
+      assert.equal(regenerateResponse.status, 200)
+      const regeneratedReport = (await regenerateResponse.json()) as {
+        currentRevisionId: string
+      }
+      assert.equal(
+        regeneratedReport.currentRevisionId,
+        comparisonReport.report.reportRevisionId,
+      )
+      const reportRevisions = await application.databaseClient.database
+        .select({ id: skillTestReportRevisions.id })
+        .from(skillTestReportRevisions)
+        .where(
+          eq(skillTestReportRevisions.reportId, comparisonReport.id),
+        )
+      assert.equal(reportRevisions.length, 1)
+      await application.databaseClient.database
+        .update(skillTestReportRevisions)
+        .set({ generatorVersion: "test-report-generator-legacy" })
+        .where(
+          eq(
+            skillTestReportRevisions.id,
+            comparisonReport.report.reportRevisionId,
+          ),
+        )
+      const upgradedGeneratorResponse = await fetch(
+        `${address}/api/test-reports/${comparisonReport.id}/regenerate`,
+        {
+          method: "POST",
+          headers: {
+            "idempotency-key": "comparison-report-regenerate-generator-v2",
+          },
+        },
+      )
+      assert.equal(upgradedGeneratorResponse.status, 200)
+      const upgradedGeneratorReport =
+        (await upgradedGeneratorResponse.json()) as {
+          currentRevisionId: string
+          report: { generatorVersion: string; reportRevisionNumber: number }
+        }
+      assert.notEqual(
+        upgradedGeneratorReport.currentRevisionId,
+        comparisonReport.report.reportRevisionId,
+      )
+      assert.equal(upgradedGeneratorReport.report.reportRevisionNumber, 2)
+      assert.equal(
+        (
+          await application.databaseClient.database
+            .select({ id: skillTestReportRevisions.id })
+            .from(skillTestReportRevisions)
+            .where(
+              eq(skillTestReportRevisions.reportId, comparisonReport.id),
+            )
+        ).length,
+        2,
+      )
+      await application.databaseClient.database
+        .insert(skillTestReportAnalyses)
+        .values({
+          id: lifecycleAnalysisId,
+          reportId: comparisonReport.id,
+          reportRevisionId: upgradedGeneratorReport.currentRevisionId,
+          revisionNumber: 1,
+          status: "PENDING",
+          configuredModelId: "sdk_default",
+          actualModelId: null,
+          configurationFingerprint: "a".repeat(64),
+          semanticConfigurationFingerprint: "b".repeat(64),
+          runtimePolicy: {
+            schemaVersion: "test-report-analyzer-runtime-policy.v1",
+            maxTurns: 1,
+            maxBudgetUsd: 0.75,
+            timeoutMs: 90_000,
+            cancellationGraceMs: 5_000,
+            maxPromptCharacters: 500_000,
+            maxResponseCharacters: 200_000,
+            sandboxPolicy: "report_analyzer_strict_v1",
+            persistSession: false,
+            strictMcpConfig: true,
+            toolsEnabled: false,
+            skillsEnabled: false,
+            mcpEnabled: false,
+          },
+          runtimePolicyFingerprint: "c".repeat(64),
+          promptVersion: "test-report-analyzer-prompt-v1",
+          inputFingerprint: "d".repeat(64),
+          selectedEvalRevisionCaseIds: [
+            comparison.cases[0]!.evalRevisionCaseId,
+          ],
+          idempotencyKey: `lifecycle-${lifecycleAnalysisId}`,
+        })
+      const htmlDocumentResponse = await fetch(
+        `${address}/api/test-reports/${comparisonReport.id}/revisions/${upgradedGeneratorReport.currentRevisionId}/document.html?locale=zh-CN`,
+      )
+      assert.equal(htmlDocumentResponse.status, 200)
+      assert.match(
+        htmlDocumentResponse.headers.get("content-type") ?? "",
+        /^text\/html/,
+      )
+      assert.match(
+        htmlDocumentResponse.headers.get("content-security-policy") ?? "",
+        /default-src 'none'/,
+      )
+      assert.match(
+        htmlDocumentResponse.headers.get("content-disposition") ?? "",
+        /^inline/,
+      )
+      const htmlDocument = await htmlDocumentResponse.text()
+      assert.match(htmlDocument, /^<!doctype html>/)
+      assert.match(htmlDocument, /逐 Eval 结果/)
+      assert.match(htmlDocument, /\?externalId=1/)
+      assert.doesNotMatch(htmlDocument, /controlled fixture summarized/)
+
+      const markdownDocumentResponse = await fetch(
+        `${address}/api/test-reports/${comparisonReport.id}/revisions/${upgradedGeneratorReport.currentRevisionId}/document.md?locale=en`,
+      )
+      assert.equal(markdownDocumentResponse.status, 200)
+      assert.match(
+        markdownDocumentResponse.headers.get("content-disposition") ?? "",
+        /^attachment/,
+      )
+      assert.match(await markdownDocumentResponse.text(), /^# /)
+
+      const historicalDocumentResponse = await fetch(
+        `${address}/api/test-reports/${comparisonReport.id}/revisions/${comparisonReport.report.reportRevisionId}/document.html?locale=en`,
+      )
+      assert.equal(historicalDocumentResponse.status, 200)
+      const jsonDocumentResponse = await fetch(
+        `${address}/api/test-reports/${comparisonReport.id}/revisions/${upgradedGeneratorReport.currentRevisionId}/document.json`,
+      )
+      assert.equal(jsonDocumentResponse.status, 404)
+      const reportListResponse = await fetch(
+        `${address}/api/skill-workspaces/${workspaceId}/test-reports?reportType=version_comparison`,
+      )
+      assert.equal(reportListResponse.status, 200)
+      const reportList = (await reportListResponse.json()) as {
+        items: Array<{ runId: string }>
+      }
+      assert.equal(
+        reportList.items.some((item) => item.runId === comparison.id),
+        true,
+      )
 
       for (const runCase of comparison.cases) {
         const artifact = runCase.artifacts[0]
@@ -1316,6 +1598,36 @@ test(
           "grading",
         ],
       )
+      const executionFailureReportResponse = await fetch(
+        `${address}/api/test-runs/${executionFailureRun.id}/report`,
+      )
+      assert.equal(executionFailureReportResponse.status, 200)
+      const executionFailureReport =
+        (await executionFailureReportResponse.json()) as {
+          id: string
+          status: string
+        }
+      assert.equal(executionFailureReport.status, "PARTIAL")
+      const baselineExecutionIssueResponse = await fetch(
+        `${address}/api/test-reports/${executionFailureReport.id}/cases?issueKind=EXECUTION_ERROR&side=BASELINE&externalId=1`,
+      )
+      assert.equal(baselineExecutionIssueResponse.status, 200)
+      assert.equal(
+        ((await baselineExecutionIssueResponse.json()) as {
+          pagination: { total: number }
+        }).pagination.total,
+        1,
+      )
+      const targetExecutionIssueResponse = await fetch(
+        `${address}/api/test-reports/${executionFailureReport.id}/cases?issueKind=EXECUTION_ERROR&side=TARGET&externalId=1`,
+      )
+      assert.equal(targetExecutionIssueResponse.status, 200)
+      assert.equal(
+        ((await targetExecutionIssueResponse.json()) as {
+          pagination: { total: number }
+        }).pagination.total,
+        0,
+      )
 
       agentRuntimeAdapter.planFailure({
         phase: "grading",
@@ -1379,15 +1691,37 @@ test(
         canceledRunStarted.id,
       )
       assert.equal(canceledRun.status, "CANCELED")
+      const canceledExecutionStatuses = canceledRun.cases.map(
+        (runCase) => runCase.executionStatus,
+      )
       assert.equal(
-        canceledRun.cases.every(
-          (runCase) => runCase.executionStatus === "CANCELED",
+        canceledExecutionStatuses.every((status) =>
+          ["CANCELED", "INTERRUPTED"].includes(status),
         ),
         true,
+      )
+      assert.ok(
+        canceledExecutionStatuses.filter((status) => status === "CANCELED")
+          .length >=
+          canceledRun.cases.length - 1,
       )
       assert.ok(agentRuntimeAdapter.interruptCount >= 1)
       assert.equal(agentRuntimeAdapter.maxActiveSends, 1)
       assert.equal(agentRuntimeAdapter.activeSends, 0)
+      const canceledReportResponse = await fetch(
+        `${address}/api/test-runs/${canceledRun.id}/report`,
+      )
+      assert.equal(canceledReportResponse.status, 200)
+      const canceledReport = (await canceledReportResponse.json()) as {
+        status: string
+        report: {
+          run: { runStatus: string }
+          completeness: { status: string }
+        }
+      }
+      assert.equal(canceledReport.status, "PARTIAL")
+      assert.equal(canceledReport.report.run.runStatus, "CANCELED")
+      assert.equal(canceledReport.report.completeness.status, "PARTIAL")
 
       const target = terminal.cases.find((item) => item.side === "TARGET")
       const baseline = terminal.cases.find(
@@ -1433,15 +1767,20 @@ test(
         true,
       )
       const executionOpens = agentRuntimeAdapter.opens.filter(
-        (item) => item.canUseTool !== undefined,
+        (item) =>
+          item.canUseTool !== undefined &&
+          item.sandboxPolicy === "test_run_strict_v1",
       )
+      assert.ok(executionOpens.length > 0)
       assert.equal(
         executionOpens.every(
           (item) =>
-            item.availableTools?.includes("Skill") === true &&
             item.isolateSettings === true &&
             item.sandboxPolicy === "test_run_strict_v1" &&
-            item.environment?.DATABASE_URL === undefined,
+            item.environment?.DATABASE_URL === undefined &&
+            (item.enabledSkills?.length
+              ? item.availableTools?.includes("Skill") === true
+              : item.availableTools?.includes("Skill") === false),
         ),
         true,
       )
@@ -1534,6 +1873,29 @@ test(
         status: "legacy_unavailable",
       })
       assert.equal(legacyRun.cases.length, 0)
+      const legacyReportResponse = await fetch(
+        `${address}/api/test-runs/${legacyRunId}/report`,
+      )
+      assert.equal(legacyReportResponse.status, 200)
+      const legacyReport = (await legacyReportResponse.json()) as {
+        status: string
+        report: {
+          environment: { status: string }
+          comparability: { status: string }
+          completeness: { status: string }
+          cases: readonly { evalRevisionCaseId: string }[]
+        }
+      }
+      assert.equal(legacyReport.status, "PARTIAL")
+      assert.deepEqual(legacyReport.report.environment, {
+        status: "legacy_unavailable",
+      })
+      assert.equal(
+        legacyReport.report.comparability.status,
+        "UNKNOWN_LEGACY",
+      )
+      assert.equal(legacyReport.report.completeness.status, "PARTIAL")
+      assert.equal(legacyReport.report.cases.length, published.revision.evalCount)
       await inspectionClient.database
         .delete(skillTestRuns)
         .where(eq(skillTestRuns.id, legacyRunId))
@@ -1574,6 +1936,35 @@ test(
         applicationName: "skillconsole-test-run-loop-cleanup",
         maxConnections: 1,
       })
+      const generationSuiteIds = (
+        await cleanupClient.database
+          .select({ id: evalSuites.id })
+          .from(evalSuites)
+          .where(eq(evalSuites.workspaceId, workspaceId))
+      ).map((suite) => suite.id)
+      if (generationSuiteIds.length > 0) {
+        await cleanupClient.database
+          .delete(skillTestRuns)
+          .where(eq(skillTestRuns.workspaceId, workspaceId))
+        assert.equal(
+          (
+            await cleanupClient.database
+              .select({ id: skillTestReportAnalyses.id })
+              .from(skillTestReportAnalyses)
+              .where(eq(skillTestReportAnalyses.id, lifecycleAnalysisId))
+          ).length,
+          0,
+          "deleting the Run must cascade through Report, Revision, and Analysis",
+        )
+        await cleanupClient.database
+          .delete(evalRevisions)
+          .where(inArray(evalRevisions.suiteId, generationSuiteIds))
+        await cleanupClient.database
+          .delete(evalGenerationTasks)
+          .where(
+            inArray(evalGenerationTasks.suiteId, generationSuiteIds),
+          )
+      }
       await cleanupClient.database
         .delete(skillWorkspaces)
         .where(eq(skillWorkspaces.id, otherWorkspaceId))

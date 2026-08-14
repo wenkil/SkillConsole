@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Cpu,
   FileDown,
+  FileChartColumn,
   Fingerprint,
   ListTree,
   LoaderCircle,
@@ -12,7 +13,7 @@ import {
 } from "lucide-react"
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 
 import { TestRunStatusBadge } from "@/features/test-runs/components/test-run-status"
 import { useTestRunDetailController } from "@/features/test-runs/hooks/use-test-runs-controller"
@@ -292,10 +293,17 @@ export function TestRunDetailView({
 }) {
   const { t } = useTranslation("testRuns")
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const linkedExternalId = useMemo(() => {
+    const value = searchParams.get("externalId")
+    if (!value || !/^\d+$/.test(value)) return null
+    const parsed = Number(value)
+    return Number.isSafeInteger(parsed) ? parsed : null
+  }, [searchParams])
   const [tab, setTab] = useState<"results" | "logs">("results")
   const [requestedExternalId, setRequestedExternalId] = useState<
     number | null
-  >(null)
+  >(linkedExternalId)
   const [logSide, setLogSide] = useState<"" | "TARGET" | "BASELINE">("")
   const [logExternalId, setLogExternalId] = useState("")
   const [logPhase, setLogPhase] = useState<
@@ -316,7 +324,6 @@ export function TestRunDetailView({
     runId,
     logFilters,
   )
-
   if (controller.loading) {
     return (
       <main className="flex h-full items-center justify-center gap-2 text-xs">
@@ -471,6 +478,7 @@ export function TestRunDetailView({
               {run.executionPolicy}
             </p>
           </div>
+          <div className="flex items-center gap-2">
           {isActiveTestRun(run.status) ? (
             <Button
               className="rounded-none"
@@ -484,7 +492,22 @@ export function TestRunDetailView({
               <Square data-icon="inline-start" />
               {t("detail.cancel")}
             </Button>
-          ) : null}
+          ) : (
+            <Button
+              className="rounded-none"
+              onClick={() =>
+                navigate(
+                  `/workbenches/${workspace.id}/reports/by-run/${run.id}`,
+                )
+              }
+              type="button"
+              variant="outline"
+            >
+              <FileChartColumn data-icon="inline-start" />
+              {t("detail.viewReport")}
+            </Button>
+          )}
+          </div>
         </div>
         <div className="mt-4 h-1.5 border border-rule bg-paper-muted">
           <div

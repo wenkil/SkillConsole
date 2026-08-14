@@ -185,6 +185,13 @@ export function mapSdkMessage(
       {
         type: "initialized",
         sdkSessionId: message.session_id,
+        model: message.model,
+        tools: [...message.tools],
+        skills: [...(message.skills ?? [])],
+        mcpServers: message.mcp_servers.map((server) => ({
+          name: server.name,
+          status: server.status,
+        })),
       },
     ]
   }

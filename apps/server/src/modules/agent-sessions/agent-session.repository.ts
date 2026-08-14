@@ -246,21 +246,32 @@ export class AgentSessionRepository {
 
   async markInitialized(
     sessionId: string,
-    sdkSessionId: string,
-  ): Promise<void> {
-    await this.database
-      .update(agentSessions)
-      .set({
-        sdkSessionId,
-        status: "RUNNING",
-        updatedAt: new Date(),
+    event: Extract<AgentRuntimeEvent, { type: "initialized" }>,
+  ): Promise<AgentSessionEvent> {
+    return this.database.transaction(async (transaction) => {
+      const [updated] = await transaction
+        .update(agentSessions)
+        .set({
+          sdkSessionId: event.sdkSessionId,
+          status: "RUNNING",
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(agentSessions.id, sessionId),
+            inArray(agentSessions.status, ["STARTING", "RUNNING"]),
+          ),
+        )
+        .returning({ id: agentSessions.id })
+      if (!updated) throw notFound(sessionId)
+      return this.appendEvent(transaction, sessionId, null, "session.initialized", {
+        schemaVersion: 1,
+        model: event.model,
+        tools: [...event.tools],
+        skills: [...event.skills],
+        mcpServers: event.mcpServers.map((server) => ({ ...server })),
       })
-      .where(
-        and(
-          eq(agentSessions.id, sessionId),
-          inArray(agentSessions.status, ["STARTING", "RUNNING"]),
-        ),
-      )
+    })
   }
 
   async recordRuntimeEvent(
@@ -304,6 +315,19 @@ export class AgentSessionRepository {
         .where(eq(agentSessions.id, sessionId))
         .for("update")
       if (!session) throw notFound(sessionId)
+
+      const latestTurn = await this.getLatestTurnRow(sessionId, transaction)
+      if (
+        !latestTurn ||
+        latestTurn.id !== turnId ||
+        latestTurn.status !== "RUNNING" ||
+        !["STARTING", "RUNNING", "CANCELING"].includes(session.status)
+      ) {
+        return {
+          session: mapSession(session, latestTurn),
+          events: [],
+        }
+      }
 
       const events: AgentSessionEvent[] = []
       events.push(
@@ -350,7 +374,7 @@ export class AgentSessionRepository {
         })
         .where(
           and(
-            eq(agentSessionTurns.id, turnId),
+            eq(agentSessionTurns.id, latestTurn.id),
             eq(agentSessionTurns.sessionId, sessionId),
           ),
         )

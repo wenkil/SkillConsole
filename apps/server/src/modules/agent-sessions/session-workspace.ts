@@ -63,6 +63,7 @@ export class AgentSessionWorkspaceStore {
   private readonly sessionsRoot: string
   private readonly evalGenerationsRoot: string
   private readonly testRunsRoot: string
+  private readonly testReportAnalysesRoot: string
 
   constructor(
     private readonly dataRoot: string,
@@ -71,6 +72,10 @@ export class AgentSessionWorkspaceStore {
     this.sessionsRoot = path.resolve(dataRoot, "agent-sessions")
     this.evalGenerationsRoot = path.resolve(dataRoot, "eval-generations")
     this.testRunsRoot = path.resolve(dataRoot, "test-runs")
+    this.testReportAnalysesRoot = path.resolve(
+      dataRoot,
+      "test-report-analyses",
+    )
   }
 
   getLocator(sessionId: string): string {
@@ -92,12 +97,17 @@ export class AgentSessionWorkspaceStore {
       segments[0] === "test-runs" &&
       segments[2] === "cases" &&
       (segments[4] === "workspace" || segments[4] === "grading")
+    const isTestReportAnalysisWorkspace =
+      segments.length === 3 &&
+      segments[0] === "test-report-analyses" &&
+      segments[2] === "workspace"
     const internalIdPattern =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
     if (
       (!isSessionWorkspace &&
         !isEvalWorkspace &&
-        !isTestRunWorkspace) ||
+        !isTestRunWorkspace &&
+        !isTestReportAnalysisWorkspace) ||
       !internalIdPattern.test(segments[1] ?? "") ||
       (isTestRunWorkspace &&
         !internalIdPattern.test(segments[3] ?? ""))
@@ -113,7 +123,9 @@ export class AgentSessionWorkspaceStore {
       ? this.sessionsRoot
       : isEvalWorkspace
         ? this.evalGenerationsRoot
-        : this.testRunsRoot
+        : isTestRunWorkspace
+          ? this.testRunsRoot
+          : this.testReportAnalysesRoot
     const relativeToRoot = path.relative(controlledRoot, absolutePath)
 
     if (

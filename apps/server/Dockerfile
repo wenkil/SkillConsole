@@ -6,9 +6,18 @@ FROM ${NODE_IMAGE} AS runtime-base
 
 # Skills may declare Python/Pandoc-backed transformations. Keep the development,
 # migration, and production server images on the same explicit capability set.
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends python3 python-is-python3 pandoc bubblewrap socat \
-  && rm -rf /var/lib/apt/lists/*
+# Use mirror + retries to avoid network flakes on deb.debian.org
+RUN set -eux; \
+  if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources; \
+    sed -i 's|security.debian.org|mirrors.aliyun.com/debian-security|g' /etc/apt/sources.list.d/debian.sources; \
+  elif [ -f /etc/apt/sources.list ]; then \
+    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list; \
+    sed -i 's|security.debian.org|mirrors.aliyun.com/debian-security|g' /etc/apt/sources.list; \
+  fi; \
+  apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 update; \
+  apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 install -y --no-install-recommends python3 python-is-python3 pandoc bubblewrap socat; \
+  rm -rf /var/lib/apt/lists/*
 
 COPY apps/server/docker-entrypoint.sh /usr/local/bin/skillconsole-entrypoint
 RUN chmod 0755 /usr/local/bin/skillconsole-entrypoint

@@ -116,6 +116,49 @@ vi.mock("@/features/evals/components/evals-workbench-view", () => ({
   ),
 }))
 
+vi.mock(
+  "@/features/test-runs/components/test-runs-workbench-view",
+  () => ({
+    TestRunsWorkbenchView: () => (
+      <main>
+        <h1>测试任务工作台</h1>
+      </main>
+    ),
+  }),
+)
+
+vi.mock(
+  "@/features/test-runs/components/test-run-detail-view",
+  () => ({
+    TestRunDetailView: ({ runId }: { runId: string }) => (
+      <main>测试任务详情 {runId}</main>
+    ),
+  }),
+)
+
+vi.mock(
+  "@/features/test-reports/components/test-reports-workbench-view",
+  () => ({
+    TestReportsWorkbenchView: () => (
+      <main>
+        <h1>测试报告工作台</h1>
+      </main>
+    ),
+  }),
+)
+
+vi.mock(
+  "@/features/test-reports/components/test-report-detail-view",
+  () => ({
+    TestReportDetailView: ({ reportId }: { reportId: string }) => (
+      <main>静态报告详情 {reportId}</main>
+    ),
+    TestReportByRunRedirect: ({ runId }: { runId: string }) => (
+      <main>按任务查找报告 {runId}</main>
+    ),
+  }),
+)
+
 function renderRoute(path: string) {
   return render(
     <I18nextProvider i18n={i18n}>
@@ -160,20 +203,36 @@ describe("workspace routes", () => {
     ).toHaveAttribute("aria-current", "page")
   })
 
-  it.each([
-    ["datasets", "数据集"],
-    ["runs", "测试任务"],
-  ])("renders the %s placeholder without fake actions", (path, title) => {
-    renderRoute(`/workbenches/${workspace.id}/${path}`)
+  it("renders the datasets placeholder without fake actions", () => {
+    renderRoute(`/workbenches/${workspace.id}/datasets`)
 
     const main = screen.getByRole("main")
     expect(
-      within(main).getByRole("heading", { name: title }),
+      within(main).getByRole("heading", { name: "数据集" }),
     ).toBeInTheDocument()
     expect(
       within(main).getByText("将在后续迭代实现"),
     ).toBeInTheDocument()
     expect(within(main).queryByRole("button")).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ["runs", "测试任务工作台"],
+    ["reports", "测试报告工作台"],
+  ])("opens the implemented %s module", (path, title) => {
+    renderRoute(`/workbenches/${workspace.id}/${path}`)
+
+    expect(screen.getByRole("heading", { name: title })).toBeInTheDocument()
+  })
+
+  it.each([
+    ["runs/run-1", "测试任务详情 run-1"],
+    ["reports/report-1", "静态报告详情 report-1"],
+    ["reports/by-run/run-1", "按任务查找报告 run-1"],
+  ])("routes %s to its concrete detail view", (path, text) => {
+    renderRoute(`/workbenches/${workspace.id}/${path}`)
+
+    expect(screen.getByRole("main")).toHaveTextContent(text)
   })
 
   it("opens the Evals generation workbench from test cases", () => {

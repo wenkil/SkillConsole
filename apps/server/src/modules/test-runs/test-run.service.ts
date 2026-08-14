@@ -692,6 +692,12 @@ export class TestRunService {
     return this.eventBus.subscribe(runId, listener)
   }
 
+  subscribeAll(
+    listener: (event: TestRunEvent) => void,
+  ): () => void {
+    return this.eventBus.subscribeAll(listener)
+  }
+
   async cancel(runId: string): Promise<TestRunView> {
     const run = await this.options.repository.getRow(runId)
     if (

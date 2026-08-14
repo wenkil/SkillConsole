@@ -12,7 +12,7 @@
     "migrate:dev": "tsx src/infrastructure/database/migrate.ts",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test test/first-iteration.test.ts test/third-iteration.test.ts test/agent-sessions.test.ts test/eval-foundation.test.ts test/eval-generation.test.ts test/eval-api.test.ts test/eval-loop.test.ts test/test-run-foundation.test.ts test/test-run-api.test.ts test/test-run-loop.test.ts test/test-run-permissions.test.ts"
+    "test": "tsx --test test/first-iteration.test.ts test/third-iteration.test.ts test/agent-sessions.test.ts test/eval-foundation.test.ts test/eval-generation.test.ts test/eval-api.test.ts test/eval-loop.test.ts test/test-run-foundation.test.ts test/test-run-api.test.ts test/test-run-loop.test.ts test/test-run-permissions.test.ts test/test-report-foundation.test.ts test/test-report-api.test.ts test/test-report-analyzer.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.220",

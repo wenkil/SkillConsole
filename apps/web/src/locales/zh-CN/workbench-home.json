@@ -110,7 +110,7 @@
       "testCases": "测试用例",
       "datasets": "数据集",
       "runs": "测试任务",
-      "reports": "对比报告"
+      "reports": "测试报告"
     },
     "backToList": "返回工作台列表",
     "collapseSidebar": "收起工作台侧栏",
@@ -209,8 +209,8 @@
           "description": "选择版本和测试集，一键发起并跟踪运行任务。"
         },
         "comparisonReports": {
-          "title": "对比报告",
-          "description": "汇总版本差异、测试结果和版本标记，不输出强制得分。"
+          "title": "测试报告",
+          "description": "以静态 HTML 汇总所有终态任务的确定性指标、变化、问题和证据入口，并提供 Markdown。"
         }
       },
       "versionTagsTitle": "按需要设置版本标签",

@@ -123,7 +123,7 @@ export function WorkspaceNavigation({
     {
       module: "reports",
       label: t("workspaceShell.navigation.reports", {
-        defaultValue: "Comparison reports",
+        defaultValue: "Test reports",
       }),
       path: `${basePath}/reports`,
       icon: FileChartColumn,

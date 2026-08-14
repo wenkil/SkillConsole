@@ -55,6 +55,10 @@ class EvalsFakeRuntime implements AgentRuntimeSession {
     await this.input.onEvent(null, {
       type: "initialized",
       sdkSessionId: randomUUID(),
+      model: "claude-fake-evals",
+      tools: [...(this.input.availableTools ?? [])],
+      skills: [...(this.input.enabledSkills ?? [])],
+      mcpServers: [],
     })
     const outputRoot = path.join(this.input.cwd, "output")
     await mkdir(path.join(outputRoot, "files"), { recursive: true })

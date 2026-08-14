@@ -44,8 +44,13 @@ export interface CreateAgentSessionInWorkspaceInput {
   readonly maxBudgetUsd?: number
   readonly environment?: Readonly<Record<string, string | undefined>>
   readonly protectedEnvironmentNames?: readonly string[]
-  readonly sandboxPolicy?: "test_run_strict_v1"
+  readonly sandboxPolicy?:
+    | "test_run_strict_v1"
+    | "report_analyzer_strict_v1"
   readonly isolateSettings?: boolean
+  readonly systemPrompt?: string
+  readonly persistSession?: boolean
+  readonly strictMcpConfig?: boolean
   readonly additionalRedactedValues?: readonly string[]
 }
 
@@ -154,6 +159,13 @@ export class AgentSessionService {
           : {}),
         ...(input.isolateSettings !== undefined
           ? { isolateSettings: input.isolateSettings }
+          : {}),
+        ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
+        ...(input.persistSession !== undefined
+          ? { persistSession: input.persistSession }
+          : {}),
+        ...(input.strictMcpConfig !== undefined
+          ? { strictMcpConfig: input.strictMcpConfig }
           : {}),
         redactedValues: [
           ...settingsValues,
@@ -281,6 +293,22 @@ export class AgentSessionService {
     this.registry.closeAndDelete(sessionId)
   }
 
+  async abandon(
+    sessionId: string,
+    message = "The active Agent Session was abandoned by its owner.",
+  ): Promise<AgentSessionView> {
+    try {
+      const result = await this.repository.markRuntimeInterrupted(
+        sessionId,
+        new Error(message),
+      )
+      this.publish(result.events)
+      return result.session
+    } finally {
+      this.registry.closeAndDelete(sessionId)
+    }
+  }
+
   async shutdown(): Promise<void> {
     if (this.shuttingDown) return
     this.shuttingDown = true
@@ -300,8 +328,13 @@ export class AgentSessionService {
     readonly maxBudgetUsd?: number
     readonly environment?: Readonly<Record<string, string | undefined>>
     readonly protectedEnvironmentNames?: readonly string[]
-    readonly sandboxPolicy?: "test_run_strict_v1"
+    readonly sandboxPolicy?:
+      | "test_run_strict_v1"
+      | "report_analyzer_strict_v1"
     readonly isolateSettings?: boolean
+    readonly systemPrompt?: string
+    readonly persistSession?: boolean
+    readonly strictMcpConfig?: boolean
     readonly redactedValues: readonly string[]
   }): AgentRuntimeSession {
     if (this.shuttingDown) {
@@ -340,15 +373,23 @@ export class AgentSessionService {
       ...(input.isolateSettings !== undefined
         ? { isolateSettings: input.isolateSettings }
         : {}),
+      ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
+      ...(input.persistSession !== undefined
+        ? { persistSession: input.persistSession }
+        : {}),
+      ...(input.strictMcpConfig !== undefined
+        ? { strictMcpConfig: input.strictMcpConfig }
+        : {}),
       ...(input.sdkSessionId
         ? { resumeSessionId: input.sdkSessionId }
         : {}),
       onEvent: async (turnId, event) => {
         if (event.type === "initialized") {
-          await this.repository.markInitialized(
+          const stored = await this.repository.markInitialized(
             input.sessionId,
-            event.sdkSessionId,
+            event,
           )
+          this.eventBus.publish(stored)
           return
         }
         if (!turnId) {
@@ -405,8 +446,13 @@ export class AgentSessionService {
     readonly maxBudgetUsd?: number
     readonly environment?: Readonly<Record<string, string | undefined>>
     readonly protectedEnvironmentNames?: readonly string[]
-    readonly sandboxPolicy?: "test_run_strict_v1"
+    readonly sandboxPolicy?:
+      | "test_run_strict_v1"
+      | "report_analyzer_strict_v1"
     readonly isolateSettings?: boolean
+    readonly systemPrompt?: string
+    readonly persistSession?: boolean
+    readonly strictMcpConfig?: boolean
     readonly redactedValues: readonly string[]
   }): Promise<AgentSessionView> {
     const turnId = randomUUID()
@@ -451,6 +497,13 @@ export class AgentSessionService {
           : {}),
         ...(input.isolateSettings !== undefined
           ? { isolateSettings: input.isolateSettings }
+          : {}),
+        ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
+        ...(input.persistSession !== undefined
+          ? { persistSession: input.persistSession }
+          : {}),
+        ...(input.strictMcpConfig !== undefined
+          ? { strictMcpConfig: input.strictMcpConfig }
           : {}),
       })
       await runtime.send({ turnId, prompt: input.prompt })

@@ -110,7 +110,7 @@
       "testCases": "Test cases",
       "datasets": "Datasets",
       "runs": "Test runs",
-      "reports": "Comparison reports"
+      "reports": "Test reports"
     },
     "backToList": "Back to workbench list",
     "collapseSidebar": "Collapse workbench sidebar",
@@ -209,8 +209,8 @@
           "description": "Choose a version and test set, then start and track a run."
         },
         "comparisonReports": {
-          "title": "Comparison reports",
-          "description": "Summarize version differences, test results, and version labels without forced scoring."
+          "title": "Test reports",
+          "description": "Present deterministic metrics, changes, issues, and evidence links for every terminal Run as static HTML with Markdown available."
         }
       },
       "versionTagsTitle": "Set version labels as needed",

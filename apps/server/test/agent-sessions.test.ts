@@ -72,6 +72,10 @@ class FakeRuntimeSession implements AgentRuntimeSession {
       await this.input.onEvent(null, {
         type: "initialized",
         sdkSessionId: this.sdkSessionId,
+        model: "claude-fake-analyzer",
+        tools: [...(this.input.availableTools ?? [])],
+        skills: [...(this.input.enabledSkills ?? [])],
+        mcpServers: [],
       })
     }
     if (turn.prompt === "hold" || turn.prompt === "no-init-hold") return
@@ -196,6 +200,28 @@ async function readSseUntil(
 }
 
 test("maps only complete Claude SDK messages and tool results", () => {
+  assert.deepEqual(
+    mapSdkMessage({
+      type: "system",
+      subtype: "init",
+      session_id: "sdk-session-1",
+      model: "claude-test",
+      tools: [],
+      skills: [],
+      mcp_servers: [],
+    } as never),
+    [
+      {
+        type: "initialized",
+        sdkSessionId: "sdk-session-1",
+        model: "claude-test",
+        tools: [],
+        skills: [],
+        mcpServers: [],
+      },
+    ],
+  )
+
   const assistantEvents = mapSdkMessage(
     {
       type: "assistant",
@@ -701,6 +727,7 @@ test(
       assert.deepEqual(
         firstEvents.map((event) => event.type),
         [
+          "session.initialized",
           "assistant.message",
           "tool.completed",
           "usage.updated",
@@ -709,7 +736,7 @@ test(
       )
       assert.deepEqual(
         firstEvents.map((event) => event.sequence),
-        [3, 4, 5, 6],
+        [3, 4, 5, 6, 7],
       )
       assert.equal(
         firstEvents.some((event) => event.type.includes("delta")),
@@ -718,7 +745,7 @@ test(
 
       const liveStream = await fetch(
         `${address}/api/agent-sessions/${created.id}/events`,
-        { headers: { "Last-Event-ID": "6" } },
+        { headers: { "Last-Event-ID": "7" } },
       )
       const liveEventsPromise = readSseUntil(
         liveStream,
@@ -736,7 +763,7 @@ test(
       const liveEvents = await liveEventsPromise
       assert.equal(liveEvents[0]?.type, "turn.started")
       assert.equal(liveEvents.at(-1)?.type, "turn.completed")
-      assert.ok(liveEvents.every((event) => event.sequence > 6))
+      assert.ok(liveEvents.every((event) => event.sequence > 7))
       assert.equal(adapter.opens.length, 1)
 
       const holdResponse = await fetch(

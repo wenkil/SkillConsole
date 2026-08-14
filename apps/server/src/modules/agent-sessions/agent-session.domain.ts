@@ -19,6 +19,7 @@ export const agentSessionTurnStatuses = [
 
 export const agentSessionEventTypes = [
   "session.started",
+  "session.initialized",
   "turn.started",
   "assistant.message",
   "tool.completed",
@@ -129,6 +130,13 @@ export type AgentRuntimeEvent =
   | {
       readonly type: "initialized"
       readonly sdkSessionId: string
+      readonly model: string
+      readonly tools: readonly string[]
+      readonly skills: readonly string[]
+      readonly mcpServers: readonly {
+        readonly name: string
+        readonly status: string
+      }[]
     }
   | {
       readonly type: "assistant_message"
@@ -197,8 +205,13 @@ export interface OpenAgentRuntimeSessionInput {
   readonly maxBudgetUsd?: number
   readonly environment?: Readonly<Record<string, string | undefined>>
   readonly protectedEnvironmentNames?: readonly string[]
-  readonly sandboxPolicy?: "test_run_strict_v1"
+  readonly sandboxPolicy?:
+    | "test_run_strict_v1"
+    | "report_analyzer_strict_v1"
   readonly isolateSettings?: boolean
+  readonly systemPrompt?: string
+  readonly persistSession?: boolean
+  readonly strictMcpConfig?: boolean
   readonly redactedValues: readonly string[]
   readonly onEvent: (
     turnId: string | null,

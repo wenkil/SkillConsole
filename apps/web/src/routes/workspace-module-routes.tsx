@@ -1,6 +1,5 @@
 import {
   Database,
-  FileChartColumn,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import {
@@ -15,6 +14,11 @@ import { VersionCompareView } from "@/features/version-browser/components/versio
 import { EvalsWorkbenchView } from "@/features/evals/components/evals-workbench-view"
 import { TestRunDetailView } from "@/features/test-runs/components/test-run-detail-view"
 import { TestRunsWorkbenchView } from "@/features/test-runs/components/test-runs-workbench-view"
+import {
+  TestReportByRunRedirect,
+  TestReportDetailView,
+} from "@/features/test-reports/components/test-report-detail-view"
+import { TestReportsWorkbenchView } from "@/features/test-reports/components/test-reports-workbench-view"
 import type { SkillBrowserTarget } from "@/features/version-browser/model/version-browser"
 import { WorkbenchOverview } from "@/features/workbench-home/components/workbench-overview"
 import { ModulePlaceholder } from "@/features/workspace-shell/components/module-placeholder"
@@ -58,6 +62,35 @@ export function TestRunDetailRoute() {
       workspace={workspace}
     />
   )
+}
+
+export function TestReportsWorkbenchRoute() {
+  const { workspace, locale } = useWorkspaceRouteContext()
+  return <TestReportsWorkbenchView locale={locale} workspace={workspace} />
+}
+
+export function TestReportDetailRoute() {
+  const { reportId } = useParams()
+  const { workspace, locale } = useWorkspaceRouteContext()
+  if (!reportId) {
+    return <Navigate replace to={`/workbenches/${workspace.id}/reports`} />
+  }
+  return (
+    <TestReportDetailView
+      locale={locale}
+      reportId={reportId}
+      workspace={workspace}
+    />
+  )
+}
+
+export function TestReportByRunRoute() {
+  const { runId } = useParams()
+  const { workspace } = useWorkspaceRouteContext()
+  if (!runId) {
+    return <Navigate replace to={`/workbenches/${workspace.id}/runs`} />
+  }
+  return <TestReportByRunRedirect runId={runId} workspace={workspace} />
 }
 
 function getVersionTargetPath(
@@ -111,10 +144,7 @@ export function VersionBrowserRoute({
 }
 
 interface ModulePlaceholderRouteProps {
-  module: Extract<
-    WorkspaceModule,
-    "datasets" | "reports"
-  >
+  module: Extract<WorkspaceModule, "datasets">
 }
 
 export function ModulePlaceholderRoute({
@@ -128,23 +158,6 @@ export function ModulePlaceholderRoute({
       description: t("workspaceShell.placeholders.datasets.description"),
       plannedStage: t(
         "workspaceShell.placeholders.datasets.plannedStage",
-      ),
-    },
-    reports: {
-      icon: FileChartColumn,
-      title: t("workspaceShell.navigation.reports", {
-        defaultValue: "对比报告",
-      }),
-      description: t(
-        "workspaceShell.placeholders.reports.description",
-        {
-          defaultValue:
-            "汇总版本目录差异、测试点、任务结果和版本标签。",
-        },
-      ),
-      plannedStage: t(
-        "workspaceShell.placeholders.reports.plannedStage",
-        { defaultValue: "后续迭代" },
       ),
     },
   } as const

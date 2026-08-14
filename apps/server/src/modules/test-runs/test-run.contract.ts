@@ -45,7 +45,7 @@ const TestRunCaseAssessmentStatusSchema = Type.Union([
   Type.Literal("FAILED"),
 ])
 
-const AssertionResultStatusSchema = Type.Union([
+export const AssertionResultStatusSchema = Type.Union([
   Type.Literal("PASSED"),
   Type.Literal("FAILED"),
   Type.Literal("INSUFFICIENT_EVIDENCE"),
@@ -207,7 +207,7 @@ const RuntimeCapabilitySnapshotSchema = Type.Object(
   { additionalProperties: false },
 )
 
-const TestRunEnvironmentSchema = Type.Union([
+export const TestRunEnvironmentSchema = Type.Union([
   Type.Object(
     { status: Type.Literal("legacy_unavailable") },
     { additionalProperties: false },
@@ -233,7 +233,7 @@ const TestRunEnvironmentSchema = Type.Union([
   ),
 ])
 
-const TestRunTraceabilitySchema = Type.Object(
+export const TestRunTraceabilitySchema = Type.Object(
   {
     protocolVersion: Type.String({ minLength: 1 }),
     sdkVersion: Type.String({ minLength: 1 }),
@@ -380,7 +380,7 @@ const CaseErrorSchema = Type.Object(
   { additionalProperties: false },
 )
 
-const TestRunCaseSchema = Type.Object(
+export const TestRunCaseSchema = Type.Object(
   {
     id: Type.String({ format: "uuid" }),
     evalRevisionCaseId: Type.String({ format: "uuid" }),
