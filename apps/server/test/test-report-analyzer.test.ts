@@ -52,7 +52,18 @@ const analyzerRuntimePolicy = {
 } as const
 
 function stableHash(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex")
+  const canonicalize = (item: unknown): unknown => {
+    if (Array.isArray(item)) return item.map(canonicalize)
+    if (item === null || typeof item !== "object") return item
+    return Object.fromEntries(
+      Object.entries(item as Readonly<Record<string, unknown>>)
+        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+        .map(([key, nested]) => [key, canonicalize(nested)]),
+    )
+  }
+  return createHash("sha256")
+    .update(JSON.stringify(canonicalize(value)))
+    .digest("hex")
 }
 
 function seedFrozenPendingAnalysis(
@@ -768,6 +779,26 @@ test("Analyzer publishes a cited revision through an isolated no-tool Agent Sess
       "actual-analyzer-model",
     )
     assert.equal(harness.agentSessions.released.length, 1)
+    const logs = await harness.service.listLogs(revision.id, { limit: 200 })
+    assert.ok(logs.items.some((item) => item.type === "session.initialized"))
+    assert.ok(logs.items.some((item) => item.type === "turn.completed"))
+    assert.equal(
+      logs.items.some((item) => "sessionId" in item),
+      false,
+    )
+
+    const diagnosticContent = await readFile(
+      path.join(
+        harness.dataRoot,
+        "diagnostics",
+        "test-report-analyzer",
+        `${revision.id}.jsonl`,
+      ),
+      "utf8",
+    )
+    assert.match(diagnosticContent, /"type":"analysis\.completed"/)
+    assert.match(diagnosticContent, /"type":"agent\.event/)
+    assert.doesNotMatch(diagnosticContent, /test-only-secret-value/)
 
     const input = harness.agentSessions.createInputs[0]
     assert.ok(input)
@@ -839,6 +870,30 @@ test("Analyzer startup requeues PENDING work and fails closed on a changed froze
       await cleanupHarness(harness)
     }
   })
+
+  await t.test(
+    "accepts an unchanged Runtime Policy after jsonb reorders its keys",
+    async () => {
+      const harness = await createHarness({ output: validOutput })
+      try {
+        seedFrozenPendingAnalysis(harness.repository, harness.report)
+        harness.repository.current = {
+          ...harness.repository.current,
+          runtimePolicy: Object.fromEntries(
+            Object.entries(harness.repository.current.runtimePolicy).reverse(),
+          ) as TestReportAnalysisRevisionView["runtimePolicy"],
+        }
+        harness.repository.pendingOnInitialize = true
+        await harness.service.initialize()
+        const revision = await waitForTerminalRevision(harness.repository)
+
+        assert.equal(revision.status, "AVAILABLE")
+        assert.equal(harness.agentSessions.createInputs.length, 1)
+      } finally {
+        await cleanupHarness(harness)
+      }
+    },
+  )
 
   await t.test("rejects a PENDING Revision with a changed prompt version", async () => {
     const harness = await createHarness({ output: validOutput })

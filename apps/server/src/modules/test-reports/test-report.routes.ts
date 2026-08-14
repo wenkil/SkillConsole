@@ -7,6 +7,10 @@ import { ErrorResponseSchema } from "../../core/http/error.contract.js"
 import {
   CreateTestReportAnalysisBodySchema,
   TestReportAnalysisParamsSchema,
+  TestReportAnalysisEventsHeaderSchema,
+  TestReportAnalysisEventsQuerySchema,
+  TestReportAnalysisLogPageSchema,
+  TestReportAnalysisLogsQuerySchema,
   TestReportAnalysisRevisionListSchema,
   TestReportAnalysisRevisionSchema,
   TestReportCasePageSchema,
@@ -24,7 +28,10 @@ import {
   TestRunReportParamsSchema,
   WorkspaceTestReportParamsSchema,
 } from "./test-report.contract.js"
-import type { TestReportAnalysisRevisionView } from "./test-report.domain.js"
+import type {
+  TestReportAnalysisLogEvent,
+  TestReportAnalysisRevisionView,
+} from "./test-report.domain.js"
 
 function serializePublicResponse(value: unknown) {
   return JSON.parse(JSON.stringify(value))
@@ -54,6 +61,14 @@ const documentSecurityHeaders = {
   "Referrer-Policy": "no-referrer",
   "Cross-Origin-Resource-Policy": "same-origin",
 } as const
+
+function writeAnalysisSseEvent(
+  response: NodeJS.WritableStream,
+  event: TestReportAnalysisLogEvent,
+): void {
+  response.write(`id: ${event.sequence}\n`)
+  response.write(`data: ${JSON.stringify(event)}\n\n`)
+}
 
 export const testReportRoutes: FastifyPluginAsyncTypebox = async (
   application,
@@ -140,6 +155,114 @@ export const testReportRoutes: FastifyPluginAsyncTypebox = async (
   )
 
   application.get(
+    "/api/test-report-analyses/:analysisId/logs",
+    {
+      schema: {
+        tags: ["test-reports"],
+        summary: "Read paginated normalized Analyzer logs",
+        params: TestReportAnalysisParamsSchema,
+        querystring: TestReportAnalysisLogsQuerySchema,
+        response: {
+          200: TestReportAnalysisLogPageSchema,
+          404: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) =>
+      reply
+        .header("Cache-Control", "private, no-store")
+        .send(
+          await analysisService.listLogs(request.params.analysisId, {
+            ...request.query,
+            limit: request.query.limit ?? 200,
+          }),
+        ),
+  )
+
+  application.get(
+    "/api/test-report-analyses/:analysisId/events",
+    {
+      schema: {
+        tags: ["test-reports"],
+        summary: "Replay and stream normalized Analyzer logs",
+        params: TestReportAnalysisParamsSchema,
+        headers: TestReportAnalysisEventsHeaderSchema,
+        querystring: TestReportAnalysisEventsQuerySchema,
+        produces: ["text/event-stream"],
+        response: {
+          200: Type.String({ contentMediaType: "text/event-stream" }),
+          400: ErrorResponseSchema,
+          404: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const analysisId = request.params.analysisId
+      const afterSequence = Math.max(
+        request.query.afterSequence ?? 0,
+        Number(request.headers["last-event-id"] ?? "0"),
+      )
+      await analysisService.get(analysisId)
+
+      let live = false
+      const pending: TestReportAnalysisLogEvent[] = []
+      let lastSequence = afterSequence
+      const unsubscribe = await analysisService.subscribeLogs(
+        analysisId,
+        (event) => {
+          if (!live) {
+            pending.push(event)
+            return
+          }
+          if (event.sequence <= lastSequence) return
+          writeAnalysisSseEvent(reply.raw, event)
+          lastSequence = event.sequence
+        },
+      )
+
+      try {
+        const backlog = await analysisService.replayLogs(
+          analysisId,
+          afterSequence,
+        )
+        reply.hijack()
+        reply.raw.writeHead(200, {
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "X-Accel-Buffering": "no",
+        })
+        reply.raw.flushHeaders()
+        for (const event of backlog) {
+          if (event.sequence <= lastSequence) continue
+          writeAnalysisSseEvent(reply.raw, event)
+          lastSequence = event.sequence
+        }
+        live = true
+        for (const event of pending.sort(
+          (left, right) => left.sequence - right.sequence,
+        )) {
+          if (event.sequence <= lastSequence) continue
+          writeAnalysisSseEvent(reply.raw, event)
+          lastSequence = event.sequence
+        }
+
+        const heartbeat = setInterval(() => {
+          reply.raw.write(": keep-alive\n\n")
+        }, 15_000)
+        heartbeat.unref()
+        request.raw.once("close", () => {
+          clearInterval(heartbeat)
+          unsubscribe()
+        })
+      } catch (error) {
+        unsubscribe()
+        throw error
+      }
+    },
+  )
+
+  application.get(
     "/api/test-report-analyses/:analysisId/document.html",
     {
       schema: {
@@ -159,6 +282,50 @@ export const testReportRoutes: FastifyPluginAsyncTypebox = async (
         request.params.analysisId,
         request.query.locale ?? "en",
         "html",
+      )
+      const etag = documentEtag(document.content)
+      for (const [name, value] of Object.entries(documentSecurityHeaders)) {
+        reply.header(name, value)
+      }
+      return reply
+        .header("Cache-Control", "private, no-cache")
+        .header("ETag", etag)
+        .header(
+          "Content-Security-Policy",
+          "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
+        )
+        .header(
+          "Content-Disposition",
+          contentDisposition(
+            document.filename,
+            request.query.download ?? false,
+          ),
+        )
+        .type("text/html; charset=utf-8")
+        .send(document.content)
+    },
+  )
+
+  application.get(
+    "/api/test-report-analyses/:analysisId/document.full.html",
+    {
+      schema: {
+        tags: ["test-reports"],
+        summary:
+          "Read one immutable HTML document containing the fact report and AI Analysis Revision",
+        params: TestReportAnalysisParamsSchema,
+        querystring: TestReportDocumentQuerySchema,
+        response: {
+          200: Type.String(),
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const document = await analysisService.getCombinedHtmlDocument(
+        request.params.analysisId,
+        request.query.locale ?? "en",
       )
       const etag = documentEtag(document.content)
       for (const [name, value] of Object.entries(documentSecurityHeaders)) {

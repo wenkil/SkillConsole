@@ -16,6 +16,7 @@ import { Link, Navigate } from "react-router-dom"
 
 import {
   testReportAnalysisDocumentUrl,
+  testReportCombinedDocumentUrl,
   testReportDocumentUrl,
 } from "@/features/test-reports/api/test-reports-api"
 import { TestReportStatusBadge } from "@/features/test-reports/components/test-report-status"
@@ -273,8 +274,8 @@ function AnalyzerPanel({
   const htmlUrl = available && analysis
     ? testReportAnalysisDocumentUrl(analysis.id, locale, "html")
     : null
-  const htmlDownloadUrl = available && analysis
-    ? testReportAnalysisDocumentUrl(analysis.id, locale, "html", true)
+  const fullHtmlDownloadUrl = available && analysis
+    ? testReportCombinedDocumentUrl(analysis.id, locale)
     : null
   const markdownUrl = available && analysis
     ? testReportAnalysisDocumentUrl(analysis.id, locale, "markdown", true)
@@ -511,9 +512,9 @@ function AnalyzerPanel({
                     size="sm"
                     variant="outline"
                   >
-                    <a href={htmlDownloadUrl!}>
+                    <a href={fullHtmlDownloadUrl!}>
                       <FileCode2 data-icon="inline-start" />
-                      {t("analysis.downloadHtml")}
+                      {t("analysis.downloadFullHtml")}
                     </a>
                   </Button>
                   <Button
@@ -530,56 +531,172 @@ function AnalyzerPanel({
                 </div>
               ) : null}
             </div>
-            {available && htmlUrl ? (
-              <iframe
-                className="min-h-0 flex-1 border-0 bg-[#f5f1e8]"
-                sandbox="allow-top-navigation-by-user-activation"
-                src={htmlUrl}
-                title={t("analysis.documentTitle", {
-                  revision: analysis.revisionNumber,
-                })}
+            <div className="flex min-h-0 flex-1 flex-col">
+              {available && htmlUrl ? (
+                <iframe
+                  className="min-h-0 flex-1 border-0 bg-[#f5f1e8]"
+                  sandbox="allow-top-navigation-by-user-activation"
+                  src={htmlUrl}
+                  title={t("analysis.documentTitle", {
+                    revision: analysis.revisionNumber,
+                  })}
+                />
+              ) : analysis.status === "FAILED" ? (
+                <AnalysisCenteredState
+                  action={
+                    <Button
+                      className="mt-4 rounded-none"
+                      disabled={
+                        controller.creating || controller.analysisActive
+                      }
+                      onClick={() =>
+                        void controller.actions
+                          .create(analysis.selectedEvalRevisionCaseIds)
+                          .catch(() => undefined)
+                      }
+                      type="button"
+                      variant="outline"
+                    >
+                      <RotateCcw data-icon="inline-start" />
+                      {t("analysis.retry")}
+                    </Button>
+                  }
+                  description={
+                    analysis.error?.message ?? t("analysis.failedDescription")
+                  }
+                  icon="error"
+                  title={t("analysis.failedTitle")}
+                />
+              ) : (
+                <AnalysisCenteredState
+                  description={t("analysis.runningDescription")}
+                  icon="loading"
+                  title={t(
+                    analysis.status === "PENDING"
+                      ? "analysis.pendingTitle"
+                      : "analysis.runningTitle",
+                  )}
+                />
+              )}
+              <AnalysisLogsPanel
+                analysisId={analysis.id}
+                available={available}
+                connectionError={controller.logConnectionError}
+                events={controller.logEvents}
+                hasEarlier={controller.hasEarlierLogs}
+                loading={controller.logsLoading}
+                loadingEarlier={controller.loadingEarlierLogs}
+                logsError={controller.logsError}
+                onLoadEarlier={() => void controller.actions.loadEarlierLogs()}
+                onRetry={controller.actions.retryLogs}
               />
-            ) : analysis.status === "FAILED" ? (
-              <AnalysisCenteredState
-                action={
-                  <Button
-                    className="mt-4 rounded-none"
-                    disabled={
-                      controller.creating || controller.analysisActive
-                    }
-                    onClick={() =>
-                      void controller.actions
-                        .create(analysis.selectedEvalRevisionCaseIds)
-                        .catch(() => undefined)
-                    }
-                    type="button"
-                    variant="outline"
-                  >
-                    <RotateCcw data-icon="inline-start" />
-                    {t("analysis.retry")}
-                  </Button>
-                }
-                description={
-                  analysis.error?.message ?? t("analysis.failedDescription")
-                }
-                icon="error"
-                title={t("analysis.failedTitle")}
-              />
-            ) : (
-              <AnalysisCenteredState
-                description={t("analysis.runningDescription")}
-                icon="loading"
-                title={t(
-                  analysis.status === "PENDING"
-                    ? "analysis.pendingTitle"
-                    : "analysis.runningTitle",
-                )}
-              />
-            )}
+            </div>
           </>
         )}
       </div>
     </section>
+  )
+}
+
+function AnalysisLogsPanel({
+  analysisId,
+  available,
+  connectionError,
+  events,
+  hasEarlier,
+  loading,
+  loadingEarlier,
+  logsError,
+  onLoadEarlier,
+  onRetry,
+}: {
+  analysisId: string
+  available: boolean
+  connectionError: boolean
+  events: ReturnType<typeof useTestReportAnalyzerController>["logEvents"]
+  hasEarlier: boolean
+  loading: boolean
+  loadingEarlier: boolean
+  logsError: boolean
+  onLoadEarlier: () => void
+  onRetry: () => void
+}) {
+  const { t, i18n } = useTranslation("testReports")
+  return (
+    <details
+      className="shrink-0 border-t border-foreground bg-[#101414] text-white"
+      defaultOpen={!available}
+      key={`${analysisId}:${available ? "available" : "active"}`}
+    >
+      <summary className="flex cursor-pointer items-center justify-between gap-3 border-b border-white/15 px-4 py-2 font-mono text-[9px] font-bold uppercase">
+        <span>{t("analysis.logs.title")}</span>
+        <span className="text-white/50">
+          {t("analysis.logs.count", { count: events.length })}
+        </span>
+      </summary>
+      <div className="h-64 overflow-y-auto p-4 font-mono text-[10px]">
+        {connectionError ? (
+          <div className="mb-3 border border-amber-400/50 bg-amber-400/10 p-2 text-amber-200">
+            {t("analysis.logs.connectionError")}
+          </div>
+        ) : null}
+        {hasEarlier ? (
+          <div className="mb-3 text-center">
+            <Button
+              className="rounded-none border-white/25 bg-transparent text-white hover:bg-white/10 hover:text-white"
+              disabled={loadingEarlier}
+              onClick={onLoadEarlier}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {loadingEarlier
+                ? t("analysis.logs.loading")
+                : t("analysis.logs.loadEarlier")}
+            </Button>
+          </div>
+        ) : null}
+        {logsError ? (
+          <div className="flex items-center justify-between gap-3 border border-red-400/60 p-3 text-red-300">
+            {t("analysis.logs.loadError")}
+            <button className="underline" onClick={onRetry} type="button">
+              {t("states.retry")}
+            </button>
+          </div>
+        ) : loading ? (
+          <div className="flex items-center gap-2 text-white/55">
+            <LoaderCircle className="size-3 animate-spin" />
+            {t("analysis.logs.loading")}
+          </div>
+        ) : events.length === 0 ? (
+          <div className="text-white/55">{t("analysis.logs.empty")}</div>
+        ) : (
+          events.map((event) => (
+            <article
+              className="grid grid-cols-[3.5rem_10rem_minmax(0,1fr)] gap-3 border-b border-white/10 py-2.5"
+              key={event.sequence}
+            >
+              <span className="text-white/35">#{event.sequence}</span>
+              <time className="text-white/45">
+                {new Intl.DateTimeFormat(i18n.language, {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                }).format(new Date(event.occurredAt))}
+              </time>
+              <div className="min-w-0">
+                <strong className="text-white">{event.type}</strong>
+                {Object.keys(event.payload).length > 0 ? (
+                  <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-all text-[9px] leading-4 text-white/60">
+                    {JSON.stringify(event.payload, null, 2)}
+                  </pre>
+                ) : null}
+              </div>
+            </article>
+          ))
+        )}
+      </div>
+    </details>
   )
 }
 

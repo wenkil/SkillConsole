@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto"
 import type { Database } from "../../infrastructure/database/index.js"
 import type {
   AgentRuntimeAdapter,
+  AgentRuntimeDiagnostic,
   AgentRuntimeFailure,
   AgentRuntimeSession,
   AgentRuntimeToolPermissionHandler,
@@ -52,6 +53,9 @@ export interface CreateAgentSessionInWorkspaceInput {
   readonly persistSession?: boolean
   readonly strictMcpConfig?: boolean
   readonly additionalRedactedValues?: readonly string[]
+  readonly onRuntimeDiagnostic?: (
+    diagnostic: AgentRuntimeDiagnostic,
+  ) => Promise<void>
 }
 
 export class AgentSessionService {
@@ -172,6 +176,9 @@ export class AgentSessionService {
           cwd,
           ...(input.additionalRedactedValues ?? []),
         ],
+        ...(input.onRuntimeDiagnostic
+          ? { onRuntimeDiagnostic: input.onRuntimeDiagnostic }
+          : {}),
       })
     } catch (error) {
       throw this.classifyWorkspacePreparationFailure(error)
@@ -336,6 +343,9 @@ export class AgentSessionService {
     readonly persistSession?: boolean
     readonly strictMcpConfig?: boolean
     readonly redactedValues: readonly string[]
+    readonly onRuntimeDiagnostic?: (
+      diagnostic: AgentRuntimeDiagnostic,
+    ) => Promise<void>
   }): AgentRuntimeSession {
     if (this.shuttingDown) {
       throw new Error("Agent Session service is shutting down.")
@@ -345,6 +355,9 @@ export class AgentSessionService {
     runtime = this.options.runtimeAdapter.open({
       cwd: input.cwd,
       redactedValues: input.redactedValues,
+      ...(input.onRuntimeDiagnostic
+        ? { onDiagnostic: input.onRuntimeDiagnostic }
+        : {}),
       ...(input.allowedTools
         ? { allowedTools: input.allowedTools }
         : {}),
@@ -454,6 +467,9 @@ export class AgentSessionService {
     readonly persistSession?: boolean
     readonly strictMcpConfig?: boolean
     readonly redactedValues: readonly string[]
+    readonly onRuntimeDiagnostic?: (
+      diagnostic: AgentRuntimeDiagnostic,
+    ) => Promise<void>
   }): Promise<AgentSessionView> {
     const turnId = randomUUID()
     const created = await this.repository.create(
@@ -469,6 +485,9 @@ export class AgentSessionService {
         cwd: input.cwd,
         sdkSessionId: null,
         redactedValues: [...new Set(input.redactedValues)],
+        ...(input.onRuntimeDiagnostic
+          ? { onRuntimeDiagnostic: input.onRuntimeDiagnostic }
+          : {}),
         ...(input.allowedTools
           ? { allowedTools: input.allowedTools }
           : {}),

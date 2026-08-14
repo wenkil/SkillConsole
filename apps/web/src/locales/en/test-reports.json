@@ -153,7 +153,16 @@
     "meta": "Actual model {{model}} · configured model {{configuredModel}} · Prompt {{prompt}} · {{count}} Cases",
     "runtimePolicy": "Runtime {{schema}} · budget ceiling ${{budget}} · timeout {{timeout}}",
     "usage": "{{input}} input · {{output}} output Tokens · ${{cost}} · {{duration}} · {{turns}} turns",
-    "downloadHtml": "Download analysis HTML",
+    "logs": {
+      "title": "Live Analyzer logs",
+      "count": "{{count}} events",
+      "loading": "Loading logs",
+      "empty": "No Analyzer log events have arrived yet.",
+      "loadError": "Analyzer logs could not be loaded.",
+      "connectionError": "The live log connection was interrupted. The browser is reconnecting automatically.",
+      "loadEarlier": "Load earlier logs"
+    },
+    "downloadFullHtml": "Download complete HTML",
     "downloadMarkdown": "Download analysis Markdown",
     "documentTitle": "AI Analysis Revision {{revision}}"
   },

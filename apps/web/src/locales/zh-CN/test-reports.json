@@ -153,7 +153,16 @@
     "meta": "实际模型 {{model}} · 配置模型 {{configuredModel}} · Prompt {{prompt}} · {{count}} 个 Case",
     "runtimePolicy": "Runtime {{schema}} · 预算上限 ${{budget}} · 超时 {{timeout}}",
     "usage": "输入 {{input}} · 输出 {{output}} Token · ${{cost}} · {{duration}} · {{turns}} 轮",
-    "downloadHtml": "下载分析 HTML",
+    "logs": {
+      "title": "Analyzer 实时日志",
+      "count": "{{count}} 条",
+      "loading": "正在读取日志",
+      "empty": "尚未收到 Analyzer 日志事件。",
+      "loadError": "无法读取 Analyzer 日志。",
+      "connectionError": "实时日志连接暂时中断，浏览器正在自动重连。",
+      "loadEarlier": "加载更早日志"
+    },
+    "downloadFullHtml": "下载完整 HTML",
     "downloadMarkdown": "下载分析 Markdown",
     "documentTitle": "AI 分析 Revision {{revision}}"
   },

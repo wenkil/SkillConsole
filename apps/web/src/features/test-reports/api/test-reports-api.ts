@@ -1,6 +1,8 @@
 import type {
   TestReportAnalysis,
   TestReportAnalysisList,
+  TestReportAnalysisLogEvent,
+  TestReportAnalysisLogPage,
   TestReportDetail,
   TestReportListFilters,
   TestReportPage,
@@ -93,6 +95,44 @@ export function getTestReportAnalysis(
   )
 }
 
+export function listTestReportAnalysisLogs(
+  analysisId: string,
+  input: { readonly beforeSequence?: number; readonly limit?: number } = {},
+): Promise<TestReportAnalysisLogPage> {
+  const query = new URLSearchParams({
+    limit: String(input.limit ?? 200),
+  })
+  if (input.beforeSequence !== undefined) {
+    query.set("beforeSequence", String(input.beforeSequence))
+  }
+  return readJson(
+    `/api/test-report-analyses/${encodeURIComponent(analysisId)}/logs?${query}`,
+  )
+}
+
+export function subscribeToTestReportAnalysis(
+  analysisId: string,
+  afterSequence: number,
+  onEvent: (event: TestReportAnalysisLogEvent) => void,
+  onConnectionError: () => void,
+): () => void {
+  const query = new URLSearchParams({
+    afterSequence: String(Math.max(0, afterSequence)),
+  })
+  const source = new EventSource(
+    `/api/test-report-analyses/${encodeURIComponent(analysisId)}/events?${query}`,
+  )
+  source.onmessage = (rawEvent) => {
+    try {
+      onEvent(JSON.parse(rawEvent.data) as TestReportAnalysisLogEvent)
+    } catch {
+      onConnectionError()
+    }
+  }
+  source.onerror = onConnectionError
+  return () => source.close()
+}
+
 export function createTestReportAnalysis(
   reportId: string,
   evalRevisionCaseIds: readonly string[],
@@ -122,4 +162,15 @@ export function testReportAnalysisDocumentUrl(
   })
   if (download) query.set("download", "true")
   return `/api/test-report-analyses/${encodeURIComponent(analysisId)}/document.${extension}?${query}`
+}
+
+export function testReportCombinedDocumentUrl(
+  analysisId: string,
+  locale: string,
+): string {
+  const query = new URLSearchParams({
+    locale: locale === "zh-CN" ? "zh-CN" : "en",
+    download: "true",
+  })
+  return `/api/test-report-analyses/${encodeURIComponent(analysisId)}/document.full.html?${query}`
 }

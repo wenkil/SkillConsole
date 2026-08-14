@@ -723,6 +723,62 @@ export const TestReportAnalysisRevisionListSchema = Type.Object(
   { additionalProperties: false },
 )
 
+export const TestReportAnalysisLogEventSchema = Type.Object(
+  {
+    sequence: Type.Integer({ minimum: 1 }),
+    type: Type.String({ minLength: 1, maxLength: 80 }),
+    analysisId: Type.String({ format: "uuid" }),
+    occurredAt: Type.String({ format: "date-time" }),
+    payload: Type.Record(Type.String(), Type.Unknown()),
+  },
+  { additionalProperties: false },
+)
+
+export const TestReportAnalysisLogsQuerySchema = Type.Object(
+  {
+    beforeSequence: Type.Optional(Type.Integer({ minimum: 1 })),
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })),
+  },
+  { additionalProperties: false },
+)
+
+export const TestReportAnalysisLogPageSchema = Type.Object(
+  {
+    items: Type.Array(TestReportAnalysisLogEventSchema),
+    pagination: Type.Object(
+      {
+        limit: Type.Integer({ minimum: 1, maximum: 200 }),
+        hasMore: Type.Boolean(),
+        nextBeforeSequence: Type.Union([
+          Type.Integer({ minimum: 1 }),
+          Type.Null(),
+        ]),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  { additionalProperties: false },
+)
+
+export const TestReportAnalysisEventsQuerySchema = Type.Object(
+  {
+    afterSequence: Type.Optional(Type.Integer({ minimum: 0 })),
+  },
+  { additionalProperties: false },
+)
+
+export const TestReportAnalysisEventsHeaderSchema = Type.Object(
+  {
+    "last-event-id": Type.Optional(
+      Type.String({
+        pattern: "^(0|[1-9][0-9]*)$",
+        maxLength: 15,
+      }),
+    ),
+  },
+  { additionalProperties: true },
+)
+
 export const TestReportListItemSchema = Type.Object(
   {
     id: Type.String({ format: "uuid" }),

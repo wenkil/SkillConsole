@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => ({
   selectDefaultAnalysisCases: vi.fn(),
   selectAllAnalysisCases: vi.fn(),
   clearAnalysisCases: vi.fn(),
+  retryAnalysisLogs: vi.fn(),
+  loadEarlierAnalysisLogs: vi.fn(),
 }))
 
 const analysisCases = [
@@ -143,6 +145,13 @@ beforeEach(async () => {
     detailLoading: false,
     error: false,
     creating: false,
+    analysisActive: false,
+    logEvents: [],
+    logsLoading: false,
+    logsError: false,
+    logConnectionError: false,
+    hasEarlierLogs: false,
+    loadingEarlierLogs: false,
     mutationError: null,
     actions: {
       retry: mocks.retry,
@@ -152,6 +161,8 @@ beforeEach(async () => {
       selectAllCases: mocks.selectAllAnalysisCases,
       clearCases: mocks.clearAnalysisCases,
       create: mocks.createAnalysis,
+      retryLogs: mocks.retryAnalysisLogs,
+      loadEarlierLogs: mocks.loadEarlierAnalysisLogs,
     },
   })
   await i18n.changeLanguage("zh-CN")
@@ -232,7 +243,7 @@ describe("test report views", () => {
     expect(mocks.createAnalysis).toHaveBeenCalledOnce()
   })
 
-  it("shows an immutable historical Analysis Revision as separate static HTML", async () => {
+  it("previews an immutable Analysis Revision and downloads it with its fact Report Revision", async () => {
     const user = userEvent.setup()
     const analysis = {
       id: "01900000-0000-7000-8000-000000000030",
@@ -317,8 +328,13 @@ describe("test report views", () => {
       ),
     )
     expect(
-      screen.getByRole("link", { name: /下载分析 HTML/ }),
-    ).toHaveAttribute("href", expect.stringContaining("download=true"))
+      screen.getByRole("link", { name: /下载完整 HTML/ }),
+    ).toHaveAttribute(
+      "href",
+      expect.stringContaining(
+        `/api/test-report-analyses/${analysis.id}/document.full.html?locale=zh-CN&download=true`,
+      ),
+    )
     expect(
       screen.getByRole("link", { name: /下载分析 Markdown/ }),
     ).toHaveAttribute("href", expect.stringContaining("document.md"))

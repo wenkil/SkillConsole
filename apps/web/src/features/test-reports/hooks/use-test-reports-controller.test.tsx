@@ -15,8 +15,10 @@ const api = vi.hoisted(() => ({
   getTestReportAnalysis: vi.fn(),
   getTestReportByRun: vi.fn(),
   listTestReportAnalyses: vi.fn(),
+  listTestReportAnalysisLogs: vi.fn(),
   listTestReports: vi.fn(),
   regenerateTestReport: vi.fn(),
+  subscribeToTestReportAnalysis: vi.fn(() => () => undefined),
 }))
 
 vi.mock("@/features/test-reports/api/test-reports-api", () => api)
@@ -96,6 +98,14 @@ function makeAnalysis(
 describe("useTestReportAnalyzerController", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    api.listTestReportAnalysisLogs.mockResolvedValue({
+      items: [],
+      pagination: {
+        limit: 200,
+        hasMore: false,
+        nextBeforeSequence: null,
+      },
+    })
   })
 
   it("drops the selected Analysis when navigation switches to another report", async () => {

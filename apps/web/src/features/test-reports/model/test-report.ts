@@ -113,6 +113,23 @@ export interface TestReportAnalysisList {
   readonly items: readonly TestReportAnalysis[]
 }
 
+export interface TestReportAnalysisLogEvent {
+  readonly sequence: number
+  readonly type: string
+  readonly analysisId: string
+  readonly occurredAt: string
+  readonly payload: Readonly<Record<string, unknown>>
+}
+
+export interface TestReportAnalysisLogPage {
+  readonly items: readonly TestReportAnalysisLogEvent[]
+  readonly pagination: {
+    readonly limit: number
+    readonly hasMore: boolean
+    readonly nextBeforeSequence: number | null
+  }
+}
+
 export interface TestReportListItem {
   readonly id: string
   readonly workspaceId: string

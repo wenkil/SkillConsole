@@ -291,6 +291,24 @@ test("Analyzer API preserves Revision identity and never exposes its Agent Sessi
     },
     list: async () => [analysis],
     get: async () => analysis,
+    listLogs: async () => ({
+      items: [
+        {
+          sequence: 1,
+          type: "session.initialized",
+          analysisId,
+          occurredAt: now,
+          payload: { model: "sdk_default", tools: [], skills: [] },
+        },
+      ],
+      pagination: {
+        limit: 200,
+        hasMore: false,
+        nextBeforeSequence: null,
+      },
+    }),
+    subscribeLogs: async () => () => undefined,
+    replayLogs: async () => [],
     getDocument: async (
       _analysisId: string,
       locale: string,
@@ -301,6 +319,13 @@ test("Analyzer API preserves Revision identity and never exposes its Agent Sessi
           ? `<!doctype html><html lang="${locale}"><body>Analysis</body></html>`
           : "# Analysis\n",
       filename: format === "html" ? "analysis.html" : "analysis.md",
+    }),
+    getCombinedHtmlDocument: async (
+      requestedAnalysisId: string,
+      locale: string,
+    ) => ({
+      content: `<!doctype html><html lang="${locale}"><body>Facts + Analysis ${requestedAnalysisId}</body></html>`,
+      filename: "report-r1-a1-full.html",
     }),
   } as unknown as TestReportAnalysisService
   const application = Fastify({ logger: false }).withTypeProvider<TypeBoxTypeProvider>()
@@ -341,6 +366,14 @@ test("Analyzer API preserves Revision identity and never exposes its Agent Sessi
       "configurationFingerprint" in listed.json().items[0],
       false,
     )
+    const logs = await application.inject({
+      method: "GET",
+      url: `/api/test-report-analyses/${analysisId}/logs`,
+    })
+    assert.equal(logs.statusCode, 200)
+    assert.equal(logs.json().items[0].analysisId, analysisId)
+    assert.equal(logs.json().items[0].type, "session.initialized")
+    assert.equal("agentSessionId" in logs.json().items[0], false)
     const html = await application.inject({
       method: "GET",
       url: `/api/test-report-analyses/${analysisId}/document.html?locale=zh-CN`,
@@ -348,6 +381,20 @@ test("Analyzer API preserves Revision identity and never exposes its Agent Sessi
     assert.equal(html.statusCode, 200)
     assert.match(html.headers["content-security-policy"] ?? "", /default-src 'none'/)
     assert.match(html.body, /lang="zh-CN"/)
+    const combined = await application.inject({
+      method: "GET",
+      url: `/api/test-report-analyses/${analysisId}/document.full.html?locale=zh-CN&download=true`,
+    })
+    assert.equal(combined.statusCode, 200)
+    assert.ok(combined.body.includes(`Facts + Analysis ${analysisId}`))
+    assert.match(
+      combined.headers["content-disposition"] ?? "",
+      /^attachment;.*report-r1-a1-full\.html/,
+    )
+    assert.match(
+      combined.headers["content-security-policy"] ?? "",
+      /default-src 'none'/,
+    )
     const missingKey = await application.inject({
       method: "POST",
       url: `/api/test-reports/${reportId}/analyses`,

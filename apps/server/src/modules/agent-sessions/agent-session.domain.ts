@@ -166,6 +166,12 @@ export interface RuntimeTurnInput {
   readonly prompt: string
 }
 
+export interface AgentRuntimeDiagnostic {
+  readonly messageType: string
+  readonly subtype: string | null
+  readonly details: Readonly<Record<string, unknown>>
+}
+
 export interface AgentRuntimeToolPermissionContext {
   readonly signal: AbortSignal
   readonly blockedPath?: string
@@ -213,6 +219,7 @@ export interface OpenAgentRuntimeSessionInput {
   readonly persistSession?: boolean
   readonly strictMcpConfig?: boolean
   readonly redactedValues: readonly string[]
+  readonly onDiagnostic?: (diagnostic: AgentRuntimeDiagnostic) => Promise<void>
   readonly onEvent: (
     turnId: string | null,
     event: AgentRuntimeEvent,

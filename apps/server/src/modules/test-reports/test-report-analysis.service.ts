@@ -15,9 +15,12 @@ import {
 import { sanitizeTestRunPublicValue } from "../test-runs/test-run-public-safety.js"
 import type {
   StructuredTestReportV1,
+  TestReportAnalysisLogEvent,
+  TestReportAnalysisLogPage,
   TestReportAnalysisRevisionView,
   TestReportAnalyzerRuntimePolicyV1,
 } from "./test-report.domain.js"
+import { TestReportAnalysisDiagnostics } from "./test-report-analysis-diagnostics.js"
 import {
   buildTestReportAnalyzerPrompt,
   createTestReportAnalysisInputFingerprint,
@@ -31,6 +34,10 @@ import {
   renderTestReportAnalysisHtml,
   renderTestReportAnalysisMarkdown,
 } from "./test-report-analysis-renderer.js"
+import {
+  getCombinedTestReportDocumentFilename,
+  renderCombinedTestReportHtml,
+} from "./test-report-combined-renderer.js"
 import { TestReportAnalysisWorkspace } from "./test-report-analysis-workspace.js"
 import type { TestReportDocumentLocale } from "./test-report-renderer.js"
 import { TestReportRepository } from "./test-report.repository.js"
@@ -93,8 +100,21 @@ function sha256(content: Buffer): string {
   return createHash("sha256").update(content).digest("hex")
 }
 
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize)
+  if (value === null || typeof value !== "object") return value
+
+  return Object.fromEntries(
+    Object.entries(value as Readonly<Record<string, unknown>>)
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+      .map(([key, item]) => [key, canonicalize(item)]),
+  )
+}
+
 function stableHash(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex")
+  return createHash("sha256")
+    .update(JSON.stringify(canonicalize(value)))
+    .digest("hex")
 }
 
 function parseConfiguredModelId(settings: Buffer): string {
@@ -283,13 +303,16 @@ function foldAnalysisEvents(
 
 export class TestReportAnalysisService {
   private readonly workspace: TestReportAnalysisWorkspace
+  private readonly diagnostics: TestReportAnalysisDiagnostics
   private readonly runtimePolicy: TestReportAnalyzerRuntimePolicyV1
   private readonly workers = new Map<string, Promise<void>>()
   private readonly activeSessions = new Map<string, string>()
+  private readonly recordedAgentEventSequences = new Map<string, Set<number>>()
   private shuttingDown = false
 
   constructor(private readonly options: TestReportAnalysisServiceOptions) {
     this.workspace = new TestReportAnalysisWorkspace(options.dataRoot)
+    this.diagnostics = new TestReportAnalysisDiagnostics(options.dataRoot)
     this.runtimePolicy = {
       ...analyzerRuntimePolicy,
       timeoutMs: options.agentSessionTimeoutMs ?? analyzerRuntimePolicy.timeoutMs,
@@ -397,6 +420,66 @@ export class TestReportAnalysisService {
     return this.options.repository.getAnalysis(analysisId)
   }
 
+  async listLogs(
+    analysisId: string,
+    input: { readonly beforeSequence?: number; readonly limit: number },
+  ): Promise<TestReportAnalysisLogPage> {
+    const analysis = await this.options.repository.getAnalysis(analysisId)
+    if (!analysis.agentSessionId) {
+      return {
+        items: [],
+        pagination: {
+          limit: input.limit,
+          hasMore: false,
+          nextBeforeSequence: null,
+        },
+      }
+    }
+    const events = (
+      await this.options.agentSessions.listEvents(analysis.agentSessionId, 0)
+    ).filter(
+      (event) =>
+        input.beforeSequence === undefined ||
+        event.sequence < input.beforeSequence,
+    )
+    const hasMore = events.length > input.limit
+    const selected = events.slice(-input.limit)
+    return {
+      items: selected.map((event) => this.toLogEvent(analysisId, event)),
+      pagination: {
+        limit: input.limit,
+        hasMore,
+        nextBeforeSequence: hasMore ? (selected[0]?.sequence ?? null) : null,
+      },
+    }
+  }
+
+  async subscribeLogs(
+    analysisId: string,
+    listener: (event: TestReportAnalysisLogEvent) => void,
+  ): Promise<() => void> {
+    const analysis = await this.options.repository.getAnalysis(analysisId)
+    if (!analysis.agentSessionId) return () => undefined
+    return this.options.agentSessions.subscribe(
+      analysis.agentSessionId,
+      (event) => listener(this.toLogEvent(analysisId, event)),
+    )
+  }
+
+  async replayLogs(
+    analysisId: string,
+    afterSequence: number,
+  ): Promise<readonly TestReportAnalysisLogEvent[]> {
+    const analysis = await this.options.repository.getAnalysis(analysisId)
+    if (!analysis.agentSessionId) return []
+    return (
+      await this.options.agentSessions.listEvents(
+        analysis.agentSessionId,
+        afterSequence,
+      )
+    ).map((event) => this.toLogEvent(analysisId, event))
+  }
+
   async getDocument(
     analysisId: string,
     locale: TestReportDocumentLocale,
@@ -446,6 +529,33 @@ export class TestReportAnalysisService {
     }
   }
 
+  async getCombinedHtmlDocument(
+    analysisId: string,
+    locale: TestReportDocumentLocale,
+  ) {
+    const analysis = await this.options.repository.getAnalysis(analysisId)
+    if (analysis.status !== "AVAILABLE" || !analysis.analysis) {
+      throw new DomainError({
+        code: "TEST_REPORT_ANALYSIS_DOCUMENT_UNAVAILABLE",
+        message: "The requested Analysis Revision is not available.",
+        kind: "conflict",
+      })
+    }
+    const report = await this.options.repository.getRevisionSnapshot(
+      analysis.reportId,
+      analysis.reportRevisionId,
+    )
+    const renderable = analysis as TestReportAnalysisRevisionView & {
+      readonly analysis: NonNullable<
+        TestReportAnalysisRevisionView["analysis"]
+      >
+    }
+    return {
+      content: renderCombinedTestReportHtml(renderable, report, locale),
+      filename: getCombinedTestReportDocumentFilename(renderable, report),
+    }
+  }
+
   async shutdown(): Promise<void> {
     if (this.shuttingDown) return
     this.shuttingDown = true
@@ -474,12 +584,19 @@ export class TestReportAnalysisService {
     for (const sessionId of this.activeSessions.values()) {
       this.options.agentSessions.release(sessionId)
     }
+    await this.diagnostics.flush()
   }
 
   private launch(analysisId: string): void {
     if (this.shuttingDown || this.workers.has(analysisId)) return
     const worker = this.run(analysisId)
       .catch(async (error: unknown) => {
+        await this.recordDiagnostic(analysisId, "analysis.worker.failed", {
+          error:
+            error instanceof Error
+              ? { name: error.name, message: error.message }
+              : { message: String(error) },
+        })
         this.options.logger.error(
           { analysisId, error },
           "Test report Analyzer worker failed",
@@ -508,6 +625,7 @@ export class TestReportAnalysisService {
           })
       })
       .finally(() => {
+        this.recordedAgentEventSequences.delete(analysisId)
         this.workers.delete(analysisId)
       })
     this.workers.set(analysisId, worker)
@@ -516,6 +634,15 @@ export class TestReportAnalysisService {
   private async run(analysisId: string): Promise<void> {
     const revision = await this.options.repository.getAnalysis(analysisId)
     if (revision.status !== "PENDING") return
+    await this.recordDiagnostic(analysisId, "analysis.execution.started", {
+      reportId: revision.reportId,
+      reportRevisionId: revision.reportRevisionId,
+      revisionNumber: revision.revisionNumber,
+      configuredModelId: revision.configuredModelId,
+      selectedCaseCount: revision.selectedEvalRevisionCaseIds.length,
+      runtimePolicy: revision.runtimePolicy,
+      inputFingerprint: revision.inputFingerprint,
+    })
     const report = await this.options.repository.getRevisionSnapshot(
       revision.reportId,
       revision.reportRevisionId,
@@ -543,6 +670,10 @@ export class TestReportAnalysisService {
     const prompt = buildTestReportAnalyzerPrompt({
       report,
       selectedEvalRevisionCaseIds: revision.selectedEvalRevisionCaseIds,
+    })
+    await this.recordDiagnostic(analysisId, "analysis.prompt.prepared", {
+      characterCount: prompt.length,
+      sha256: createHash("sha256").update(prompt, "utf8").digest("hex"),
     })
     const settings = await readFile(this.options.claudeSettingsPath)
     const expectedConfigurationFingerprint = sha256(settings)
@@ -615,6 +746,12 @@ export class TestReportAnalysisService {
           ...environment.sensitiveValues,
           prepared.absolutePath,
         ],
+        onRuntimeDiagnostic: (diagnostic) =>
+          this.recordDiagnostic(analysisId, "sdk.message", {
+            messageType: diagnostic.messageType,
+            subtype: diagnostic.subtype,
+            details: diagnostic.details,
+          }),
       })
       const claimed = await this.options.repository.claimAnalysis(
         analysisId,
@@ -633,6 +770,7 @@ export class TestReportAnalysisService {
       }
       this.activeSessions.set(analysisId, session.id)
       const observedTerminal = await this.waitForTerminal(
+        analysisId,
         session.id,
         revision.runtimePolicy.timeoutMs,
       )
@@ -646,6 +784,7 @@ export class TestReportAnalysisService {
           )
         })
         sessionTerminal = await this.waitForTerminal(
+          analysisId,
           session.id,
           revision.runtimePolicy.cancellationGraceMs,
         )
@@ -660,6 +799,19 @@ export class TestReportAnalysisService {
       folded = foldAnalysisEvents(
         await this.options.agentSessions.listEvents(session.id, 0),
       )
+      await this.recordDiagnostic(analysisId, "analysis.session.folded", {
+        timedOut: timeout,
+        initialized: folded.initialized,
+        actualModelId: folded.actualModelId,
+        terminalType: folded.terminalType,
+        finalOutputCharacterCount: folded.finalOutput?.length ?? 0,
+        exposedTools: folded.exposedTools,
+        exposedSkills: folded.exposedSkills,
+        exposedMcpServers: folded.exposedMcpServers,
+        toolUseObserved: folded.toolUseObserved,
+        usage: folded.usage,
+        error: folded.error,
+      })
       await this.options.agentSessions.assertSourceConfigurationFingerprint(
         expectedConfigurationFingerprint,
       )
@@ -721,6 +873,11 @@ export class TestReportAnalysisService {
         result.usage,
         result.modelId,
       )
+      await this.recordDiagnostic(analysisId, "analysis.completed", {
+        status: "AVAILABLE",
+        modelId: result.modelId,
+        usage: result.usage,
+      })
     } else {
       await this.options.repository.failAnalysis(
         analysisId,
@@ -728,6 +885,44 @@ export class TestReportAnalysisService {
         result.message,
         result.usage,
         result.modelId,
+      )
+      await this.recordDiagnostic(analysisId, "analysis.failed", {
+        status: "FAILED",
+        code: result.code,
+        message: result.message,
+        modelId: result.modelId ?? null,
+        usage: result.usage,
+      })
+    }
+    await this.diagnostics.flush(analysisId)
+  }
+
+  private toLogEvent(
+    analysisId: string,
+    event: AgentSessionEvent,
+  ): TestReportAnalysisLogEvent {
+    return {
+      sequence: event.sequence,
+      type: event.type,
+      analysisId,
+      occurredAt: event.occurredAt,
+      payload: sanitizeTestRunPublicValue(event.payload) as Readonly<
+        Record<string, unknown>
+      >,
+    }
+  }
+
+  private async recordDiagnostic(
+    analysisId: string,
+    type: string,
+    payload: Readonly<Record<string, unknown>>,
+  ): Promise<void> {
+    try {
+      await this.diagnostics.append(analysisId, type, payload)
+    } catch (error) {
+      this.options.logger.error(
+        { analysisId, type, error },
+        "Analyzer diagnostic event could not be written",
       )
     }
   }
@@ -830,6 +1025,7 @@ export class TestReportAnalysisService {
   }
 
   private async waitForTerminal(
+    analysisId: string,
     sessionId: string,
     timeoutMs: number,
   ): Promise<boolean> {
@@ -843,15 +1039,39 @@ export class TestReportAnalysisService {
       settled = true
       resolve?.(value)
     }
+    const recordedSequences =
+      this.recordedAgentEventSequences.get(analysisId) ?? new Set<number>()
+    this.recordedAgentEventSequences.set(analysisId, recordedSequences)
+    const recordEvent = (
+      event: AgentSessionEvent,
+      replayed: boolean,
+    ): Promise<void> => {
+      if (recordedSequences.has(event.sequence)) return Promise.resolve()
+      recordedSequences.add(event.sequence)
+      return this.recordDiagnostic(
+        analysisId,
+        replayed ? "agent.event.replayed" : "agent.event",
+        {
+          sequence: event.sequence,
+          type: event.type,
+          occurredAt: event.occurredAt,
+          payload: event.payload,
+        },
+      )
+    }
     const unsubscribe = this.options.agentSessions.subscribe(
       sessionId,
       (event) => {
+        void recordEvent(event, false)
         if (terminalAgentEvents.has(event.type)) finish(true)
       },
     )
     const timeout = setTimeout(() => finish(false), timeoutMs)
     try {
       const backlog = await this.options.agentSessions.listEvents(sessionId, 0)
+      for (const event of backlog) {
+        await recordEvent(event, true)
+      }
       if (backlog.some((event) => terminalAgentEvents.has(event.type))) {
         finish(true)
       }

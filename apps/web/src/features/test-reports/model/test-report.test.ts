@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   createTestReportAnalysis,
   testReportAnalysisDocumentUrl,
+  testReportCombinedDocumentUrl,
   testReportDocumentUrl,
 } from "@/features/test-reports/api/test-reports-api"
 import {
@@ -31,6 +32,12 @@ describe("test report document model", () => {
     )
     expect(markdown).toContain("document.md?locale=en&download=true")
     expect(`${html}${markdown}`).not.toContain(".json")
+  })
+
+  it("builds a complete HTML download URL from the selected Analysis Revision", () => {
+    expect(testReportCombinedDocumentUrl("analysis-id", "zh-CN")).toBe(
+      "/api/test-report-analyses/analysis-id/document.full.html?locale=zh-CN&download=true",
+    )
   })
 
   it("requires both a terminal report status and immutable Revision identity", () => {

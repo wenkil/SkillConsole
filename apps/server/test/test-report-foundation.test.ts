@@ -19,6 +19,11 @@ import {
   renderTestReportHtml,
   renderTestReportMarkdown,
 } from "../src/modules/test-reports/test-report-renderer.js"
+import {
+  getCombinedTestReportDocumentFilename,
+  renderCombinedTestReportHtml,
+} from "../src/modules/test-reports/test-report-combined-renderer.js"
+import type { RenderableTestReportAnalysis } from "../src/modules/test-reports/test-report-analysis-renderer.js"
 import { StructuredTestReportSchema } from "../src/modules/test-reports/test-report.contract.js"
 import { TestReportService } from "../src/modules/test-reports/test-report.service.js"
 import type { TestReportRepository } from "../src/modules/test-reports/test-report.repository.js"
@@ -756,6 +761,76 @@ test("static HTML and Markdown documents share one safe structured Revision", ()
     markdown,
     new RegExp(
       `/workbenches/${base.workspaceId}/runs/${base.runId}\\?externalId=1`,
+    ),
+  )
+})
+
+test("combined HTML binds one fact Report Revision to one AI Analysis Revision", () => {
+  const report = build(
+    createRun("version_vs_version", [
+      runCase({ side: "BASELINE", externalId: 1, status: "FAILED" }),
+      runCase({ side: "TARGET", externalId: 1, status: "PASSED" }),
+    ]),
+  )
+  const analysis = {
+    id: randomUUID(),
+    reportId: report.reportId,
+    reportRevisionId: report.reportRevisionId,
+    revisionNumber: 2,
+    configuredModelId: "configured-analyzer-model",
+    actualModelId: "actual-analyzer-model",
+    modelId: "actual-analyzer-model",
+    configurationFingerprint: hash,
+    semanticConfigurationFingerprint: hash,
+    runtimePolicy: {
+      schemaVersion: "test-report-analyzer-runtime-policy.v1",
+      maxBudgetUsd: 0.75,
+      timeoutMs: 90_000,
+    },
+    runtimePolicyFingerprint: hash,
+    promptVersion: "test-report-analyzer-prompt-v1",
+    inputFingerprint: hash,
+    analysis: {
+      schemaVersion: "test-report-analysis.v1",
+      summary: '<img src=x onerror="alert(1)"> AI summary',
+      findings: [
+        {
+          id: "finding-1",
+          kind: "INFERENCE",
+          scope: "SKILL",
+          confidence: "MEDIUM",
+          title: "Selected Case improved",
+          statement: "The selected Case changed from failed to passed.",
+          evidenceRefs: report.issues.items[0]?.evidenceRefs ?? [],
+          affectedEvalCaseIds: [report.cases[0]!.evalRevisionCaseId],
+          suggestedAction: "Inspect the linked Run Case.",
+        },
+      ],
+      priorityOrder: ["finding-1"],
+      limitations: ["One Eval Case only."],
+    },
+    usage: usage(),
+    createdAt: now,
+    completedAt: now,
+  } satisfies RenderableTestReportAnalysis
+
+  const html = renderCombinedTestReportHtml(analysis, report, "zh-CN")
+  const filename = getCombinedTestReportDocumentFilename(analysis, report)
+
+  assert.equal([...html.matchAll(/<!doctype html>/g)].length, 1)
+  assert.match(html, /确定性事实报告/)
+  assert.match(html, /第二部分 · AI 分析/)
+  assert.match(html, /Selected Case improved/)
+  assert.match(
+    html,
+    /&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt; AI summary/,
+  )
+  assert.doesNotMatch(html, /<img src=x/)
+  assert.match(html, /test-report-combined-renderer-v1/)
+  assert.match(
+    filename,
+    new RegExp(
+      `-${report.runId.slice(0, 8)}-r${report.reportRevisionNumber}-a2-full\\.html$`,
     ),
   )
 })
