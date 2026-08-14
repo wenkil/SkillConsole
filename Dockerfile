@@ -4,9 +4,7 @@ ARG NODE_IMAGE=node:22-bookworm-slim
 
 FROM ${NODE_IMAGE} AS runtime-base
 
-# Test runs require deterministic document tooling and a fail-closed command
-# sandbox. The Agent SDK refuses to execute test Cases when the sandbox probe
-# fails instead of silently falling back to the host filesystem.
+# Keep common document and command-line tooling available to every Agent role.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 python-is-python3 pandoc bubblewrap socat \
   && rm -rf /var/lib/apt/lists/*
@@ -30,6 +28,7 @@ FROM dependencies AS build
 
 COPY apps/web apps/web
 COPY apps/server apps/server
+COPY agent-prompts agent-prompts
 
 RUN npm run build --workspace @skillconsole/web
 RUN npm run build --workspace @skillconsole/server
@@ -52,9 +51,10 @@ COPY --from=build /workspace/apps/server/dist apps/server/dist
 COPY --from=build /workspace/apps/web/dist apps/web/dist
 COPY apps/server/config apps/server/config
 COPY apps/server/resources apps/server/resources
+COPY agent-prompts agent-prompts
 
-RUN mkdir -p /workspace/var /home/node/.claude \
-  && chown -R node:node /workspace/var /home/node/.claude
+RUN mkdir -p /workspace/var \
+  && chown -R node:node /workspace/var
 
 EXPOSE 3000
 

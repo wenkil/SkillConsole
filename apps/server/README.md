@@ -63,8 +63,22 @@ Route handlers translate HTTP requests into application operations. They must no
   `SKILLCONSOLE_DATA_ROOT/agent-sessions/<sessionId>/workspace/.claude/settings.json`.
 - SDK working directory: the session `workspace` root.
 - Settings source: `project`.
+- Capability source: the same copied project `settings.json` for every Agent
+  role; the Server does not add role-specific tool, Skill, MCP, or write-path
+  permission overrides.
+- System Prompts: repository-root `agent-prompts/*.system.md`, selected by a
+  fixed Session role and read again for each new Session.
+- Task payloads: workspace `inputs/task.json` plus its referenced files; the
+  initial user Prompt is only a short bootstrap instruction.
 - Direct deployment override: `SKILLCONSOLE_CLAUDE_SETTINGS_PATH`.
-- Transcript storage: the SDK default `~/.claude` location.
+- System Prompt directory override: `SKILLCONSOLE_AGENT_PROMPTS_ROOT`.
+- Native log storage:
+  `SKILLCONSOLE_DATA_ROOT/agent-session-logs/<agentSessionId>/` contains
+  metadata, full SDK messages, the main/subagent transcript mirror,
+  diagnostics, usage, and final output. The SDK runtime state is isolated at
+  `SKILLCONSOLE_DATA_ROOT/claude-runtime/<agentSessionId>/` for recovery.
+- Native log files are Server-side artifacts only. They are not returned by
+  the Agent Session API or SSE stream.
 
 Public responses exclude configuration content, sensitive values, absolute
 paths, SDK session IDs, and SDK raw objects.

@@ -297,6 +297,10 @@ test("rejects a target Skill copy changed during Agent execution", async () => {
         totalBytes: fileRecord.byteSize,
       },
       inspected,
+      {
+        maxEvalCount: 3,
+        generationBrief: null,
+      },
     )
     await writeFile(
       path.join(
@@ -313,7 +317,12 @@ test("rejects a target Skill copy changed during Agent execution", async () => {
       () =>
         preparer.verifyImmutableInputs(
           generationId,
-          { snapshotId, skillName: "sample-skill" },
+          {
+            snapshotId,
+            skillName: "sample-skill",
+            maxEvalCount: 3,
+            generationBrief: null,
+          },
           inspected,
         ),
       (error: unknown) =>

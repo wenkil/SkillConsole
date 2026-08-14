@@ -110,8 +110,8 @@
     }
   },
   "analysis": {
-    "title": "Independent Analyzer",
-    "disclaimer": "The model receives only the selected sanitized report facts and evidence references. It cannot access the Run workspace, tools, Skills, or network, and cannot modify product objects.",
+    "title": "Report Analyzer",
+    "disclaimer": "The Analyzer uses the capabilities from project settings.json and reads the frozen report, selected Cases, and context files prepared in its workspace.",
     "generatedNotice": "AI analysis is a model-generated interpretation layer. It does not replace the deterministic fact report or declare a winner, release decision, or root cause.",
     "modelGenerated": "Model generated",
     "status": {
@@ -144,14 +144,14 @@
     "loadError": "Could not load AI analysis",
     "loadErrorDescription": "The fact report remains available. Retry loading the independent Analysis Revision.",
     "emptyTitle": "No AI analysis yet",
-    "emptyDescription": "Select the Cases to analyze, then start an independent, tool-free Analyzer Session on demand.",
+    "emptyDescription": "Select the Cases to analyze, then start an Analyzer Session with the project's shared capabilities.",
     "pendingTitle": "Analyzer is queued",
     "runningTitle": "Analyzer is running",
     "runningDescription": "A separate script-free static HTML document will appear when it finishes. The fact report and its Revision will not change.",
     "failedTitle": "AI analysis failed",
     "failedDescription": "Failure does not affect the fact report. You can create a new Analysis Revision with the same Cases.",
     "meta": "Actual model {{model}} · configured model {{configuredModel}} · Prompt {{prompt}} · {{count}} Cases",
-    "runtimePolicy": "Runtime {{schema}} · budget ceiling ${{budget}} · timeout {{timeout}}",
+    "runtimePolicy": "Runtime {{schema}} · capabilities from {{capability}} · budget ceiling ${{budget}} · timeout {{timeout}}",
     "usage": "{{input}} input · {{output}} output Tokens · ${{cost}} · {{duration}} · {{turns}} turns",
     "logs": {
       "title": "Live Analyzer logs",

@@ -88,13 +88,10 @@ export interface TestReportAnalysis {
     readonly maxBudgetUsd: number
     readonly timeoutMs: number
     readonly cancellationGraceMs: number
-    readonly sandboxPolicy: string
-    readonly persistSession: boolean
-    readonly strictMcpConfig: boolean
-    readonly toolsEnabled: boolean
-    readonly skillsEnabled: boolean
-    readonly mcpEnabled: boolean
-    readonly maxPromptCharacters: number
+    readonly capabilitySource: "project_settings"
+    readonly promptControlledFileAccess: boolean
+    readonly persistSession?: boolean
+    readonly maxInputCharacters: number
     readonly maxResponseCharacters: number
   }
   readonly runtimePolicyFingerprint: string

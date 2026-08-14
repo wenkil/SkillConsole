@@ -6,7 +6,6 @@ import path from "node:path"
 import test from "node:test"
 
 import { AgentSessionWorkspaceStore } from "../src/modules/agent-sessions/session-workspace.js"
-import { strictTestRunSandbox } from "../src/modules/agent-sessions/runtime/claude-agent-sdk.adapter.js"
 import { mapSdkMessage } from "../src/modules/agent-sessions/runtime/sdk-message.mapper.js"
 import { buildExecutionPrompt } from "../src/modules/test-runs/test-run-prompt.js"
 import {
@@ -62,14 +61,21 @@ test("semantic configuration fingerprint ignores credentials but tracks model ch
       "utf8",
     )
 
+  const promptVersions = {
+    executionPromptVersion: "execution.system.md@sha256:test",
+    graderProtocolVersion: "grader.system.md@sha256:test",
+  }
   const first = buildTestRunSemanticConfigurationFingerprint(
     settings("secret-one", "claude-test"),
+    promptVersions,
   )
   const credentialOnly = buildTestRunSemanticConfigurationFingerprint(
     settings("secret-two", "claude-test"),
+    promptVersions,
   )
   const modelChanged = buildTestRunSemanticConfigurationFingerprint(
     settings("secret-two", "claude-test-next"),
+    promptVersions,
   )
 
   assert.equal(first, credentialOnly)
@@ -286,31 +292,12 @@ test("runtime redaction ignores short control values but still removes secrets",
   )
 })
 
-test("strict test run sandbox never re-allows a filesystem root", () => {
-  const cwd = path.resolve("C:/controlled/test-run/workspace")
-  const sandbox = strictTestRunSandbox({
-    cwd,
-    environment: {
-      PATH: "C:\\Windows",
-      SystemRoot: "C:\\Windows",
-    },
-    redactedValues: [],
-    onEvent: async () => undefined,
-    onFatalError: async () => undefined,
-  })
+test("test execution bootstrap delegates task detail to the workspace file", () => {
   assert.equal(
-    sandbox.filesystem.allowRead.some(
-      (candidate) => path.parse(candidate).root === candidate,
-    ),
-    false,
+    buildExecutionPrompt(),
+    "Read inputs/task.json and execute the test Case described there.",
   )
-  assert.equal(sandbox.enableWeakerNestedSandbox, false)
-  assert.equal(
-    sandbox.filesystem.allowWrite.every((candidate) =>
-      candidate.endsWith(path.join("workspace", "outputs")),
-    ),
-    true,
-  )
+  assert.doesNotMatch(buildExecutionPrompt(), /TARGET|BASELINE|fixture/)
 })
 
 test("test run scorer requires one independently evidenced result per assertion", () => {
@@ -549,15 +536,10 @@ test("Agent Session workspace resolver accepts only controlled test run locators
   )
 })
 
-test("target and baseline use the same execution prompt envelope", () => {
-  const input = {
-    userPrompt: "Summarize the attached fixture.",
-    inputPaths: ["inputs/files/fixture.txt"],
-  }
-
-  assert.equal(buildExecutionPrompt(input), buildExecutionPrompt(input))
-  assert.equal(buildExecutionPrompt(input).includes("TARGET"), false)
-  assert.equal(buildExecutionPrompt(input).includes("BASELINE"), false)
+test("target and baseline use the same execution bootstrap prompt", () => {
+  assert.equal(buildExecutionPrompt(), buildExecutionPrompt())
+  assert.equal(buildExecutionPrompt().includes("TARGET"), false)
+  assert.equal(buildExecutionPrompt().includes("BASELINE"), false)
 })
 
 test("test run Artifact safety gate removes outputs containing protected values", async () => {

@@ -82,6 +82,8 @@ const claudeErrorMessages = {
     "The Claude Agent SDK runtime was interrupted.",
   CLAUDE_EXECUTION_FAILED:
     "Claude could not complete the request.",
+  AGENT_SESSION_LOG_PERSISTENCE_FAILED:
+    "The Agent Session native logs could not be persisted.",
 } satisfies Record<ClaudeErrorCode, string>
 
 const assistantErrorCodes = {

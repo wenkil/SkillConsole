@@ -67,6 +67,7 @@ export const claudeErrorCodes = [
   "CLAUDE_PROCESS_FAILED",
   "CLAUDE_RUNTIME_INTERRUPTED",
   "CLAUDE_EXECUTION_FAILED",
+  "AGENT_SESSION_LOG_PERSISTENCE_FAILED",
 ] as const
 
 export type AgentSessionStatus = (typeof agentSessionStatuses)[number]
@@ -106,6 +107,37 @@ export interface AgentSessionEvent {
   readonly occurredAt: string
   readonly payload: Readonly<Record<string, unknown>>
 }
+
+export const agentSessionLogStatuses = [
+  "WRITING",
+  "COMPLETE",
+  "DEGRADED",
+  "FAILED",
+  "RECOVERY_REQUIRED",
+] as const
+
+export type AgentSessionLogStatus =
+  (typeof agentSessionLogStatuses)[number]
+
+export type AgentSessionOrigin =
+  | { readonly type: "eval_generation"; readonly taskId: string }
+  | {
+      readonly type: "test_run_execution"
+      readonly runId: string
+      readonly caseId: string
+    }
+  | {
+      readonly type: "test_run_grader"
+      readonly runId: string
+      readonly caseId: string
+    }
+  | {
+      readonly type: "report_analyzer"
+      readonly reportId: string
+      readonly analysisId: string
+      readonly revisionId: string
+    }
+  | { readonly type: "generic" }
 
 export type AssistantContent =
   | {
@@ -172,53 +204,19 @@ export interface AgentRuntimeDiagnostic {
   readonly details: Readonly<Record<string, unknown>>
 }
 
-export interface AgentRuntimeToolPermissionContext {
-  readonly signal: AbortSignal
-  readonly blockedPath?: string
-  readonly decisionReason?: string
-  readonly title?: string
-  readonly displayName?: string
-  readonly description?: string
-  readonly toolUseId: string
-  readonly requestId: string
-}
-
-export type AgentRuntimeToolPermissionResult =
-  | {
-      readonly behavior: "allow"
-      readonly updatedInput?: Readonly<Record<string, unknown>>
-    }
-  | {
-      readonly behavior: "deny"
-      readonly message: string
-      readonly interrupt?: boolean
-    }
-
-export type AgentRuntimeToolPermissionHandler = (
-  toolName: string,
-  input: Readonly<Record<string, unknown>>,
-  context: AgentRuntimeToolPermissionContext,
-) => Promise<AgentRuntimeToolPermissionResult>
-
 export interface OpenAgentRuntimeSessionInput {
+  readonly agentSessionId: string
   readonly cwd: string
+  readonly claudeConfigDir: string
+  readonly sessionStore: SessionStore
   readonly resumeSessionId?: string
-  readonly allowedTools?: readonly string[]
-  readonly availableTools?: readonly string[]
-  readonly enabledSkills?: readonly string[]
-  readonly canUseTool?: AgentRuntimeToolPermissionHandler
   readonly maxTurns?: number
   readonly maxBudgetUsd?: number
   readonly environment?: Readonly<Record<string, string | undefined>>
   readonly protectedEnvironmentNames?: readonly string[]
-  readonly sandboxPolicy?:
-    | "test_run_strict_v1"
-    | "report_analyzer_strict_v1"
-  readonly isolateSettings?: boolean
   readonly systemPrompt?: string
-  readonly persistSession?: boolean
-  readonly strictMcpConfig?: boolean
   readonly redactedValues: readonly string[]
+  readonly onRawMessage: (message: SDKMessage) => Promise<void>
   readonly onDiagnostic?: (diagnostic: AgentRuntimeDiagnostic) => Promise<void>
   readonly onEvent: (
     turnId: string | null,
@@ -244,3 +242,7 @@ export interface AgentRuntimeAdapter {
     input: OpenAgentRuntimeSessionInput,
   ) => AgentRuntimeSession
 }
+import type {
+  SDKMessage,
+  SessionStore,
+} from "@anthropic-ai/claude-agent-sdk"

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
+import path from "node:path"
 import test from "node:test"
 import { Check } from "typebox/value"
 
@@ -7,12 +8,11 @@ import type {
   TestRunCaseView,
   TestRunDetailView,
 } from "../src/modules/test-runs/test-run.domain.js"
+import { AgentSystemPromptStore } from "../src/modules/agent-sessions/agent-system-prompt.js"
 import { buildStructuredTestReport } from "../src/modules/test-reports/test-report-generator.js"
 import {
-  buildTestReportAnalyzerPrompt,
   createTestReportAnalysisInputFingerprint,
   parseTestReportAnalysis,
-  testReportAnalyzerSystemPrompt,
   TestReportAnalysisProtocolError,
 } from "../src/modules/test-reports/test-report-analysis-protocol.js"
 import {
@@ -783,9 +783,15 @@ test("combined HTML binds one fact Report Revision to one AI Analysis Revision",
     configurationFingerprint: hash,
     semanticConfigurationFingerprint: hash,
     runtimePolicy: {
-      schemaVersion: "test-report-analyzer-runtime-policy.v1",
+      schemaVersion: "test-report-analyzer-runtime-policy.v3",
+      maxTurns: 32,
       maxBudgetUsd: 0.75,
-      timeoutMs: 90_000,
+      timeoutMs: 240_000,
+      cancellationGraceMs: 5_000,
+      maxInputCharacters: 500_000,
+      maxResponseCharacters: 200_000,
+      capabilitySource: "project_settings",
+      promptControlledFileAccess: true,
     },
     runtimePolicyFingerprint: hash,
     promptVersion: "test-report-analyzer-prompt-v1",
@@ -835,7 +841,7 @@ test("combined HTML binds one fact Report Revision to one AI Analysis Revision",
   )
 })
 
-test("Analyzer protocol binds every Finding to selected immutable evidence", () => {
+test("Analyzer protocol binds every Finding to selected immutable evidence", async () => {
   const report = build(
     createRun("version_vs_version", [
       runCase({ side: "BASELINE", externalId: 1, status: "PASSED" }),
@@ -884,6 +890,7 @@ test("Analyzer protocol binds every Finding to selected immutable evidence", () 
       configuredModelId: "sdk_default",
       semanticConfigurationFingerprint: "c".repeat(64),
       runtimePolicyFingerprint: "d".repeat(64),
+      promptVersion: "test-report-analyzer.system.md@sha256:test",
     }),
     createTestReportAnalysisInputFingerprint({
       report,
@@ -891,15 +898,15 @@ test("Analyzer protocol binds every Finding to selected immutable evidence", () 
       configuredModelId: "sdk_default",
       semanticConfigurationFingerprint: "c".repeat(64),
       runtimePolicyFingerprint: "d".repeat(64),
+      promptVersion: "test-report-analyzer.system.md@sha256:test",
     }),
   )
-  const prompt = buildTestReportAnalyzerPrompt({
-    report,
-    selectedEvalRevisionCaseIds: [selectedCaseId],
-  })
-  assert.equal(JSON.parse(prompt).messageType, "UNTRUSTED_REPORT_DATA")
-  assert.match(testReportAnalyzerSystemPrompt, /untrusted evidence/)
-  assert.doesNotMatch(prompt, /BASELINE output 1/)
+  const prompt = await new AgentSystemPromptStore(
+    path.resolve("agent-prompts"),
+  ).load("test-report-analyzer")
+  assert.match(prompt.content, /untrusted evidence/)
+  assert.match(prompt.content, /inputs\/task\.json/)
+  assert.doesNotMatch(prompt.content, /BASELINE output 1/)
 })
 
 test("Analyzer protocol rejects uncited, out-of-scope, and decisive conclusions", () => {

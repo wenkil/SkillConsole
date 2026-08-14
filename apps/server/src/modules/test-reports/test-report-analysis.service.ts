@@ -9,8 +9,8 @@ import type {
 } from "../agent-sessions/agent-session.domain.js"
 import type { AgentSessionService } from "../agent-sessions/agent-session.service.js"
 import {
-  buildIsolatedAgentRuntimeEnvironment,
-  forIsolatedAgentWorkspace,
+  buildTaskAgentRuntimeEnvironment,
+  forTaskAgentWorkspace,
 } from "../test-runs/test-run-runtime-environment.js"
 import { sanitizeTestRunPublicValue } from "../test-runs/test-run-public-safety.js"
 import type {
@@ -18,15 +18,12 @@ import type {
   TestReportAnalysisLogEvent,
   TestReportAnalysisLogPage,
   TestReportAnalysisRevisionView,
-  TestReportAnalyzerRuntimePolicyV1,
+  TestReportAnalyzerRuntimePolicyV3,
 } from "./test-report.domain.js"
 import { TestReportAnalysisDiagnostics } from "./test-report-analysis-diagnostics.js"
 import {
-  buildTestReportAnalyzerPrompt,
   createTestReportAnalysisInputFingerprint,
   parseTestReportAnalysis,
-  testReportAnalysisPromptVersion,
-  testReportAnalyzerSystemPrompt,
   TestReportAnalysisProtocolError,
 } from "./test-report-analysis-protocol.js"
 import {
@@ -43,20 +40,16 @@ import type { TestReportDocumentLocale } from "./test-report-renderer.js"
 import { TestReportRepository } from "./test-report.repository.js"
 
 const analyzerRuntimePolicy = {
-  schemaVersion: "test-report-analyzer-runtime-policy.v1",
-  maxTurns: 1,
+  schemaVersion: "test-report-analyzer-runtime-policy.v3",
+  maxTurns: 32,
   maxBudgetUsd: 0.75,
-  timeoutMs: 90_000,
+  timeoutMs: 240_000,
   cancellationGraceMs: 5_000,
-  maxPromptCharacters: 500_000,
+  maxInputCharacters: 500_000,
   maxResponseCharacters: 200_000,
-  sandboxPolicy: "report_analyzer_strict_v1",
-  persistSession: false,
-  strictMcpConfig: true,
-  toolsEnabled: false,
-  skillsEnabled: false,
-  mcpEnabled: false,
-} as const satisfies TestReportAnalyzerRuntimePolicyV1
+  capabilitySource: "project_settings",
+  promptControlledFileAccess: true,
+} as const satisfies TestReportAnalyzerRuntimePolicyV3
 
 const terminalAgentEvents = new Set<AgentSessionEvent["type"]>([
   "turn.completed",
@@ -304,7 +297,7 @@ function foldAnalysisEvents(
 export class TestReportAnalysisService {
   private readonly workspace: TestReportAnalysisWorkspace
   private readonly diagnostics: TestReportAnalysisDiagnostics
-  private readonly runtimePolicy: TestReportAnalyzerRuntimePolicyV1
+  private readonly runtimePolicy: TestReportAnalyzerRuntimePolicyV3
   private readonly workers = new Map<string, Promise<void>>()
   private readonly activeSessions = new Map<string, string>()
   private readonly recordedAgentEventSequences = new Map<string, Set<number>>()
@@ -373,14 +366,13 @@ export class TestReportAnalysisService {
     }
 
     const settings = await readFile(this.options.claudeSettingsPath)
+    const systemPrompt =
+      await this.options.agentSessions.getSystemPrompt("test-report-analyzer")
     const configuredModelId = parseConfiguredModelId(settings)
     const configurationFingerprint = sha256(settings)
     const runtimePolicyFingerprint = stableHash(this.runtimePolicy)
-    const prompt = buildTestReportAnalyzerPrompt({
-      report: detail.report,
-      selectedEvalRevisionCaseIds: selected,
-    })
-    if (prompt.length > this.runtimePolicy.maxPromptCharacters) {
+    const inputCharacterCount = JSON.stringify(detail.report).length
+    if (inputCharacterCount > this.runtimePolicy.maxInputCharacters) {
       throw new DomainError({
         code: "TEST_REPORT_ANALYSIS_INPUT_TOO_LARGE",
         message: "The selected Report evidence exceeds the Analyzer input limit.",
@@ -396,7 +388,7 @@ export class TestReportAnalysisService {
         semanticConfigurationFingerprint(settings),
       runtimePolicy: this.runtimePolicy,
       runtimePolicyFingerprint,
-      promptVersion: testReportAnalysisPromptVersion,
+      promptVersion: systemPrompt.version,
       inputFingerprint: createTestReportAnalysisInputFingerprint({
         report: detail.report,
         selectedEvalRevisionCaseIds: selected,
@@ -404,6 +396,7 @@ export class TestReportAnalysisService {
         semanticConfigurationFingerprint:
           semanticConfigurationFingerprint(settings),
         runtimePolicyFingerprint,
+        promptVersion: systemPrompt.version,
       }),
       selectedEvalRevisionCaseIds: selected,
       idempotencyKey,
@@ -647,6 +640,8 @@ export class TestReportAnalysisService {
       revision.reportId,
       revision.reportRevisionId,
     )
+    const systemPrompt =
+      await this.options.agentSessions.getSystemPrompt("test-report-analyzer")
     const expectedInputFingerprint =
       createTestReportAnalysisInputFingerprint({
         report,
@@ -655,9 +650,10 @@ export class TestReportAnalysisService {
         semanticConfigurationFingerprint:
           revision.semanticConfigurationFingerprint,
         runtimePolicyFingerprint: revision.runtimePolicyFingerprint,
+        promptVersion: revision.promptVersion,
       })
     if (
-      revision.promptVersion !== testReportAnalysisPromptVersion ||
+      revision.promptVersion !== systemPrompt.version ||
       revision.inputFingerprint !== expectedInputFingerprint
     ) {
       throw new DomainError({
@@ -667,13 +663,12 @@ export class TestReportAnalysisService {
         kind: "conflict",
       })
     }
-    const prompt = buildTestReportAnalyzerPrompt({
-      report,
-      selectedEvalRevisionCaseIds: revision.selectedEvalRevisionCaseIds,
-    })
+    const prompt =
+      "Read inputs/task.json, analyze the referenced frozen report, and write outputs/analysis.json."
     await this.recordDiagnostic(analysisId, "analysis.prompt.prepared", {
       characterCount: prompt.length,
       sha256: createHash("sha256").update(prompt, "utf8").digest("hex"),
+      systemPromptVersion: systemPrompt.version,
     })
     const settings = await readFile(this.options.claudeSettingsPath)
     const expectedConfigurationFingerprint = sha256(settings)
@@ -692,12 +687,30 @@ export class TestReportAnalysisService {
         kind: "conflict",
       })
     }
-    const baseEnvironment = buildIsolatedAgentRuntimeEnvironment(settings)
+    const baseEnvironment = buildTaskAgentRuntimeEnvironment(settings)
     const prepared = await this.workspace.prepare(
       analysisId,
-      revision.inputFingerprint,
+      {
+        inputFingerprint: revision.inputFingerprint,
+        promptVersion: revision.promptVersion,
+        configuredModelId: revision.configuredModelId,
+        report,
+        selectedEvalRevisionCaseIds: revision.selectedEvalRevisionCaseIds,
+      },
     )
-    const environment = forIsolatedAgentWorkspace(
+    await this.recordDiagnostic(analysisId, "analysis.workspace.prepared", {
+      systemPromptVersion: systemPrompt.version,
+      capabilitySource: revision.runtimePolicy.capabilitySource,
+      taskPath: "inputs/task.json",
+      reportPath: "inputs/fact-report.json",
+      selectedCasesPath: "inputs/selected-cases.json",
+      contextPath: "inputs/analysis-context.json",
+      outputPath: "outputs/analysis.json",
+      inputFileCount: prepared.inputFiles.length,
+      reportCharacterCount: JSON.stringify(report).length,
+      selectedCaseCount: revision.selectedEvalRevisionCaseIds.length,
+    })
+    const environment = forTaskAgentWorkspace(
       baseEnvironment,
       prepared.absolutePath,
     )
@@ -722,29 +735,29 @@ export class TestReportAnalysisService {
 
     try {
       session = await this.options.agentSessions.createInWorkspace({
+        origin: {
+          type: "report_analyzer",
+          reportId: revision.reportId,
+          analysisId,
+          revisionId: revision.reportRevisionId,
+        },
         prompt,
-        systemPrompt: testReportAnalyzerSystemPrompt,
+        systemPromptRole: "test-report-analyzer",
+        expectedSystemPromptFingerprint: systemPrompt.sha256,
         workspaceLocator: prepared.locator,
         expectedConfigurationFingerprint,
-        allowedTools: [],
-        availableTools: [],
-        enabledSkills: [],
-        canUseTool: async () => ({
-          behavior: "deny" as const,
-          message: "Analyzer sessions do not permit tools.",
-          interrupt: true,
-        }),
         maxTurns: revision.runtimePolicy.maxTurns,
         maxBudgetUsd: revision.runtimePolicy.maxBudgetUsd,
         environment: environment.values,
         protectedEnvironmentNames: environment.protectedNames,
-        sandboxPolicy: revision.runtimePolicy.sandboxPolicy,
-        isolateSettings: true,
-        persistSession: revision.runtimePolicy.persistSession,
-        strictMcpConfig: revision.runtimePolicy.strictMcpConfig,
         additionalRedactedValues: [
           ...environment.sensitiveValues,
           prepared.absolutePath,
+          prepared.taskPath,
+          prepared.reportPath,
+          prepared.selectedCasesPath,
+          prepared.contextPath,
+          prepared.outputPath,
         ],
         onRuntimeDiagnostic: (diagnostic) =>
           this.recordDiagnostic(analysisId, "sdk.message", {
@@ -799,6 +812,19 @@ export class TestReportAnalysisService {
       folded = foldAnalysisEvents(
         await this.options.agentSessions.listEvents(session.id, 0),
       )
+      if (!timeout && folded.terminalType === "turn.completed") {
+        await this.workspace.verifyInputs(prepared)
+        const output = await this.workspace.readOutput(prepared)
+        await this.recordDiagnostic(analysisId, "analysis.output.loaded", {
+          outputPath: "outputs/analysis.json",
+          characterCount: output.length,
+          sha256: createHash("sha256").update(output, "utf8").digest("hex"),
+        })
+        folded = {
+          ...folded,
+          finalOutput: output,
+        }
+      }
       await this.recordDiagnostic(analysisId, "analysis.session.folded", {
         timedOut: timeout,
         initialized: folded.initialized,
@@ -812,7 +838,8 @@ export class TestReportAnalysisService {
         usage: folded.usage,
         error: folded.error,
       })
-      await this.options.agentSessions.assertSourceConfigurationFingerprint(
+      await this.options.agentSessions.assertWorkspaceConfigurationFingerprint(
+        prepared.locator,
         expectedConfigurationFingerprint,
       )
       result = this.validateResult(report, revision, folded, timeout)
@@ -838,6 +865,22 @@ export class TestReportAnalysisService {
       }
     } finally {
       if (session) {
+        await this.options.agentSessions
+          .annotateFinalOutputProtocol(
+            session.id,
+            result!.ok
+              ? "VALID"
+              : result!.code === "TEST_REPORT_ANALYZER_OUTPUT_INVALID" ||
+                  result!.code.includes("PROTOCOL")
+                ? "INVALID"
+                : "NOT_APPLICABLE",
+          )
+          .catch((error) => {
+            this.options.logger.error(
+              { analysisId, sessionId: session?.id, error },
+              "Analyzer native final-output protocol status could not be recorded",
+            )
+          })
         if (!sessionTerminal) {
           await this.options.agentSessions.abandon(
             session.id,
@@ -962,20 +1005,6 @@ export class TestReportAnalysisService {
         code: "TEST_REPORT_ANALYZER_INITIALIZATION_INCOMPLETE",
         message: "The Analyzer runtime did not provide initialization facts.",
         usage: folded.usage,
-      }
-    }
-    if (
-      folded.exposedTools.length > 0 ||
-      folded.exposedSkills.length > 0 ||
-      folded.exposedMcpServers.length > 0 ||
-      folded.toolUseObserved
-    ) {
-      return {
-        ok: false,
-        code: "TEST_REPORT_ANALYZER_ISOLATION_VIOLATION",
-        message: "The Analyzer runtime exposed a prohibited tool, Skill, or MCP surface.",
-        usage: folded.usage,
-        modelId: model,
       }
     }
     if (folded.terminalType !== "turn.completed") {

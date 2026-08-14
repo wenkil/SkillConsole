@@ -33,8 +33,6 @@ import {
 import {
   buildExecutionPrompt,
   buildGraderPrompt,
-  testRunExecutionPromptVersion,
-  testRunGraderProtocolVersion,
 } from "./test-run-prompt.js"
 import {
   TestRunRepository,
@@ -50,15 +48,12 @@ import {
   type TestRunRuntimeEnvironment,
 } from "./test-run-runtime-environment.js"
 import {
-  createTestRunToolPermissionPolicy,
-  testRunToolPermissionPolicyVersion,
-} from "./test-run-permissions.js"
-import {
   TestRunScorer,
 } from "./test-run-scorer.js"
 import { TestRunStorage } from "./test-run-storage.js"
 
 export const testRunProtocolVersion = "skill-test-run-v3"
+const projectSettingsPermissionPolicyVersion = "project-settings-v1"
 const maxFinalOutputCharacters = 200_000
 const executionLimits = {
   maxTurns: 32,
@@ -121,6 +116,11 @@ interface SemanticRuntimeConfiguration {
   readonly apiEndpointHash: string | null
 }
 
+export interface TestRunPromptVersions {
+  readonly executionPromptVersion: string
+  readonly graderProtocolVersion: string
+}
+
 function sha256(value: Buffer | string): string {
   return createHash("sha256").update(value).digest("hex")
 }
@@ -162,6 +162,7 @@ function buildEnvironmentSnapshot(
   executionPolicy:
     | "target_then_no_skill_serial_v1"
     | "paired_serial_alternating_v1",
+  promptVersions: TestRunPromptVersions,
 ): TestRunEnvironmentSnapshot {
   return {
     status: "captured",
@@ -173,9 +174,9 @@ function buildEnvironmentSnapshot(
     apiEndpointHash: semantic.apiEndpointHash,
     executionLimits,
     gradingLimits,
-    executionPromptVersion: testRunExecutionPromptVersion,
-    graderProtocolVersion: testRunGraderProtocolVersion,
-    toolPermissionPolicyVersion: testRunToolPermissionPolicyVersion,
+    executionPromptVersion: promptVersions.executionPromptVersion,
+    graderProtocolVersion: promptVersions.graderProtocolVersion,
+    toolPermissionPolicyVersion: projectSettingsPermissionPolicyVersion,
     executionPolicy,
     runtimeCapabilities,
   }
@@ -233,14 +234,15 @@ function frozenRuntimeCapabilities(
 
 export function buildTestRunSemanticConfigurationFingerprint(
   settings: Buffer,
+  promptVersions: TestRunPromptVersions,
 ): string {
   return stableHash({
     ...parseSemanticRuntimeConfiguration(settings),
     executionLimits,
     gradingLimits,
-    executionPromptVersion: testRunExecutionPromptVersion,
-    graderProtocolVersion: testRunGraderProtocolVersion,
-    toolPermissionPolicyVersion: testRunToolPermissionPolicyVersion,
+    executionPromptVersion: promptVersions.executionPromptVersion,
+    graderProtocolVersion: promptVersions.graderProtocolVersion,
+    toolPermissionPolicyVersion: projectSettingsPermissionPolicyVersion,
   })
 }
 
@@ -541,13 +543,21 @@ export class TestRunService {
 
     const settings = await readFile(this.options.claudeSettingsPath)
     const configurationFingerprint = sha256(settings)
+    const [executionSystemPrompt, graderSystemPrompt] = await Promise.all([
+      this.options.agentSessions.getSystemPrompt("test-run-execution"),
+      this.options.agentSessions.getSystemPrompt("test-run-grader"),
+    ])
     const semantic = parseSemanticRuntimeConfiguration(settings)
     const executionPolicy =
       input.mode === "version_vs_version"
         ? ("paired_serial_alternating_v1" as const)
         : ("target_then_no_skill_serial_v1" as const)
+    const promptVersions = {
+      executionPromptVersion: executionSystemPrompt.version,
+      graderProtocolVersion: graderSystemPrompt.version,
+    }
     const semanticConfigurationFingerprint =
-      buildTestRunSemanticConfigurationFingerprint(settings)
+      buildTestRunSemanticConfigurationFingerprint(settings, promptVersions)
     const runtimeCapabilities =
       await this.options.storage.captureRuntimeCapabilities()
     const runtimeEnvironment = buildTestRunRuntimeEnvironment(settings)
@@ -555,6 +565,7 @@ export class TestRunService {
       semantic,
       runtimeCapabilities,
       executionPolicy,
+      promptVersions,
     )
     const environmentFingerprint = stableHash(environment)
     const comparabilityFingerprint = stableHash({
@@ -566,9 +577,9 @@ export class TestRunService {
       environmentFingerprint,
       sdkVersion: claudeAgentSdkVersion,
       protocolVersion: testRunProtocolVersion,
-      executionPromptVersion: testRunExecutionPromptVersion,
-      graderProtocolVersion: testRunGraderProtocolVersion,
-      toolPermissionPolicyVersion: testRunToolPermissionPolicyVersion,
+      executionPromptVersion: executionSystemPrompt.version,
+      graderProtocolVersion: graderSystemPrompt.version,
+      toolPermissionPolicyVersion: projectSettingsPermissionPolicyVersion,
       skillCreatorCommit: targetSelection.revision.skillCreatorCommit,
       skillCreatorTreeHash: targetSelection.revision.skillCreatorTreeHash,
     })
@@ -641,9 +652,9 @@ export class TestRunService {
         evalManifestHash: targetSelection.revision.manifestHash,
         comparabilityFingerprint,
         runInputFingerprint,
-        executionPromptVersion: testRunExecutionPromptVersion,
-        graderProtocolVersion: testRunGraderProtocolVersion,
-        toolPermissionPolicyVersion: testRunToolPermissionPolicyVersion,
+        executionPromptVersion: executionSystemPrompt.version,
+        graderProtocolVersion: graderSystemPrompt.version,
+        toolPermissionPolicyVersion: projectSettingsPermissionPolicyVersion,
       },
       idempotencyKey: input.idempotencyKey,
       requestHash,
@@ -1061,53 +1072,46 @@ export class TestRunService {
         installSkill,
         selection,
         runCase.files,
+        {
+          userTask: runCase.prompt,
+          side: runCase.side,
+          skillName: installSkill ? selection.revision.skillName : null,
+        },
       )
       const caseRuntimeEnvironment = forTestRunWorkspace(
         runtimeEnvironment,
         workspace.absolutePath,
       )
+      const executionSystemPrompt =
+        await this.options.agentSessions.getSystemPrompt("test-run-execution")
+      if (executionSystemPrompt.version !== run.executionPromptVersion) {
+        throw new DomainError({
+          code: "TEST_RUN_EXECUTION_PROMPT_CHANGED",
+          message:
+            "The test execution System Prompt changed after the run was frozen.",
+          kind: "conflict",
+        })
+      }
       const session = await this.options.agentSessions.createInWorkspace({
-        prompt: buildExecutionPrompt({
-          userPrompt: runCase.prompt,
-          inputPaths: workspace.inputPaths,
-        }),
+        origin: {
+          type: "test_run_execution",
+          runId,
+          caseId: runCase.id,
+        },
+        prompt: buildExecutionPrompt(),
         workspaceLocator: workspace.locator,
         expectedConfigurationFingerprint: run.configurationFingerprint,
-        availableTools: [
-          "Read",
-          "Glob",
-          "Grep",
-          "Write",
-          "Edit",
-          "NotebookEdit",
-          "Bash",
-          ...(installSkill ? ["Skill"] : []),
-        ],
-        enabledSkills: installSkill ? [selection.revision.skillName] : [],
-        isolateSettings: true,
-        canUseTool: createTestRunToolPermissionPolicy(
-          workspace.absolutePath,
-          {
-            skillName: selection.revision.skillName,
-            bundledScripts: installSkill
-              ? selection.skill.files
-                  .map((file) =>
-                    file.relativePath.replaceAll("\\", "/"),
-                  )
-                  .filter((relativePath) =>
-                    relativePath.startsWith("scripts/"),
-                  )
-              : [],
-          },
-        ),
+        systemPromptRole: "test-run-execution",
+        expectedSystemPromptFingerprint: executionSystemPrompt.sha256,
         maxTurns: executionLimits.maxTurns,
         maxBudgetUsd: executionLimits.maxBudgetUsd,
         environment: caseRuntimeEnvironment.values,
         protectedEnvironmentNames:
           caseRuntimeEnvironment.protectedNames,
-        sandboxPolicy: "test_run_strict_v1",
-        additionalRedactedValues:
-          caseRuntimeEnvironment.sensitiveValues,
+        additionalRedactedValues: [
+          workspace.taskPath,
+          ...caseRuntimeEnvironment.sensitiveValues,
+        ],
       })
       executionSessionId = session.id
       this.activeSessions.set(runId, session.id)
@@ -1138,6 +1142,10 @@ export class TestRunService {
         selection,
         timeoutMs: executionLimits.timeoutMs,
       })
+      await this.options.agentSessions.annotateFinalOutputProtocol(
+        session.id,
+        "NOT_APPLICABLE",
+      )
       this.options.agentSessions.release(session.id)
       executionSessionId = null
       this.activeSessions.delete(runId)
@@ -1183,7 +1191,8 @@ export class TestRunService {
         await this.publishNewEvents(runId)
         return
       }
-      await this.options.agentSessions.assertSourceConfigurationFingerprint(
+      await this.options.agentSessions.assertWorkspaceConfigurationFingerprint(
+        workspace.locator,
         run.configurationFingerprint,
       )
       await this.options.storage.verifyImmutableInputs(
@@ -1192,6 +1201,11 @@ export class TestRunService {
         installSkill,
         selection,
         runCase.files,
+        {
+          userTask: runCase.prompt,
+          side: runCase.side,
+          skillName: installSkill ? selection.revision.skillName : null,
+        },
       )
       const artifacts = await this.options.storage.collectArtifacts(
         runId,
@@ -1344,8 +1358,10 @@ export class TestRunService {
       evidence.map((item) => [item.relativePath, item]),
     )
     const rubric = await this.options.scorer.loadRubric()
-    const session = await this.options.agentSessions.createInWorkspace({
-      prompt: buildGraderPrompt({
+    const gradingTask = await this.options.storage.prepareGradingTask(
+      runId,
+      runCase.id,
+      {
         rubric,
         userPrompt: runCase.prompt,
         expectedOutput: runCase.expectedOutput,
@@ -1355,22 +1371,42 @@ export class TestRunService {
           ...artifact,
           content: evidenceByPath.get(artifact.relativePath)?.content ?? null,
         })),
-      }),
+      },
+    )
+    const graderSystemPrompt =
+      await this.options.agentSessions.getSystemPrompt("test-run-grader")
+    if (graderSystemPrompt.version !== run.graderProtocolVersion) {
+      throw new DomainError({
+        code: "TEST_RUN_GRADER_PROMPT_CHANGED",
+        message:
+          "The test grader System Prompt changed after the run was frozen.",
+        kind: "conflict",
+      })
+    }
+    const session = await this.options.agentSessions.createInWorkspace({
+      origin: {
+        type: "test_run_grader",
+        runId,
+        caseId: runCase.id,
+      },
+      prompt: buildGraderPrompt(),
       workspaceLocator: gradingLocator,
       expectedConfigurationFingerprint: run.configurationFingerprint,
-      allowedTools: [],
-      availableTools: [],
-      enabledSkills: [],
-      isolateSettings: true,
+      systemPromptRole: "test-run-grader",
+      expectedSystemPromptFingerprint: graderSystemPrompt.sha256,
       maxTurns: gradingLimits.maxTurns,
       maxBudgetUsd: gradingLimits.maxBudgetUsd,
       environment: graderRuntimeEnvironment.values,
       protectedEnvironmentNames:
         graderRuntimeEnvironment.protectedNames,
-      sandboxPolicy: "test_run_strict_v1",
-      additionalRedactedValues:
-        graderRuntimeEnvironment.sensitiveValues,
+      additionalRedactedValues: [
+        gradingTask.taskPath,
+        gradingTask.outputPath,
+        ...graderRuntimeEnvironment.sensitiveValues,
+      ],
     })
+    let graderProtocolStatus: "VALID" | "INVALID" | "NOT_APPLICABLE" =
+      "NOT_APPLICABLE"
     this.activeSessions.set(runId, session.id)
     try {
       const sessionRun = await this.options.repository.getRow(runId)
@@ -1410,10 +1446,15 @@ export class TestRunService {
         })
       } else {
         try {
+          const graderOutput = await this.options.storage.readGradingOutput(
+            runId,
+            runCase.id,
+          )
           const parsed = this.options.scorer.parse(
-            result.finalOutput,
+            graderOutput,
             runCase.assertions,
           )
+          graderProtocolStatus = "VALID"
           const resolved = resolveEvidenceAnchors(
             parsed,
             finalOutput,
@@ -1441,6 +1482,7 @@ export class TestRunService {
           if (!(error instanceof TestRunGraderProtocolError)) {
             throw error
           }
+          graderProtocolStatus = "INVALID"
           await this.options.repository.failAssessment({
             caseId: runCase.id,
             code: error.code,
@@ -1451,6 +1493,14 @@ export class TestRunService {
       }
       await this.publishNewEvents(runId)
     } finally {
+      await this.options.agentSessions
+        .annotateFinalOutputProtocol(session.id, graderProtocolStatus)
+        .catch((error) => {
+          this.options.logger.error(
+            { runId, caseId: runCase.id, sessionId: session.id, error },
+            "Grader native final-output protocol status could not be recorded",
+          )
+        })
       this.options.agentSessions.release(session.id)
       this.activeSessions.delete(runId)
     }

@@ -138,10 +138,16 @@ Use the fields documented in
 [Anthropic's official settings reference](https://code.claude.com/docs/en/settings).
 The file is ignored by Git. Changes apply to newly created Agent Sessions.
 
+All Agent roles use this same project `settings.json` as their SDK settings and
+capability source. Their editable System Prompts are centralized in
+[`agent-prompts`](./agent-prompts/README.md). Task-specific reports, evidence,
+Rubrics, and output paths are provided through files inside each Session
+workspace instead of being concatenated into a large startup Prompt.
+
 ### 2. Start SkillConsole
 
 ```powershell
-docker compose -f compose.yaml -f compose.development.yaml --profile development up --build
+docker compose -f compose.yaml -f compose.development.yaml --profile development up --build -d
 ```
 
 When the containers are healthy, open:

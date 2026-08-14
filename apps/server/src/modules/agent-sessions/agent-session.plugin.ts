@@ -36,6 +36,7 @@ const agentSessionRoutesPlugin: FastifyPluginAsyncTypebox<
     database: application.databaseClient.database,
     dataRoot: application.appConfig.dataRoot,
     claudeSettingsPath: application.appConfig.claudeSettingsPath,
+    agentPromptsRoot: application.appConfig.agentPromptsRoot,
     runtimeAdapter: options.runtimeAdapter ?? new ClaudeAgentSdkAdapter(),
     logger: application.log,
   })

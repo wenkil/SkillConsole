@@ -19,7 +19,6 @@ import { EvalOutputValidator } from "./eval-output-validator.js"
 import { EvalPublisher } from "./eval-publisher.js"
 import {
   buildEvalGenerationPrompt,
-  evalPromptContractVersion,
 } from "./eval-prompt.js"
 import { EvalStorage } from "./eval-storage.js"
 import { EvalWorkspacePreparer } from "./eval-workspace.js"
@@ -147,6 +146,8 @@ export class EvalGenerationService {
       input.target,
     )
     const provenance = await this.workspacePreparer.inspectProvenance()
+    const systemPrompt =
+      await this.agentSessions.getSystemPrompt("eval-generation")
     const taskId = randomUUID()
     const task = await this.repository.createTask(suiteId, {
       id: taskId,
@@ -154,7 +155,7 @@ export class EvalGenerationService {
       target,
       maxEvalCount: input.maxEvalCount,
       generationBrief: input.generationBrief,
-      promptContractVersion: evalPromptContractVersion,
+      promptContractVersion: systemPrompt.version,
       ...provenance,
       idempotencyKey: input.idempotencyKey,
       requestHash,
@@ -168,22 +169,24 @@ export class EvalGenerationService {
         taskId,
         target,
         provenance,
+        {
+          maxEvalCount: input.maxEvalCount,
+          generationBrief: input.generationBrief,
+        },
       )
       const agentSession = await this.agentSessions.createInWorkspace({
+        origin: { type: "eval_generation", taskId },
         workspaceLocator: workspace.locator,
         expectedConfigurationFingerprint:
           provenance.configurationFingerprint,
-        allowedTools: ["Write", "Edit"],
-        prompt: buildEvalGenerationPrompt({
-          skillName: target.skillName,
-          maxEvalCount: input.maxEvalCount,
-          generationBrief: input.generationBrief,
-          workspace,
-        }),
+        systemPromptRole: "eval-generation",
+        expectedSystemPromptFingerprint: systemPrompt.sha256,
+        prompt: buildEvalGenerationPrompt(),
         additionalRedactedValues: [
           workspace.targetSkillPath,
           workspace.outputEvalsPath,
           workspace.outputFilesPath,
+          workspace.taskPath,
         ],
       })
       agentSessionId = agentSession.id
@@ -408,6 +411,8 @@ export class EvalGenerationService {
           {
             snapshotId: task.targetSnapshotId,
             skillName: task.skillName,
+            maxEvalCount: task.maxEvalCount,
+            generationBrief: task.generationBrief,
           },
           {
             skillCreatorCommit: task.skillCreatorCommit,
@@ -431,12 +436,24 @@ export class EvalGenerationService {
               task.configurationFingerprint,
           },
         })
+        await this.agentSessions.annotateFinalOutputProtocol(
+          event.sessionId,
+          "VALID",
+        )
         await this.repository.completeWithDraft(taskId, {
           storageLocator: this.storage.getGenerationOutputLocator(taskId),
           ...validated,
         })
         await this.publishNewEvents(taskId)
       } catch (error) {
+        await this.agentSessions
+          .annotateFinalOutputProtocol(event.sessionId, "INVALID")
+          .catch((annotationError) => {
+            this.logger.error(
+              { taskId, sessionId: event.sessionId, error: annotationError },
+              "Evals native final-output protocol status could not be recorded",
+            )
+          })
         const current = await this.repository.getRow(taskId)
         if (current.status === "CANCELING") {
           await this.repository.fail(taskId, "CANCELED", {

@@ -659,24 +659,41 @@ const TestReportAnalysisSnapshotSchema = Type.Object(
   { additionalProperties: false },
 )
 
-const TestReportAnalyzerRuntimePolicySchema = Type.Object(
+const TestReportAnalyzerRuntimePolicyV2Schema = Type.Object(
   {
-    schemaVersion: Type.Literal("test-report-analyzer-runtime-policy.v1"),
+    schemaVersion: Type.Literal("test-report-analyzer-runtime-policy.v2"),
     maxTurns: Type.Integer({ minimum: 1 }),
     maxBudgetUsd: Type.Number({ minimum: 0 }),
     timeoutMs: Type.Integer({ minimum: 1 }),
     cancellationGraceMs: Type.Integer({ minimum: 1 }),
-    maxPromptCharacters: Type.Integer({ minimum: 1 }),
+    maxInputCharacters: Type.Integer({ minimum: 1 }),
     maxResponseCharacters: Type.Integer({ minimum: 1 }),
-    sandboxPolicy: Type.Literal("report_analyzer_strict_v1"),
+    capabilitySource: Type.Literal("project_settings"),
+    promptControlledFileAccess: Type.Literal(true),
     persistSession: Type.Literal(false),
-    strictMcpConfig: Type.Literal(true),
-    toolsEnabled: Type.Literal(false),
-    skillsEnabled: Type.Literal(false),
-    mcpEnabled: Type.Literal(false),
   },
   { additionalProperties: false },
 )
+
+const TestReportAnalyzerRuntimePolicyV3Schema = Type.Object(
+  {
+    schemaVersion: Type.Literal("test-report-analyzer-runtime-policy.v3"),
+    maxTurns: Type.Integer({ minimum: 1 }),
+    maxBudgetUsd: Type.Number({ minimum: 0 }),
+    timeoutMs: Type.Integer({ minimum: 1 }),
+    cancellationGraceMs: Type.Integer({ minimum: 1 }),
+    maxInputCharacters: Type.Integer({ minimum: 1 }),
+    maxResponseCharacters: Type.Integer({ minimum: 1 }),
+    capabilitySource: Type.Literal("project_settings"),
+    promptControlledFileAccess: Type.Literal(true),
+  },
+  { additionalProperties: false },
+)
+
+const TestReportAnalyzerRuntimePolicySchema = Type.Union([
+  TestReportAnalyzerRuntimePolicyV2Schema,
+  TestReportAnalyzerRuntimePolicyV3Schema,
+])
 
 export const TestReportAnalysisRevisionSchema = Type.Object(
   {

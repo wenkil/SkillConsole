@@ -20,7 +20,22 @@ import {
   type AgentSessionEventType,
   type AgentSessionStatus,
   type AgentSessionView,
+  type AgentSessionOrigin,
 } from "./agent-session.domain.js"
+
+function originKey(origin: AgentSessionOrigin): string {
+  switch (origin.type) {
+    case "eval_generation":
+      return origin.taskId
+    case "test_run_execution":
+    case "test_run_grader":
+      return `${origin.runId}:${origin.caseId}`
+    case "report_analyzer":
+      return `${origin.reportId}:${origin.analysisId}:${origin.revisionId}`
+    case "generic":
+      return "generic"
+  }
+}
 
 const claudeErrorCodeSet = new Set<string>(claudeErrorCodes)
 
@@ -105,6 +120,7 @@ export class AgentSessionRepository {
     sessionId: string,
     workspaceLocator: string,
     turnId: string,
+    origin: AgentSessionOrigin,
   ): Promise<RepositoryResult> {
     return this.database.transaction(async (transaction) => {
       const [session] = await transaction
@@ -113,6 +129,10 @@ export class AgentSessionRepository {
           id: sessionId,
           status: "STARTING",
           workspaceLocator,
+          originType: origin.type,
+          originKey: originKey(origin),
+          origin,
+          logStatus: "WRITING",
           nextEventSequence: 1,
         })
         .returning()

@@ -8,6 +8,7 @@ import {
   readdir,
   rm,
   unlink,
+  writeFile,
 } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -42,6 +43,7 @@ export interface EvalGenerationWorkspace {
   readonly targetSkillPath: string
   readonly outputEvalsPath: string
   readonly outputFilesPath: string
+  readonly taskPath: string
   readonly skillCreatorCommit: string
   readonly skillCreatorTreeHash: string
   readonly configurationFingerprint: string
@@ -73,6 +75,31 @@ export const pinnedSkillCreatorTreeHash =
 
 function sha256(content: Buffer | string): string {
   return createHash("sha256").update(content).digest("hex")
+}
+
+function evalGenerationTaskDocument(
+  target: Pick<FrozenEvalTarget, "skillName">,
+  taskInput: {
+    readonly maxEvalCount: number
+    readonly generationBrief: string | null
+  },
+): string {
+  return `${JSON.stringify(
+    {
+      schemaVersion: "eval-generation-task.v1",
+      skillName: target.skillName,
+      maxEvalCount: taskInput.maxEvalCount,
+      generationBrief:
+        taskInput.generationBrief?.trim() ||
+        "无补充要求。根据 Skill 的主要能力与关键边界设计用例。",
+      targetSkillPath: path.posix.join("target-skill", target.skillName),
+      skillCreatorPath: ".claude/skills/skill-creator",
+      outputEvalsPath: "output/evals.json",
+      outputFilesPath: "output/files",
+    },
+    null,
+    2,
+  )}\n`
 }
 
 async function listRegularFiles(
@@ -240,6 +267,10 @@ export class EvalWorkspacePreparer {
     generationId: string,
     target: FrozenEvalTarget,
     expectedProvenance: EvalGenerationProvenance,
+    taskInput: {
+      readonly maxEvalCount: number
+      readonly generationBrief: string | null
+    },
   ): Promise<EvalGenerationWorkspace> {
     const manifest = await this.getVerifiedSkillCreatorManifest()
     const configurationFingerprint = sha256(
@@ -312,6 +343,13 @@ export class EvalWorkspacePreparer {
           sha256: file.sha256,
         })),
       )
+      const taskPath = path.join(workspacePath, "inputs", "task.json")
+      await mkdir(path.dirname(taskPath), { recursive: true })
+      await writeFile(
+        taskPath,
+        evalGenerationTaskDocument(target, taskInput),
+        { encoding: "utf8", flag: "wx" },
+      )
 
       return {
         locator:
@@ -321,6 +359,7 @@ export class EvalWorkspacePreparer {
         outputEvalsPath:
           this.storage.getGenerationEvalsJsonPath(generationId),
         outputFilesPath,
+        taskPath,
         skillCreatorCommit: manifest.sourceCommit,
         skillCreatorTreeHash: manifest.treeHash,
         configurationFingerprint,
@@ -354,6 +393,8 @@ export class EvalWorkspacePreparer {
     target: {
       readonly snapshotId: string
       readonly skillName: string
+      readonly maxEvalCount: number
+      readonly generationBrief: string | null
     },
     expectedProvenance: EvalGenerationProvenance,
   ): Promise<void> {
@@ -394,6 +435,13 @@ export class EvalWorkspacePreparer {
           })),
         ),
       ])
+      const expectedTask = evalGenerationTaskDocument(target, target)
+      const actualTask = await readFile(
+        path.join(workspace, "inputs", "task.json"),
+      )
+      if (sha256(actualTask) !== sha256(expectedTask)) {
+        throw new Error("The Evals generation task manifest changed.")
+      }
     } catch (error) {
       throw new DomainError({
         code: "EVAL_WORKSPACE_INPUT_CHANGED",

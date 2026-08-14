@@ -1,8 +1,31 @@
+import { createHash } from "node:crypto"
 import path from "node:path"
-import { mkdir, readdir, rm, writeFile } from "node:fs/promises"
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
+
+import type { StructuredTestReportV1 } from "./test-report.domain.js"
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
+
+function sha256(content: string | Buffer): string {
+  return createHash("sha256").update(content).digest("hex")
+}
+
+interface PreparedInputFile {
+  readonly absolutePath: string
+  readonly sha256: string
+}
+
+export interface PreparedTestReportAnalysisWorkspace {
+  readonly locator: string
+  readonly absolutePath: string
+  readonly taskPath: string
+  readonly reportPath: string
+  readonly selectedCasesPath: string
+  readonly contextPath: string
+  readonly outputPath: string
+  readonly inputFiles: readonly PreparedInputFile[]
+}
 
 export class TestReportAnalysisWorkspace {
   private readonly root: string
@@ -13,11 +36,14 @@ export class TestReportAnalysisWorkspace {
 
   async prepare(
     analysisId: string,
-    inputFingerprint: string,
-  ): Promise<{
-    readonly locator: string
-    readonly absolutePath: string
-  }> {
+    input: {
+      readonly inputFingerprint: string
+      readonly promptVersion: string
+      readonly configuredModelId: string
+      readonly report: StructuredTestReportV1
+      readonly selectedEvalRevisionCaseIds: readonly string[]
+    },
+  ): Promise<PreparedTestReportAnalysisWorkspace> {
     const locator = path.posix.join(
       "test-report-analyses",
       analysisId,
@@ -30,15 +56,94 @@ export class TestReportAnalysisWorkspace {
       maxRetries: 3,
       retryDelay: 100,
     })
-    await mkdir(path.join(absolutePath, "outputs", ".tmp"), {
-      recursive: true,
-    })
-    await writeFile(
-      path.join(absolutePath, "analysis-input.sha256"),
-      `${inputFingerprint}\n`,
-      { encoding: "utf8", flag: "wx" },
-    )
-    return { locator, absolutePath }
+    const inputsRoot = path.join(absolutePath, "inputs")
+    const outputPath = path.join(absolutePath, "outputs", "analysis.json")
+    await Promise.all([
+      mkdir(inputsRoot, { recursive: true }),
+      mkdir(path.join(absolutePath, ".claude"), { recursive: true }),
+      mkdir(path.join(absolutePath, "outputs", ".tmp"), {
+        recursive: true,
+      }),
+    ])
+
+    const reportPath = path.join(inputsRoot, "fact-report.json")
+    const selectedCasesPath = path.join(inputsRoot, "selected-cases.json")
+    const contextPath = path.join(inputsRoot, "analysis-context.json")
+    const taskPath = path.join(inputsRoot, "task.json")
+    const documents = new Map<string, string>([
+      [reportPath, `${JSON.stringify(input.report, null, 2)}\n`],
+      [
+        selectedCasesPath,
+        `${JSON.stringify(
+          {
+            selectedEvalRevisionCaseIds: input.selectedEvalRevisionCaseIds,
+          },
+          null,
+          2,
+        )}\n`,
+      ],
+      [
+        contextPath,
+        `${JSON.stringify(
+          {
+            schemaVersion: "test-report-analysis-context.v1",
+            analysisId,
+            reportId: input.report.reportId,
+            reportRevisionId: input.report.reportRevisionId,
+            configuredModelId: input.configuredModelId,
+            promptVersion: input.promptVersion,
+            inputFingerprint: input.inputFingerprint,
+          },
+          null,
+          2,
+        )}\n`,
+      ],
+      [
+        taskPath,
+        `${JSON.stringify(
+          {
+            schemaVersion: "test-report-analysis-task.v1",
+            reportPath: "inputs/fact-report.json",
+            selectedCasesPath: "inputs/selected-cases.json",
+            contextPath: "inputs/analysis-context.json",
+            outputPath: "outputs/analysis.json",
+          },
+          null,
+          2,
+        )}\n`,
+      ],
+    ])
+    for (const [filePath, content] of documents) {
+      await writeFile(filePath, content, { encoding: "utf8", flag: "wx" })
+    }
+
+    return {
+      locator,
+      absolutePath,
+      taskPath,
+      reportPath,
+      selectedCasesPath,
+      contextPath,
+      outputPath,
+      inputFiles: [...documents].map(([absolutePath, content]) => ({
+        absolutePath,
+        sha256: sha256(content),
+      })),
+    }
+  }
+
+  async verifyInputs(
+    prepared: PreparedTestReportAnalysisWorkspace,
+  ): Promise<void> {
+    for (const input of prepared.inputFiles) {
+      if (sha256(await readFile(input.absolutePath)) !== input.sha256) {
+        throw new Error("A frozen Analyzer input changed during execution.")
+      }
+    }
+  }
+
+  readOutput(prepared: PreparedTestReportAnalysisWorkspace): Promise<string> {
+    return readFile(prepared.outputPath, "utf8")
   }
 
   async remove(analysisId: string): Promise<void> {

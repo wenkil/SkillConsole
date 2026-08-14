@@ -8,6 +8,7 @@ import {
   opendir,
   readFile,
   rm,
+  writeFile,
 } from "node:fs/promises"
 import path from "node:path"
 
@@ -55,16 +56,6 @@ const runtimeCapabilityPatterns: readonly {
     pattern: /\bpandoc\b/i,
   },
 ]
-
-const sandboxRequirement: RuntimeCapabilityRequirement = {
-  capability: "Command Sandbox",
-  commands:
-    process.platform === "win32"
-      ? ["sdk-native-windows"]
-      : process.platform === "darwin"
-        ? ["sandbox-exec"]
-        : ["bwrap"],
-}
 
 export function detectRuntimeCapabilityRequirements(
   textFiles: readonly string[],
@@ -116,74 +107,6 @@ function commandVersion(command: string): Promise<string | null> {
       },
     )
   })
-}
-
-function commandSucceeds(
-  command: string,
-  args: readonly string[],
-): Promise<boolean> {
-  return new Promise((resolve) => {
-    execFile(
-      command,
-      [...args],
-      { timeout: 5_000, windowsHide: true, maxBuffer: 16 * 1024 },
-      (error) => resolve(!error),
-    )
-  })
-}
-
-async function captureSandboxCapability(): Promise<
-  TestRunRuntimeCapabilitySnapshot
-> {
-  if (process.platform === "win32") {
-    return {
-      capability: sandboxRequirement.capability,
-      commands: [
-        {
-          name: "sdk-native-windows",
-          available: true,
-          version: "claude-agent-sdk-native-windows",
-        },
-      ],
-    }
-  }
-  const command = process.platform === "darwin" ? "sandbox-exec" : "bwrap"
-  const discovered = await commandExists(command)
-  const functional = discovered
-    ? await commandSucceeds(
-        command,
-        process.platform === "darwin"
-          ? ["-p", "(version 1)(allow default)", "true"]
-          : [
-              "--ro-bind",
-              "/",
-              "/",
-              "--dev-bind",
-              "/dev",
-              "/dev",
-              "--proc",
-              "/proc",
-              "--",
-              "true",
-            ],
-      )
-    : false
-  const version =
-    discovered && process.platform !== "darwin"
-      ? await commandVersion(command)
-      : discovered
-        ? "sandbox-exec"
-        : null
-  return {
-    capability: sandboxRequirement.capability,
-    commands: [
-      resolveRuntimeCommandSnapshot(
-        command,
-        discovered && functional,
-        version,
-      ),
-    ],
-  }
 }
 
 export function resolveRuntimeCommandSnapshot(
@@ -294,6 +217,31 @@ export interface PreparedTestRunCaseWorkspace {
   readonly absolutePath: string
   readonly gradingLocator: string
   readonly inputPaths: readonly string[]
+  readonly taskPath: string
+}
+
+interface TestRunExecutionTaskInput {
+  readonly userTask: string
+  readonly side: "TARGET" | "BASELINE"
+  readonly skillName: string | null
+}
+
+function executionTaskDocument(
+  task: TestRunExecutionTaskInput,
+  inputPaths: readonly string[],
+): string {
+  return `${JSON.stringify(
+    {
+      schemaVersion: "test-run-execution-task.v1",
+      userTask: task.userTask,
+      side: task.side,
+      skillName: task.skillName,
+      inputPaths,
+      outputDirectory: "outputs",
+    },
+    null,
+    2,
+  )}\n`
 }
 
 export interface TestRunPreflightResult {
@@ -373,6 +321,7 @@ export class TestRunStorage {
     installSkill: boolean,
     selection: FrozenTestRunSelection,
     evalFiles: readonly string[],
+    task: TestRunExecutionTaskInput,
   ): Promise<PreparedTestRunCaseWorkspace> {
     const caseRoot = this.getCaseRoot(runId, caseId)
     const workspace = this.getWorkspacePath(runId, caseId)
@@ -454,12 +403,18 @@ export class TestRunStorage {
           path.posix.join("inputs", relativePath),
         )
       }
+      const taskPath = path.join(workspace, "inputs", "task.json")
+      await writeFile(taskPath, executionTaskDocument(task, inputPaths), {
+        encoding: "utf8",
+        flag: "wx",
+      })
 
       return {
         locator: this.getWorkspaceLocator(runId, caseId),
         absolutePath: workspace,
         gradingLocator: this.getGradingLocator(runId, caseId),
         inputPaths,
+        taskPath,
       }
     } catch (error) {
       await rm(caseRoot, { recursive: true, force: true })
@@ -494,7 +449,7 @@ export class TestRunStorage {
         }
       }),
     )
-    return [...capabilities, await captureSandboxCapability()]
+    return capabilities
   }
 
   async assertRuntimeCapabilities(
@@ -513,10 +468,7 @@ export class TestRunStorage {
       }
     }
 
-    const requirements = [
-      ...detectRuntimeCapabilityRequirements(scanFacts),
-      sandboxRequirement,
-    ]
+    const requirements = detectRuntimeCapabilityRequirements(scanFacts)
     return {
       runtimeCapabilities,
       missing: requirements.filter((requirement) => {
@@ -565,6 +517,7 @@ export class TestRunStorage {
     installSkill: boolean,
     selection: FrozenTestRunSelection,
     evalFiles: readonly string[],
+    task: TestRunExecutionTaskInput,
   ): Promise<void> {
     const workspace = this.getWorkspacePath(runId, caseId)
     if (installSkill) {
@@ -587,9 +540,134 @@ export class TestRunStorage {
       }
       expectedInputs.push(file)
     }
+    const inputPaths = evalFiles.map((relativePath) =>
+      path.posix.join("inputs", relativePath),
+    )
+    const taskDocument = executionTaskDocument(task, inputPaths)
+    expectedInputs.push({
+      relativePath: "task.json",
+      sha256: sha256(taskDocument),
+    })
     await assertImmutableFileSet(
       path.join(workspace, "inputs"),
       expectedInputs,
+    )
+  }
+
+  async prepareGradingTask(
+    runId: string,
+    caseId: string,
+    input: {
+      readonly rubric: string
+      readonly userPrompt: string
+      readonly expectedOutput: string
+      readonly assertions: readonly string[]
+      readonly finalOutput: string
+      readonly artifacts: readonly (SnapshotManifestFile & {
+        readonly content: string | null
+      })[]
+    },
+  ): Promise<{
+    readonly taskPath: string
+    readonly outputPath: string
+  }> {
+    const gradingRoot = this.getGradingPath(runId, caseId)
+    const inputsRoot = path.join(gradingRoot, "inputs")
+    const artifactEvidenceRoot = path.join(
+      inputsRoot,
+      "artifacts",
+      "evidence",
+    )
+    const outputPath = path.join(gradingRoot, "outputs", "grading.json")
+    await mkdir(artifactEvidenceRoot, { recursive: true })
+
+    const rubricPath = path.join(inputsRoot, "rubric.md")
+    const testCasePath = path.join(inputsRoot, "test-case.json")
+    const finalOutputPath = path.join(inputsRoot, "executor-final-output.txt")
+    const artifactIndexPath = path.join(inputsRoot, "artifacts", "index.json")
+    await Promise.all([
+      writeFile(rubricPath, input.rubric, { encoding: "utf8", flag: "wx" }),
+      writeFile(
+        testCasePath,
+        `${JSON.stringify(
+          {
+            userPrompt: input.userPrompt,
+            expectedOutput: input.expectedOutput,
+            assertions: input.assertions.map((assertion, index) => ({
+              index,
+              assertion,
+            })),
+          },
+          null,
+          2,
+        )}\n`,
+        { encoding: "utf8", flag: "wx" },
+      ),
+      writeFile(finalOutputPath, input.finalOutput, {
+        encoding: "utf8",
+        flag: "wx",
+      }),
+    ])
+
+    const artifactIndex = []
+    for (const artifact of input.artifacts) {
+      let evidencePath: string | null = null
+      if (artifact.content !== null) {
+        assertEvalRelativePath(artifact.relativePath)
+        const evidenceFile = path.join(
+          artifactEvidenceRoot,
+          ...artifact.relativePath.split("/"),
+        )
+        assertWithinRoot(artifactEvidenceRoot, evidenceFile)
+        await mkdir(path.dirname(evidenceFile), { recursive: true })
+        await writeFile(evidenceFile, artifact.content, {
+          encoding: "utf8",
+          flag: "wx",
+        })
+        evidencePath = path
+          .relative(gradingRoot, evidenceFile)
+          .split(path.sep)
+          .join("/")
+      }
+      artifactIndex.push({
+        path: artifact.relativePath,
+        sha256: artifact.sha256,
+        byteSize: artifact.byteSize,
+        mediaTypeHint: artifact.mediaTypeHint,
+        contentKind: artifact.contentKind,
+        evidencePath,
+      })
+    }
+    await writeFile(
+      artifactIndexPath,
+      `${JSON.stringify({ artifacts: artifactIndex }, null, 2)}\n`,
+      { encoding: "utf8", flag: "wx" },
+    )
+
+    const taskPath = path.join(inputsRoot, "task.json")
+    await writeFile(
+      taskPath,
+      `${JSON.stringify(
+        {
+          schemaVersion: "test-run-grading-task.v1",
+          rubricPath: "inputs/rubric.md",
+          testCasePath: "inputs/test-case.json",
+          executorFinalOutputPath: "inputs/executor-final-output.txt",
+          artifactIndexPath: "inputs/artifacts/index.json",
+          outputPath: "outputs/grading.json",
+        },
+        null,
+        2,
+      )}\n`,
+      { encoding: "utf8", flag: "wx" },
+    )
+    return { taskPath, outputPath }
+  }
+
+  readGradingOutput(runId: string, caseId: string): Promise<string> {
+    return readFile(
+      path.join(this.getGradingPath(runId, caseId), "outputs", "grading.json"),
+      "utf8",
     )
   }
 

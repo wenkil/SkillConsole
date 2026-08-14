@@ -29,6 +29,7 @@ export interface ApplicationConfig {
   readonly openApiEnabled: boolean
   readonly dataRoot: string
   readonly claudeSettingsPath: string
+  readonly agentPromptsRoot: string
   readonly uploadFolderIgnoreConfigPath: string
   readonly uploadLimits: UploadLimits
   readonly staticRoot?: string
@@ -52,6 +53,10 @@ const defaultDataRoot = path.resolve(
 const defaultClaudeSettingsPath = path.resolve(
   fileURLToPath(new URL("../../../../", import.meta.url)),
   "settings.json",
+)
+const defaultAgentPromptsRoot = path.resolve(
+  fileURLToPath(new URL("../../../../", import.meta.url)),
+  "agent-prompts",
 )
 const defaultUploadFolderIgnoreConfigPath = fileURLToPath(
   new URL("../../config/upload-folder-ignore.json", import.meta.url),
@@ -184,6 +189,8 @@ export function parseApplicationConfig(
   const configuredDataRoot = environment.SKILLCONSOLE_DATA_ROOT?.trim()
   const configuredClaudeSettingsPath =
     environment.SKILLCONSOLE_CLAUDE_SETTINGS_PATH?.trim()
+  const configuredAgentPromptsRoot =
+    environment.SKILLCONSOLE_AGENT_PROMPTS_ROOT?.trim()
   const configuredUploadFolderIgnoreConfigPath =
     environment.SKILLCONSOLE_UPLOAD_FOLDER_IGNORE_CONFIG?.trim()
   const config: ApplicationConfig = {
@@ -204,6 +211,9 @@ export function parseApplicationConfig(
     claudeSettingsPath: configuredClaudeSettingsPath
       ? path.resolve(configuredClaudeSettingsPath)
       : defaultClaudeSettingsPath,
+    agentPromptsRoot: configuredAgentPromptsRoot
+      ? path.resolve(configuredAgentPromptsRoot)
+      : defaultAgentPromptsRoot,
     uploadFolderIgnoreConfigPath: configuredUploadFolderIgnoreConfigPath
       ? path.resolve(configuredUploadFolderIgnoreConfigPath)
       : defaultUploadFolderIgnoreConfigPath,

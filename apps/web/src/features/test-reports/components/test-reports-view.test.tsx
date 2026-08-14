@@ -259,18 +259,14 @@ describe("test report views", () => {
       promptVersion: "test-report-analyzer-v1",
       inputFingerprint: "a".repeat(64),
       runtimePolicy: {
-        schemaVersion: "test-report-analyzer-runtime.v1",
-        maxTurns: 1,
+        schemaVersion: "test-report-analyzer-runtime-policy.v3",
+        maxTurns: 32,
         maxBudgetUsd: 0.5,
-        timeoutMs: 60_000,
+        timeoutMs: 240_000,
         cancellationGraceMs: 1_000,
-        sandboxPolicy: "isolated_read_only",
-        persistSession: false,
-        strictMcpConfig: true,
-        toolsEnabled: false,
-        skillsEnabled: false,
-        mcpEnabled: false,
-        maxPromptCharacters: 100_000,
+        capabilitySource: "project_settings",
+        promptControlledFileAccess: true,
+        maxInputCharacters: 100_000,
         maxResponseCharacters: 20_000,
       },
       runtimePolicyFingerprint: "c".repeat(64),
@@ -314,8 +310,8 @@ describe("test report views", () => {
     expect(screen.getByText(/claude-sonnet/)).toBeInTheDocument()
     expect(screen.getByText(/claude-sonnet-configured/)).toBeInTheDocument()
     expect(
-      screen.getByText(/test-report-analyzer-runtime\.v1/),
-    ).toHaveTextContent(/\$0\.50.*60\.0 s/)
+      screen.getByText(/test-report-analyzer-runtime-policy\.v2/),
+    ).toHaveTextContent(/settings\.json.*\$0\.50.*240\.0 s/)
     const frame = screen.getByTitle("AI 分析 Revision 2")
     expect(frame).toHaveAttribute(
       "sandbox",

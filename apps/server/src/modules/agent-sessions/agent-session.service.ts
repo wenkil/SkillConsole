@@ -6,12 +6,19 @@ import type {
   AgentRuntimeDiagnostic,
   AgentRuntimeFailure,
   AgentRuntimeSession,
-  AgentRuntimeToolPermissionHandler,
   AgentSessionEvent,
+  AgentSessionLogStatus,
+  AgentSessionOrigin,
   AgentSessionView,
 } from "./agent-session.domain.js"
 import { AgentSessionEventBus } from "./agent-session-event-bus.js"
+import { AgentSessionLogManager } from "./agent-session-log-manager.js"
 import { AgentSessionRepository } from "./agent-session.repository.js"
+import {
+  AgentSystemPromptStore,
+  type AgentSystemPrompt,
+  type AgentSystemPromptRole,
+} from "./agent-system-prompt.js"
 import { ActiveAgentSessionRegistry } from "./runtime/active-session-registry.js"
 import {
   AgentSessionWorkspaceConfigurationError,
@@ -29,29 +36,22 @@ export interface AgentSessionServiceOptions {
   readonly database: Database
   readonly dataRoot: string
   readonly claudeSettingsPath: string
+  readonly agentPromptsRoot: string
   readonly runtimeAdapter: AgentRuntimeAdapter
   readonly logger: AgentSessionLogger
 }
 
 export interface CreateAgentSessionInWorkspaceInput {
+  readonly origin: AgentSessionOrigin
   readonly prompt: string
   readonly workspaceLocator: string
   readonly expectedConfigurationFingerprint: string
-  readonly allowedTools?: readonly string[]
-  readonly availableTools?: readonly string[]
-  readonly enabledSkills?: readonly string[]
-  readonly canUseTool?: AgentRuntimeToolPermissionHandler
+  readonly systemPromptRole: AgentSystemPromptRole
+  readonly expectedSystemPromptFingerprint: string
   readonly maxTurns?: number
   readonly maxBudgetUsd?: number
   readonly environment?: Readonly<Record<string, string | undefined>>
   readonly protectedEnvironmentNames?: readonly string[]
-  readonly sandboxPolicy?:
-    | "test_run_strict_v1"
-    | "report_analyzer_strict_v1"
-  readonly isolateSettings?: boolean
-  readonly systemPrompt?: string
-  readonly persistSession?: boolean
-  readonly strictMcpConfig?: boolean
   readonly additionalRedactedValues?: readonly string[]
   readonly onRuntimeDiagnostic?: (
     diagnostic: AgentRuntimeDiagnostic,
@@ -61,6 +61,8 @@ export interface CreateAgentSessionInWorkspaceInput {
 export class AgentSessionService {
   private readonly repository: AgentSessionRepository
   private readonly workspaces: AgentSessionWorkspaceStore
+  private readonly systemPrompts: AgentSystemPromptStore
+  private readonly logs: AgentSessionLogManager
   private readonly registry = new ActiveAgentSessionRegistry()
   private readonly eventBus = new AgentSessionEventBus()
   private shuttingDown = false
@@ -71,9 +73,16 @@ export class AgentSessionService {
       options.dataRoot,
       options.claudeSettingsPath,
     )
+    this.systemPrompts = new AgentSystemPromptStore(options.agentPromptsRoot)
+    this.logs = new AgentSessionLogManager(
+      options.dataRoot,
+      options.database,
+      options.logger,
+    )
   }
 
   async initialize(): Promise<void> {
+    await this.logs.initialize()
     await this.repository.reconcileInterruptedSessions()
   }
 
@@ -81,14 +90,18 @@ export class AgentSessionService {
     const sessionId = randomUUID()
     const turnId = randomUUID()
     const workspace = await this.workspaces.prepare(sessionId)
+    const origin = { type: "generic" } as const
+    await this.logs.prepare(sessionId, origin)
     const created = await this.repository.create(
       sessionId,
       workspace.locator,
       turnId,
+      origin,
     )
     this.publish(created.events)
 
     try {
+      const systemPrompt = await this.systemPrompts.load("generic-agent")
       const redactedValues = await this.workspaces.installSettings(
         workspace.absolutePath,
       )
@@ -96,6 +109,7 @@ export class AgentSessionService {
         sessionId,
         cwd: workspace.absolutePath,
         sdkSessionId: null,
+        systemPrompt: systemPrompt.content,
         redactedValues,
       })
       await runtime.send({ turnId, prompt })
@@ -117,34 +131,24 @@ export class AgentSessionService {
     const sessionId = randomUUID()
     const cwd = this.workspaces.resolve(input.workspaceLocator)
     try {
-      const settingsValues = input.isolateSettings
-        ? []
-        : await this.workspaces.installSettings(cwd)
-      if (input.isolateSettings) {
-        await this.workspaces.assertSourceSettingsFingerprint(
-          input.expectedConfigurationFingerprint,
-        )
-      } else {
-        await this.workspaces.assertSettingsFingerprint(
-          cwd,
-          input.expectedConfigurationFingerprint,
-        )
+      const systemPrompt = await this.systemPrompts.load(
+        input.systemPromptRole,
+      )
+      if (systemPrompt.sha256 !== input.expectedSystemPromptFingerprint) {
+        throw new Error("Agent System Prompt changed during task preparation.")
       }
+      const settingsValues = await this.workspaces.installSettings(cwd)
+      await this.workspaces.assertSettingsFingerprint(
+        cwd,
+        input.expectedConfigurationFingerprint,
+      )
       return this.startSession({
         sessionId,
         prompt: input.prompt,
         workspaceLocator: input.workspaceLocator,
         cwd,
-        ...(input.allowedTools
-          ? { allowedTools: input.allowedTools }
-          : {}),
-        ...(input.availableTools
-          ? { availableTools: input.availableTools }
-          : {}),
-        ...(input.enabledSkills
-          ? { enabledSkills: input.enabledSkills }
-          : {}),
-        ...(input.canUseTool ? { canUseTool: input.canUseTool } : {}),
+        systemPrompt: systemPrompt.content,
+        origin: input.origin,
         ...(input.maxTurns !== undefined
           ? { maxTurns: input.maxTurns }
           : {}),
@@ -157,19 +161,6 @@ export class AgentSessionService {
               protectedEnvironmentNames:
                 input.protectedEnvironmentNames,
             }
-          : {}),
-        ...(input.sandboxPolicy
-          ? { sandboxPolicy: input.sandboxPolicy }
-          : {}),
-        ...(input.isolateSettings !== undefined
-          ? { isolateSettings: input.isolateSettings }
-          : {}),
-        ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
-        ...(input.persistSession !== undefined
-          ? { persistSession: input.persistSession }
-          : {}),
-        ...(input.strictMcpConfig !== undefined
-          ? { strictMcpConfig: input.strictMcpConfig }
           : {}),
         redactedValues: [
           ...settingsValues,
@@ -189,6 +180,10 @@ export class AgentSessionService {
     return this.repository.get(sessionId)
   }
 
+  getSystemPrompt(role: AgentSystemPromptRole): Promise<AgentSystemPrompt> {
+    return this.systemPrompts.load(role)
+  }
+
   async sendMessage(
     sessionId: string,
     prompt: string,
@@ -201,17 +196,20 @@ export class AgentSessionService {
       !currentRuntime,
     )
     this.publish(started.events)
+    await this.logs.beginTurn(sessionId)
 
     const cwd = this.workspaces.resolve(started.context.workspaceLocator)
     try {
       let runtime = currentRuntime
       if (!runtime) {
+        const systemPrompt = await this.systemPrompts.load("generic-agent")
         const redactedValues =
           await this.workspaces.readRedactedValues(cwd)
         runtime = this.openRuntime({
           sessionId,
           cwd,
           sdkSessionId: started.context.sdkSessionId,
+          systemPrompt: systemPrompt.content,
           redactedValues,
         })
       }
@@ -234,6 +232,11 @@ export class AgentSessionService {
     if (!cancellation.newlyRequested) {
       return cancellation.session
     }
+    await this.logs.recordDiagnostic(sessionId, {
+      messageType: "session.cancellation.requested",
+      subtype: null,
+      details: {},
+    })
     const runtime = this.registry.get(sessionId)
 
     if (!runtime) {
@@ -296,8 +299,16 @@ export class AgentSessionService {
     )
   }
 
+  annotateFinalOutputProtocol(
+    sessionId: string,
+    status: "VALID" | "INVALID" | "NOT_APPLICABLE",
+  ): Promise<void> {
+    return this.logs.annotateProtocol(sessionId, status)
+  }
+
   release(sessionId: string): void {
     this.registry.closeAndDelete(sessionId)
+    void this.logs.release(sessionId)
   }
 
   async abandon(
@@ -305,6 +316,10 @@ export class AgentSessionService {
     message = "The active Agent Session was abandoned by its owner.",
   ): Promise<AgentSessionView> {
     try {
+      await this.finalizeLogs(sessionId, {
+        kind: "runtime_failure",
+        errorMessage: message,
+      })
       const result = await this.repository.markRuntimeInterrupted(
         sessionId,
         new Error(message),
@@ -313,6 +328,7 @@ export class AgentSessionService {
       return result.session
     } finally {
       this.registry.closeAndDelete(sessionId)
+      await this.logs.release(sessionId)
     }
   }
 
@@ -320,6 +336,7 @@ export class AgentSessionService {
     if (this.shuttingDown) return
     this.shuttingDown = true
     this.registry.closeAll()
+    await this.logs.shutdown()
     await this.repository.reconcileInterruptedSessions()
   }
 
@@ -327,21 +344,11 @@ export class AgentSessionService {
     readonly sessionId: string
     readonly cwd: string
     readonly sdkSessionId: string | null
-    readonly allowedTools?: readonly string[]
-    readonly availableTools?: readonly string[]
-    readonly enabledSkills?: readonly string[]
-    readonly canUseTool?: AgentRuntimeToolPermissionHandler
     readonly maxTurns?: number
     readonly maxBudgetUsd?: number
     readonly environment?: Readonly<Record<string, string | undefined>>
     readonly protectedEnvironmentNames?: readonly string[]
-    readonly sandboxPolicy?:
-      | "test_run_strict_v1"
-      | "report_analyzer_strict_v1"
-    readonly isolateSettings?: boolean
     readonly systemPrompt?: string
-    readonly persistSession?: boolean
-    readonly strictMcpConfig?: boolean
     readonly redactedValues: readonly string[]
     readonly onRuntimeDiagnostic?: (
       diagnostic: AgentRuntimeDiagnostic,
@@ -352,22 +359,21 @@ export class AgentSessionService {
     }
 
     let runtime: AgentRuntimeSession | undefined
+    const logConfiguration = this.logs.getRuntimeConfiguration(
+      input.sessionId,
+    )
     runtime = this.options.runtimeAdapter.open({
+      agentSessionId: input.sessionId,
       cwd: input.cwd,
+      claudeConfigDir: logConfiguration.claudeConfigDir,
+      sessionStore: logConfiguration.sessionStore,
       redactedValues: input.redactedValues,
-      ...(input.onRuntimeDiagnostic
-        ? { onDiagnostic: input.onRuntimeDiagnostic }
-        : {}),
-      ...(input.allowedTools
-        ? { allowedTools: input.allowedTools }
-        : {}),
-      ...(input.availableTools
-        ? { availableTools: input.availableTools }
-        : {}),
-      ...(input.enabledSkills
-        ? { enabledSkills: input.enabledSkills }
-        : {}),
-      ...(input.canUseTool ? { canUseTool: input.canUseTool } : {}),
+      onRawMessage: (message) =>
+        this.logs.recordRawMessage(input.sessionId, message),
+      onDiagnostic: async (diagnostic) => {
+        await this.logs.recordDiagnostic(input.sessionId, diagnostic)
+        await input.onRuntimeDiagnostic?.(diagnostic)
+      },
       ...(input.maxTurns !== undefined
         ? { maxTurns: input.maxTurns }
         : {}),
@@ -380,24 +386,17 @@ export class AgentSessionService {
             protectedEnvironmentNames: input.protectedEnvironmentNames,
           }
         : {}),
-      ...(input.sandboxPolicy
-        ? { sandboxPolicy: input.sandboxPolicy }
-        : {}),
-      ...(input.isolateSettings !== undefined
-        ? { isolateSettings: input.isolateSettings }
-        : {}),
       ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
-      ...(input.persistSession !== undefined
-        ? { persistSession: input.persistSession }
-        : {}),
-      ...(input.strictMcpConfig !== undefined
-        ? { strictMcpConfig: input.strictMcpConfig }
-        : {}),
       ...(input.sdkSessionId
         ? { resumeSessionId: input.sdkSessionId }
         : {}),
       onEvent: async (turnId, event) => {
         if (event.type === "initialized") {
+          await this.logs.markInitialized(
+            input.sessionId,
+            event.sdkSessionId,
+            event.model,
+          )
           const stored = await this.repository.markInitialized(
             input.sessionId,
             event,
@@ -410,10 +409,32 @@ export class AgentSessionService {
         }
 
         if (event.type === "turn_result") {
+          const logResult = await this.finalizeLogs(input.sessionId, {
+            kind: "result",
+            ...(event.error
+              ? {
+                  errorCode: event.error.code,
+                  errorMessage: event.error.message,
+                }
+              : {}),
+          })
+          const completedEvent =
+            event.success && logResult.status === "FAILED"
+              ? {
+                  ...event,
+                  success: false,
+                  error: {
+                    code: "AGENT_SESSION_LOG_PERSISTENCE_FAILED" as const,
+                    message:
+                      logResult.error ??
+                      "Agent Session native logs could not be persisted.",
+                  },
+                }
+              : event
           const completed = await this.repository.completeTurn(
             input.sessionId,
             turnId,
-            event,
+            completedEvent,
           )
           this.publish(completed.events)
           return
@@ -433,10 +454,25 @@ export class AgentSessionService {
         )
         if (failure.terminal) runtime?.close()
         this.registry.delete(input.sessionId, runtime)
-        const result = failure.terminal
+        const logResult = await this.finalizeLogs(input.sessionId, {
+          kind: "runtime_failure",
+          errorCode: failure.code,
+          errorMessage: failure.message,
+        })
+        const effectiveFailure =
+          logResult.status === "FAILED"
+            ? {
+                code: "AGENT_SESSION_LOG_PERSISTENCE_FAILED" as const,
+                message:
+                  logResult.error ??
+                  "Agent Session native logs could not be persisted.",
+                terminal: true,
+              }
+            : failure
+        const result = effectiveFailure.terminal
           ? await this.repository.markRuntimeFailed(
               input.sessionId,
-              failure,
+              effectiveFailure,
             )
           : await this.repository.markRuntimeInterrupted(input.sessionId)
         this.publish(result.events)
@@ -451,31 +487,24 @@ export class AgentSessionService {
     readonly prompt: string
     readonly workspaceLocator: string
     readonly cwd: string
-    readonly allowedTools?: readonly string[]
-    readonly availableTools?: readonly string[]
-    readonly enabledSkills?: readonly string[]
-    readonly canUseTool?: AgentRuntimeToolPermissionHandler
     readonly maxTurns?: number
     readonly maxBudgetUsd?: number
     readonly environment?: Readonly<Record<string, string | undefined>>
     readonly protectedEnvironmentNames?: readonly string[]
-    readonly sandboxPolicy?:
-      | "test_run_strict_v1"
-      | "report_analyzer_strict_v1"
-    readonly isolateSettings?: boolean
     readonly systemPrompt?: string
-    readonly persistSession?: boolean
-    readonly strictMcpConfig?: boolean
+    readonly origin: AgentSessionOrigin
     readonly redactedValues: readonly string[]
     readonly onRuntimeDiagnostic?: (
       diagnostic: AgentRuntimeDiagnostic,
     ) => Promise<void>
   }): Promise<AgentSessionView> {
     const turnId = randomUUID()
+    await this.logs.prepare(input.sessionId, input.origin)
     const created = await this.repository.create(
       input.sessionId,
       input.workspaceLocator,
       turnId,
+      input.origin,
     )
     this.publish(created.events)
 
@@ -488,16 +517,6 @@ export class AgentSessionService {
         ...(input.onRuntimeDiagnostic
           ? { onRuntimeDiagnostic: input.onRuntimeDiagnostic }
           : {}),
-        ...(input.allowedTools
-          ? { allowedTools: input.allowedTools }
-          : {}),
-        ...(input.availableTools
-          ? { availableTools: input.availableTools }
-          : {}),
-        ...(input.enabledSkills
-          ? { enabledSkills: input.enabledSkills }
-          : {}),
-        ...(input.canUseTool ? { canUseTool: input.canUseTool } : {}),
         ...(input.maxTurns !== undefined
           ? { maxTurns: input.maxTurns }
           : {}),
@@ -511,19 +530,7 @@ export class AgentSessionService {
                 input.protectedEnvironmentNames,
             }
           : {}),
-        ...(input.sandboxPolicy
-          ? { sandboxPolicy: input.sandboxPolicy }
-          : {}),
-        ...(input.isolateSettings !== undefined
-          ? { isolateSettings: input.isolateSettings }
-          : {}),
         ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
-        ...(input.persistSession !== undefined
-          ? { persistSession: input.persistSession }
-          : {}),
-        ...(input.strictMcpConfig !== undefined
-          ? { strictMcpConfig: input.strictMcpConfig }
-          : {}),
       })
       await runtime.send({ turnId, prompt: input.prompt })
       return created.session
@@ -547,8 +554,23 @@ export class AgentSessionService {
       "Claude Agent SDK runtime operation failed",
     )
     this.registry.closeAndDelete(sessionId)
-    const result = failure.terminal
-      ? await this.repository.markRuntimeFailed(sessionId, failure)
+    const logResult = await this.finalizeLogs(sessionId, {
+      kind: "startup_failure",
+      errorCode: failure.code,
+      errorMessage: failure.message,
+    })
+    const effectiveFailure =
+      logResult.status === "FAILED"
+        ? {
+            code: "AGENT_SESSION_LOG_PERSISTENCE_FAILED" as const,
+            message:
+              logResult.error ??
+              "Agent Session native logs could not be persisted.",
+            terminal: true,
+          }
+        : failure
+    const result = effectiveFailure.terminal
+      ? await this.repository.markRuntimeFailed(sessionId, effectiveFailure)
       : await this.repository.markRuntimeInterrupted(sessionId)
     this.publish(result.events)
     return result.session
@@ -583,6 +605,24 @@ export class AgentSessionService {
   private publish(events: readonly AgentSessionEvent[]): void {
     for (const event of events) {
       this.eventBus.publish(event)
+    }
+  }
+
+  private async finalizeLogs(
+    sessionId: string,
+    terminal: Parameters<AgentSessionLogManager["finalize"]>[1],
+  ): Promise<{ readonly status: AgentSessionLogStatus; readonly error: string | null }> {
+    try {
+      return await this.logs.finalize(sessionId, terminal)
+    } catch (error) {
+      this.options.logger.error(
+        { sessionId, error },
+        "Agent Session native logs could not be finalized",
+      )
+      return {
+        status: "FAILED",
+        error: "Agent Session native logs could not be finalized.",
+      }
     }
   }
 }

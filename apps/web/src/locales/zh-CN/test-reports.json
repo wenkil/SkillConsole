@@ -110,8 +110,8 @@
     }
   },
   "analysis": {
-    "title": "独立 Analyzer",
-    "disclaimer": "模型只分析所选的脱敏报告事实和证据引用，不读取运行目录、工具、Skill 或网络，也不会修改任何产品对象。",
+    "title": "报告 Analyzer",
+    "disclaimer": "Analyzer 按项目 settings.json 使用统一能力，并依据工作区中的冻结报告、所选 Case 与上下文文件生成独立分析结果。",
     "generatedNotice": "AI 分析是模型生成的解释层，不替代确定性事实报告，也不构成胜负、上线或根因结论。",
     "modelGenerated": "模型生成",
     "status": {
@@ -144,14 +144,14 @@
     "loadError": "无法读取 AI 分析",
     "loadErrorDescription": "事实报告仍然可用。请重试读取独立的 Analysis Revision。",
     "emptyTitle": "尚未生成 AI 分析",
-    "emptyDescription": "先选择需要分析的 Case，再按需启动独立、无工具的 Analyzer Session。",
+    "emptyDescription": "先选择需要分析的 Case，再按需启动使用项目统一能力的 Analyzer Session。",
     "pendingTitle": "Analyzer 正在排队",
     "runningTitle": "Analyzer 正在分析",
     "runningDescription": "完成后会生成独立的无脚本静态 HTML；事实报告及其 Revision 不会改变。",
     "failedTitle": "AI 分析失败",
     "failedDescription": "失败不会影响事实报告。可以使用相同 Case 创建新的 Analysis Revision。",
     "meta": "实际模型 {{model}} · 配置模型 {{configuredModel}} · Prompt {{prompt}} · {{count}} 个 Case",
-    "runtimePolicy": "Runtime {{schema}} · 预算上限 ${{budget}} · 超时 {{timeout}}",
+    "runtimePolicy": "Runtime {{schema}} · 能力来源 {{capability}} · 预算上限 ${{budget}} · 超时 {{timeout}}",
     "usage": "输入 {{input}} · 输出 {{output}} Token · ${{cost}} · {{duration}} · {{turns}} 轮",
     "logs": {
       "title": "Analyzer 实时日志",

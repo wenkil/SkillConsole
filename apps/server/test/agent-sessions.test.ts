@@ -30,11 +30,18 @@ import type {
   RuntimeTurnInput,
 } from "../src/modules/agent-sessions/agent-session.domain.js"
 import {
+  AgentSystemPromptStore,
+  agentSystemPromptRoles,
+} from "../src/modules/agent-sessions/agent-system-prompt.js"
+import {
   classifyClaudeAssistantError,
   classifyClaudeResult,
 } from "../src/modules/agent-sessions/runtime/claude-error-classifier.js"
 import { mapSdkMessage } from "../src/modules/agent-sessions/runtime/sdk-message.mapper.js"
 import { AgentSessionWorkspaceStore } from "../src/modules/agent-sessions/session-workspace.js"
+import { AgentSessionJsonlWriter } from "../src/modules/agent-sessions/agent-session-jsonl-writer.js"
+import { AgentSessionTranscriptStore } from "../src/modules/agent-sessions/agent-session-transcript-store.js"
+import { recordFakeNativeTurn } from "./fake-native-agent-log.js"
 
 const folderIgnorePolicyPath = fileURLToPath(
   new URL("../config/upload-folder-ignore.json", import.meta.url),
@@ -73,8 +80,8 @@ class FakeRuntimeSession implements AgentRuntimeSession {
         type: "initialized",
         sdkSessionId: this.sdkSessionId,
         model: "claude-fake-analyzer",
-        tools: [...(this.input.availableTools ?? [])],
-        skills: [...(this.input.enabledSkills ?? [])],
+        tools: ["Read", "Write", "Edit", "Skill", "Bash"],
+        skills: [],
         mcpServers: [],
       })
     }
@@ -116,6 +123,13 @@ class FakeRuntimeSession implements AgentRuntimeSession {
     success: boolean,
     subtype: string,
   ): Promise<void> {
+    await recordFakeNativeTurn(
+      this.input,
+      this.sdkSessionId,
+      turnId,
+      success,
+      `complete:${turnId}`,
+    )
     await this.input.onEvent(turnId, {
       type: "turn_result",
       success,
@@ -556,6 +570,82 @@ test("maps Claude limits and disguised successful errors to failed turns", () =>
   assert.equal(legitimateAnswer, null)
 })
 
+test("loads every fixed Agent System Prompt with a content-addressed version", async () => {
+  const store = new AgentSystemPromptStore(path.resolve("agent-prompts"))
+  for (const role of agentSystemPromptRoles) {
+    const prompt = await store.load(role)
+    assert.equal(prompt.role, role)
+    assert.match(prompt.fileName, /\.system\.md$/)
+    assert.match(prompt.sha256, /^[0-9a-f]{64}$/)
+    assert.equal(
+      prompt.version,
+      `${prompt.fileName}@sha256:${prompt.sha256}`,
+    )
+    assert.ok(prompt.content.trim().length > 0)
+  }
+})
+
+test("persists ordered raw JSONL and idempotent main and subagent transcripts", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "skillconsole-native-log-"))
+  const rawPath = path.join(root, "sdk-messages.jsonl")
+  const writer = new AgentSessionJsonlWriter(rawPath)
+  const bound: string[] = []
+  const failures: unknown[] = []
+  const store = new AgentSessionTranscriptStore(
+    path.join(root, "transcript"),
+    async (sessionId) => {
+      bound.push(sessionId)
+    },
+    async (error) => {
+      failures.push(error)
+    },
+  )
+  try {
+    await writer.initialize()
+    await store.initialize()
+    await writer.append({ sequence: 1, type: "system" })
+    await writer.append({ sequence: 2, type: "assistant", text: "raw" })
+    const key = { projectKey: "fixture", sessionId: "sdk-fixture" }
+    await store.append(key, [
+      { type: "assistant", uuid: "message-1", value: "first" },
+      { type: "mode", value: "default" },
+    ])
+    await store.append(key, [
+      { type: "assistant", uuid: "message-1", value: "duplicate" },
+      { type: "assistant", uuid: "message-2", value: "second" },
+    ])
+    await store.append(
+      { ...key, subpath: "subagents/agent-worker.jsonl" },
+      [{ type: "assistant", uuid: "subagent-1", value: "nested" }],
+    )
+    await Promise.all([writer.close(), store.close()])
+
+    assert.deepEqual(
+      (await readFile(rawPath, "utf8"))
+        .trim()
+        .split(/\r?\n/u)
+        .map((line) => JSON.parse(line)),
+      [
+        { sequence: 1, type: "system" },
+        { sequence: 2, type: "assistant", text: "raw" },
+      ],
+    )
+    assert.deepEqual(
+      (await store.load(key))?.map((entry) => entry.uuid ?? entry.type),
+      ["message-1", "mode", "message-2"],
+    )
+    assert.deepEqual(await store.listSubkeys(key), [
+      "subagents/agent-worker.jsonl",
+    ])
+    assert.ok(bound.every((sessionId) => sessionId === "sdk-fixture"))
+    assert.deepEqual(failures, [])
+  } finally {
+    await writer.close().catch(() => undefined)
+    await store.close().catch(() => undefined)
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test("copies root Claude settings into an isolated session workspace once", async () => {
   const dataRoot = await mkdtemp(
     path.join(tmpdir(), "skillconsole-agent-workspace-"),
@@ -652,6 +742,7 @@ test(
       openApiEnabled: false,
       dataRoot,
       claudeSettingsPath,
+      agentPromptsRoot: path.resolve("agent-prompts"),
       uploadFolderIgnoreConfigPath: folderIgnorePolicyPath,
       uploadLimits,
     } as const
@@ -715,6 +806,51 @@ test(
       assert.equal(firstState.status, "IDLE")
       assert.equal(firstState.resumable, true)
       assert.equal(firstState.latestTurn?.status, "COMPLETED")
+
+      const nativeLogRoot = path.join(
+        dataRoot,
+        "agent-session-logs",
+        created.id,
+      )
+      const metadata = JSON.parse(
+        await readFile(path.join(nativeLogRoot, "metadata.json"), "utf8"),
+      ) as { readonly status: string; readonly origin: { readonly type: string } }
+      assert.equal(metadata.status, "COMPLETE")
+      assert.equal(metadata.origin.type, "generic")
+      assert.ok(
+        (await readFile(path.join(nativeLogRoot, "sdk-messages.jsonl"), "utf8"))
+          .trim()
+          .split(/\r?\n/u).length >= 2,
+      )
+      assert.match(
+        await readFile(
+          path.join(nativeLogRoot, "transcript", "main.jsonl"),
+          "utf8",
+        ),
+        /transcript-/,
+      )
+      const usage = JSON.parse(
+        await readFile(path.join(nativeLogRoot, "usage.json"), "utf8"),
+      ) as { readonly status: string; readonly inputTokens: number }
+      assert.equal(usage.status, "COMPLETE")
+      assert.equal(usage.inputTokens, 10)
+      const finalOutput = JSON.parse(
+        await readFile(path.join(nativeLogRoot, "final-output.json"), "utf8"),
+      ) as {
+        readonly status: string
+        readonly complete: boolean
+        readonly text: string
+        readonly messageId: string
+      }
+      assert.equal(finalOutput.status, "AVAILABLE")
+      assert.equal(finalOutput.complete, true)
+      assert.match(finalOutput.text, /^complete:/u)
+      assert.match(finalOutput.messageId, /^message-/u)
+      assert.equal(JSON.stringify(usage).includes("complete:"), false)
+      assert.match(
+        adapter.opens[0]?.claudeConfigDir ?? "",
+        new RegExp(`claude-runtime[\\\\/]${created.id}$`, "u"),
+      )
 
       const firstEventsResponse = await fetch(
         `${address}/api/agent-sessions/${created.id}/events`,

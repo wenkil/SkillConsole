@@ -492,6 +492,7 @@ test(
       openApiEnabled: true,
       dataRoot,
       claudeSettingsPath: path.join(dataRoot, "settings.json"),
+      agentPromptsRoot: path.resolve("agent-prompts"),
       uploadFolderIgnoreConfigPath: folderIgnorePolicyPath,
       uploadLimits: limits,
     } as const

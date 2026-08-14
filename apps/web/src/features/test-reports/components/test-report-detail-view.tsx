@@ -486,6 +486,11 @@ function AnalyzerPanel({
                 <p className="mt-1 font-mono text-[8px] text-muted-foreground">
                   {t("analysis.runtimePolicy", {
                     schema: analysis.runtimePolicy.schemaVersion,
+                    capability:
+                      analysis.runtimePolicy.capabilitySource ===
+                      "project_settings"
+                        ? "settings.json"
+                        : analysis.runtimePolicy.capabilitySource,
                     budget: analysis.runtimePolicy.maxBudgetUsd.toFixed(2),
                     timeout: formatAnalysisDuration(
                       analysis.runtimePolicy.timeoutMs,

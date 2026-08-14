@@ -46,6 +46,7 @@ import type {
   PublishEvalRevisionResult,
 } from "../src/modules/evals/eval-generation.domain.js"
 import type { TestRunDetailView } from "../src/modules/test-runs/test-run.domain.js"
+import { recordFakeNativeTurn } from "./fake-native-agent-log.js"
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL?.trim()
 const migrationsFolder = fileURLToPath(
@@ -98,6 +99,7 @@ function snapshotMarkerFromPrompt(prompt: string): string | null {
 class TestRunFakeRuntime implements AgentRuntimeSession {
   private closed = false
   private turnId: string | null = null
+  private readonly sdkSessionId = randomUUID()
 
   constructor(
     private readonly input: OpenAgentRuntimeSessionInput,
@@ -111,10 +113,10 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
     try {
       await this.input.onEvent(null, {
         type: "initialized",
-        sdkSessionId: randomUUID(),
+        sdkSessionId: this.sdkSessionId,
         model: "claude-fake-test-run",
-        tools: [...(this.input.availableTools ?? [])],
-        skills: [...(this.input.enabledSkills ?? [])],
+        tools: ["Read", "Write", "Edit", "Skill", "Bash"],
+        skills: ["skill-creator"],
         mcpServers: [],
       })
 
@@ -122,17 +124,21 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
         `${path.sep}eval-generations${path.sep}`,
       )
         ? "eval_generation"
-        : this.input.allowedTools?.length === 0
+        : this.input.cwd.endsWith(`${path.sep}grading`)
           ? "grading"
           : "execution"
-      const externalId = externalIdFromPrompt(turn.prompt)
+      const taskFacts =
+        phase === "execution"
+          ? await this.readExecutionTaskFacts()
+          : phase === "grading"
+            ? await this.readGradingTaskFacts()
+            : { externalId: null, snapshotMarker: null }
+      const externalId = taskFacts.externalId
       const executionFacts =
         phase === "execution" ? await this.inspectExecution() : null
       const snapshotMarker =
         executionFacts?.snapshotMarker ??
-        (phase === "grading"
-          ? snapshotMarkerFromPrompt(turn.prompt)
-          : null)
+        taskFacts.snapshotMarker
       this.adapter.observeSession({
         phase,
         cwd: this.input.cwd,
@@ -161,7 +167,7 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
       if (phase === "eval_generation") {
         responseText = await this.generateEvals()
       } else if (phase === "grading") {
-        responseText = `\`\`\`json\n${JSON.stringify({
+        const grading = JSON.stringify({
           assertions: [
             {
               index: 0,
@@ -178,7 +184,13 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
               ],
             },
           ],
-        })}\n\`\`\``
+        })
+        await writeFile(
+          path.join(this.input.cwd, "outputs", "grading.json"),
+          `${grading}\n`,
+          "utf8",
+        )
+        responseText = "Wrote outputs/grading.json."
       } else {
         assert.ok(executionFacts)
         responseText = await this.executeCase(executionFacts)
@@ -238,11 +250,12 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
     readonly inputContent: string
     readonly snapshotMarker: string
   }> {
-    await assert.rejects(() =>
-      readFile(
+    assert.match(
+      await readFile(
         path.join(this.input.cwd, ".claude", "settings.json"),
         "utf8",
       ),
+      /ANTHROPIC_API_KEY/,
     )
     const skillPath = path.join(
       this.input.cwd,
@@ -267,6 +280,42 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
     return { hasInstalledSkill, inputContent, snapshotMarker }
   }
 
+  private async readExecutionTaskFacts(): Promise<{
+    readonly externalId: number | null
+    readonly snapshotMarker: null
+  }> {
+    const task = JSON.parse(
+      await readFile(
+        path.join(this.input.cwd, "inputs", "task.json"),
+        "utf8",
+      ),
+    ) as { readonly userTask?: string }
+    return {
+      externalId: externalIdFromPrompt(task.userTask ?? ""),
+      snapshotMarker: null,
+    }
+  }
+
+  private async readGradingTaskFacts(): Promise<{
+    readonly externalId: number | null
+    readonly snapshotMarker: string | null
+  }> {
+    const testCase = JSON.parse(
+      await readFile(
+        path.join(this.input.cwd, "inputs", "test-case.json"),
+        "utf8",
+      ),
+    ) as { readonly userPrompt?: string }
+    const finalOutput = await readFile(
+      path.join(this.input.cwd, "inputs", "executor-final-output.txt"),
+      "utf8",
+    )
+    return {
+      externalId: externalIdFromPrompt(testCase.userPrompt ?? ""),
+      snapshotMarker: snapshotMarkerFromPrompt(finalOutput),
+    }
+  }
+
   private async executeCase(input: {
     readonly hasInstalledSkill: boolean
     readonly inputContent: string
@@ -284,8 +333,14 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
     return `Created outputs/summary.txt with the controlled fixture summary | snapshot=${input.snapshotMarker}.`
   }
 
-  private emitResult(turnId: string, success: boolean): Promise<void> {
-    return this.input.onEvent(turnId, {
+  private async emitResult(turnId: string, success: boolean): Promise<void> {
+    await recordFakeNativeTurn(
+      this.input,
+      this.sdkSessionId,
+      turnId,
+      success,
+    )
+    await this.input.onEvent(turnId, {
       type: "turn_result",
       success,
       subtype: success ? "success" : "error_during_execution",
@@ -696,6 +751,7 @@ test(
         openApiEnabled: false,
         dataRoot,
         claudeSettingsPath: settingsPath,
+        agentPromptsRoot: path.resolve("agent-prompts"),
         uploadFolderIgnoreConfigPath: folderIgnorePolicyPath,
         uploadLimits: {
           maxFiles: 100,
@@ -1344,19 +1400,15 @@ test(
           configurationFingerprint: "a".repeat(64),
           semanticConfigurationFingerprint: "b".repeat(64),
           runtimePolicy: {
-            schemaVersion: "test-report-analyzer-runtime-policy.v1",
-            maxTurns: 1,
+            schemaVersion: "test-report-analyzer-runtime-policy.v3",
+            maxTurns: 32,
             maxBudgetUsd: 0.75,
-            timeoutMs: 90_000,
+            timeoutMs: 240_000,
             cancellationGraceMs: 5_000,
-            maxPromptCharacters: 500_000,
+            maxInputCharacters: 500_000,
             maxResponseCharacters: 200_000,
-            sandboxPolicy: "report_analyzer_strict_v1",
-            persistSession: false,
-            strictMcpConfig: true,
-            toolsEnabled: false,
-            skillsEnabled: false,
-            mcpEnabled: false,
+            capabilitySource: "project_settings",
+            promptControlledFileAccess: true,
           },
           runtimePolicyFingerprint: "c".repeat(64),
           promptVersion: "test-report-analyzer-prompt-v1",
@@ -1754,33 +1806,26 @@ test(
         ]),
       )
       const graderOpens = agentRuntimeAdapter.opens.filter(
-        (item) => item.allowedTools?.length === 0,
+        (item) => item.cwd.endsWith(`${path.sep}grading`),
       )
       assert.ok(graderOpens.length > 0)
       assert.equal(
         graderOpens.every(
           (item) =>
-            item.availableTools?.length === 0 &&
-            item.isolateSettings === true &&
-            item.sandboxPolicy === "test_run_strict_v1",
+            item.systemPrompt?.includes("inputs/task.json") === true &&
+            item.environment?.DATABASE_URL === undefined,
         ),
         true,
       )
       const executionOpens = agentRuntimeAdapter.opens.filter(
-        (item) =>
-          item.canUseTool !== undefined &&
-          item.sandboxPolicy === "test_run_strict_v1",
+        (item) => item.cwd.endsWith(`${path.sep}workspace`),
       )
       assert.ok(executionOpens.length > 0)
       assert.equal(
         executionOpens.every(
           (item) =>
-            item.isolateSettings === true &&
-            item.sandboxPolicy === "test_run_strict_v1" &&
             item.environment?.DATABASE_URL === undefined &&
-            (item.enabledSkills?.length
-              ? item.availableTools?.includes("Skill") === true
-              : item.availableTools?.includes("Skill") === false),
+            item.systemPrompt?.includes("inputs/task.json") === true,
         ),
         true,
       )

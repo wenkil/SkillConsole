@@ -41,6 +41,7 @@ ENV HOST=0.0.0.0
 ENV PORT=3000
 
 COPY apps/server apps/server
+COPY agent-prompts agent-prompts
 
 EXPOSE 3000
 
@@ -69,9 +70,10 @@ COPY --from=build /workspace/apps/server/dist apps/server/dist
 COPY apps/server/migrations apps/server/migrations
 COPY apps/server/config apps/server/config
 COPY apps/server/resources apps/server/resources
+COPY agent-prompts agent-prompts
 
-RUN mkdir -p /workspace/var /home/node/.claude \
-  && chown -R node:node /workspace/var /home/node/.claude
+RUN mkdir -p /workspace/var \
+  && chown -R node:node /workspace/var
 
 EXPOSE 3000
 

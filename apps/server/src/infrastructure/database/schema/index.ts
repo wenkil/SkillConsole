@@ -1,4 +1,7 @@
 export {
+  agentSessionLogArtifacts,
+  agentSessionLogArtifactStatus,
+  agentSessionLogStatus,
   agentSessionEvents,
   agentSessionStatus,
   agentSessionTurns,

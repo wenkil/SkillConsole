@@ -36,6 +36,7 @@ import type {
   EvalGenerationTaskView,
   PublishEvalRevisionResult,
 } from "../src/modules/evals/eval-generation.domain.js"
+import { recordFakeNativeTurn } from "./fake-native-agent-log.js"
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL?.trim()
 const migrationsFolder = fileURLToPath(
@@ -47,6 +48,7 @@ const folderIgnorePolicyPath = fileURLToPath(
 
 class EvalsFakeRuntime implements AgentRuntimeSession {
   private closed = false
+  private readonly sdkSessionId = randomUUID()
 
   constructor(private readonly input: OpenAgentRuntimeSessionInput) {}
 
@@ -54,10 +56,10 @@ class EvalsFakeRuntime implements AgentRuntimeSession {
     if (this.closed) throw new Error("Fake Evals runtime is closed.")
     await this.input.onEvent(null, {
       type: "initialized",
-      sdkSessionId: randomUUID(),
+      sdkSessionId: this.sdkSessionId,
       model: "claude-fake-evals",
-      tools: [...(this.input.availableTools ?? [])],
-      skills: [...(this.input.enabledSkills ?? [])],
+      tools: ["Read", "Write", "Edit", "Skill", "Bash"],
+      skills: ["skill-creator"],
       mcpServers: [],
     })
     const outputRoot = path.join(this.input.cwd, "output")
@@ -83,6 +85,13 @@ class EvalsFakeRuntime implements AgentRuntimeSession {
         ],
       }),
       "utf8",
+    )
+    await recordFakeNativeTurn(
+      this.input,
+      this.sdkSessionId,
+      turn.turnId,
+      true,
+      "Generated one Evals case.",
     )
     await this.input.onEvent(turn.turnId, {
       type: "assistant_message",
@@ -261,6 +270,7 @@ test(
         openApiEnabled: false,
         dataRoot,
         claudeSettingsPath: settingsPath,
+        agentPromptsRoot: path.resolve("agent-prompts"),
         uploadFolderIgnoreConfigPath: folderIgnorePolicyPath,
         uploadLimits: {
           maxFiles: 100,
@@ -301,10 +311,36 @@ test(
       const terminal = await waitForTerminal(address, started.id)
       assert.equal(terminal.status, "SUCCEEDED")
       assert.equal(terminal.error, null)
-      assert.deepEqual(agentRuntimeAdapter.opens[0]?.allowedTools, [
-        "Write",
-        "Edit",
-      ])
+      assert.equal(
+        agentRuntimeAdapter.opens[0]?.systemPrompt?.includes(
+          "inputs/task.json",
+        ),
+        true,
+      )
+      assert.equal(
+        await readFile(
+          path.join(
+            agentRuntimeAdapter.opens[0]!.cwd,
+            ".claude",
+            "settings.json",
+          ),
+          "utf8",
+        ),
+        await readFile(settingsPath, "utf8"),
+      )
+      assert.equal(
+        JSON.parse(
+          await readFile(
+            path.join(
+              agentRuntimeAdapter.opens[0]!.cwd,
+              "inputs",
+              "task.json",
+            ),
+            "utf8",
+          ),
+        ).schemaVersion,
+        "eval-generation-task.v1",
+      )
 
       const draftResponse = await fetch(
         `${address}/api/eval-generations/${started.id}/draft`,
