@@ -172,10 +172,19 @@ export const testReportRoutes: FastifyPluginAsyncTypebox = async (
       reply
         .header("Cache-Control", "private, no-store")
         .send(
-          await analysisService.listLogs(request.params.analysisId, {
-            ...request.query,
-            limit: request.query.limit ?? 200,
-          }),
+          ((page) => ({
+            ...page,
+            items: page.items.map((event) => ({
+              ...event,
+              payload: { ...event.payload },
+            })),
+            pagination: { ...page.pagination },
+          }))(
+            await analysisService.listLogs(request.params.analysisId, {
+              ...request.query,
+              limit: request.query.limit ?? 200,
+            }),
+          ),
         ),
   )
 
