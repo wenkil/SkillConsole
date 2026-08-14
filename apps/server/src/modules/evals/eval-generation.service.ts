@@ -25,6 +25,22 @@ import { EvalWorkspacePreparer } from "./eval-workspace.js"
 
 type EvalEventListener = (event: EvalGenerationEvent) => void
 
+const evalGenerationRuntimePolicy = {
+  permissionMode: "dontAsk" as const,
+  tools: ["Read", "Glob", "Grep", "Write", "Edit"] as const,
+  allowedTools: ["Read", "Glob", "Grep", "Write", "Edit"] as const,
+  disallowedTools: [
+    "Bash",
+    "Agent",
+    "WebSearch",
+    "WebFetch",
+    "TaskCreate",
+    "TaskUpdate",
+    "SendMessage",
+  ] as const,
+  skills: ["skill-creator"] as const,
+}
+
 const agentEventTypes: Partial<
   Record<AgentSessionEvent["type"], string>
 > = {
@@ -182,6 +198,7 @@ export class EvalGenerationService {
         systemPromptRole: "eval-generation",
         expectedSystemPromptFingerprint: systemPrompt.sha256,
         prompt: buildEvalGenerationPrompt(),
+        ...evalGenerationRuntimePolicy,
         additionalRedactedValues: [
           workspace.targetSkillPath,
           workspace.outputEvalsPath,

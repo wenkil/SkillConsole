@@ -175,6 +175,17 @@ class ClaudeAgentSdkSession implements AgentRuntimeSession {
         ...(input.maxTurns !== undefined
           ? { maxTurns: input.maxTurns }
           : {}),
+        ...(input.permissionMode
+          ? { permissionMode: input.permissionMode }
+          : {}),
+        ...(input.tools ? { tools: [...input.tools] } : {}),
+        ...(input.allowedTools
+          ? { allowedTools: [...input.allowedTools] }
+          : {}),
+        ...(input.disallowedTools
+          ? { disallowedTools: [...input.disallowedTools] }
+          : {}),
+        ...(input.skills ? { skills: [...input.skills] } : {}),
         ...(input.resumeSessionId
           ? { resume: input.resumeSessionId }
           : {}),

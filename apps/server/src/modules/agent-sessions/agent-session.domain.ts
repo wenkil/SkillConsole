@@ -219,6 +219,11 @@ export interface OpenAgentRuntimeSessionInput {
   readonly sessionStore: SessionStore
   readonly resumeSessionId?: string
   readonly maxTurns?: number
+  readonly permissionMode?: AgentRuntimePermissionMode
+  readonly tools?: readonly string[]
+  readonly allowedTools?: readonly string[]
+  readonly disallowedTools?: readonly string[]
+  readonly skills?: readonly string[]
   readonly environment?: Readonly<Record<string, string | undefined>>
   readonly protectedEnvironmentNames?: readonly string[]
   readonly systemPrompt?: string
@@ -250,6 +255,9 @@ export interface AgentRuntimeAdapter {
   ) => AgentRuntimeSession
 }
 import type {
+  PermissionMode,
   SDKMessage,
   SessionStore,
 } from "@anthropic-ai/claude-agent-sdk"
+
+export type AgentRuntimePermissionMode = PermissionMode

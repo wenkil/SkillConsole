@@ -114,14 +114,6 @@ export function EvalTaskTable({
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               {t("review.emptyDescription")}
             </p>
-            <Button
-              className="mt-5 rounded-none"
-              onClick={onGenerate}
-              type="button"
-            >
-              <Plus data-icon="inline-start" />
-              {t("table.generate")}
-            </Button>
           </div>
         </div>
       ) : (

@@ -52,6 +52,9 @@ services:
         NODE_IMAGE: "${DOCKER_REGISTRY:-}node:22-bookworm-slim"
     environment:
       NODE_ENV: development
+      HOME: /home/node
+      USER: node
+      LOGNAME: node
       HOST: 0.0.0.0
       PORT: 3000
       DATABASE_URL: postgres://skillconsole:${POSTGRES_PASSWORD:-skillconsole}@postgres:5432/skillconsole
@@ -131,6 +134,9 @@ services:
         NODE_IMAGE: "${DOCKER_REGISTRY:-}node:22-bookworm-slim"
     environment:
       NODE_ENV: production
+      HOME: /home/node
+      USER: node
+      LOGNAME: node
       HOST: 0.0.0.0
       PORT: 3000
       DATABASE_URL: postgres://skillconsole:${POSTGRES_PASSWORD:-skillconsole}@postgres:5432/skillconsole

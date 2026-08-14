@@ -5,6 +5,7 @@ import type {
   AgentRuntimeAdapter,
   AgentRuntimeDiagnostic,
   AgentRuntimeFailure,
+  AgentRuntimePermissionMode,
   AgentRuntimeSession,
   AgentSessionEvent,
   AgentSessionLogStatus,
@@ -49,6 +50,11 @@ export interface CreateAgentSessionInWorkspaceInput {
   readonly systemPromptRole: AgentSystemPromptRole
   readonly expectedSystemPromptFingerprint: string
   readonly maxTurns?: number
+  readonly permissionMode?: AgentRuntimePermissionMode
+  readonly tools?: readonly string[]
+  readonly allowedTools?: readonly string[]
+  readonly disallowedTools?: readonly string[]
+  readonly skills?: readonly string[]
   readonly environment?: Readonly<Record<string, string | undefined>>
   readonly protectedEnvironmentNames?: readonly string[]
   readonly additionalRedactedValues?: readonly string[]
@@ -151,6 +157,15 @@ export class AgentSessionService {
         ...(input.maxTurns !== undefined
           ? { maxTurns: input.maxTurns }
           : {}),
+        ...(input.permissionMode
+          ? { permissionMode: input.permissionMode }
+          : {}),
+        ...(input.tools ? { tools: input.tools } : {}),
+        ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}),
+        ...(input.disallowedTools
+          ? { disallowedTools: input.disallowedTools }
+          : {}),
+        ...(input.skills ? { skills: input.skills } : {}),
         ...(input.environment ? { environment: input.environment } : {}),
         ...(input.protectedEnvironmentNames
           ? {
@@ -345,6 +360,11 @@ export class AgentSessionService {
     readonly cwd: string
     readonly sdkSessionId: string | null
     readonly maxTurns?: number
+    readonly permissionMode?: AgentRuntimePermissionMode
+    readonly tools?: readonly string[]
+    readonly allowedTools?: readonly string[]
+    readonly disallowedTools?: readonly string[]
+    readonly skills?: readonly string[]
     readonly environment?: Readonly<Record<string, string | undefined>>
     readonly protectedEnvironmentNames?: readonly string[]
     readonly systemPrompt?: string
@@ -376,6 +396,15 @@ export class AgentSessionService {
       ...(input.maxTurns !== undefined
         ? { maxTurns: input.maxTurns }
         : {}),
+      ...(input.permissionMode
+        ? { permissionMode: input.permissionMode }
+        : {}),
+      ...(input.tools ? { tools: input.tools } : {}),
+      ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}),
+      ...(input.disallowedTools
+        ? { disallowedTools: input.disallowedTools }
+        : {}),
+      ...(input.skills ? { skills: input.skills } : {}),
       ...(input.environment ? { environment: input.environment } : {}),
       ...(input.protectedEnvironmentNames
         ? {
@@ -484,6 +513,11 @@ export class AgentSessionService {
     readonly workspaceLocator: string
     readonly cwd: string
     readonly maxTurns?: number
+    readonly permissionMode?: AgentRuntimePermissionMode
+    readonly tools?: readonly string[]
+    readonly allowedTools?: readonly string[]
+    readonly disallowedTools?: readonly string[]
+    readonly skills?: readonly string[]
     readonly environment?: Readonly<Record<string, string | undefined>>
     readonly protectedEnvironmentNames?: readonly string[]
     readonly systemPrompt?: string
@@ -515,6 +549,15 @@ export class AgentSessionService {
         ...(input.maxTurns !== undefined
           ? { maxTurns: input.maxTurns }
           : {}),
+        ...(input.permissionMode
+          ? { permissionMode: input.permissionMode }
+          : {}),
+        ...(input.tools ? { tools: input.tools } : {}),
+        ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}),
+        ...(input.disallowedTools
+          ? { disallowedTools: input.disallowedTools }
+          : {}),
+        ...(input.skills ? { skills: input.skills } : {}),
         ...(input.environment ? { environment: input.environment } : {}),
         ...(input.protectedEnvironmentNames
           ? {
