@@ -77,7 +77,7 @@ function FileMergeView({
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="grid grid-cols-2 divide-x divide-rule border-b border-rule bg-paper-muted font-mono text-[10px] font-bold uppercase">
+      <div className="grid grid-cols-2 divide-x divide-rule border-b border-border-default bg-paper-muted font-mono text-xs font-bold uppercase">
         <div className="px-3 py-2">{leftLabel}</div>
         <div className="px-3 py-2">{rightLabel}</div>
       </div>
@@ -204,7 +204,7 @@ export function VersionCompareView({
 
   return (
     <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-foreground bg-background px-6 py-4">
+      <header className="shrink-0 border-b border-border-strong bg-background px-6 py-5">
         <Button asChild className="mb-3 h-8 rounded-none" variant="ghost">
           <Link to={`/workbenches/${workspace.id}/versions`}>
             <ArrowLeft data-icon="inline-start" />
@@ -213,21 +213,23 @@ export function VersionCompareView({
         </Button>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="mb-1 flex items-center gap-2 font-mono text-[10px] font-bold text-signal-dark uppercase">
+            <div className="ui-label mb-1 flex items-center gap-2 text-signal-dark">
               <GitCompareArrows className="size-3.5" />
               目录与文件对比
             </div>
-            <h1 className="text-3xl font-[780]">{workspace.name}</h1>
+            <h1 className="text-[clamp(2rem,3vw,2.75rem)] leading-[1.08] font-[780] tracking-[-0.04em]">
+              {workspace.name}
+            </h1>
           </div>
           <div className="flex items-end gap-2">
             {(["left", "right"] as const).map((side) => (
               <label
-                className="grid gap-1 font-mono text-[9px] text-muted-foreground uppercase"
+                className="ui-label grid gap-1"
                 key={side}
               >
                 {side === "left" ? "左侧版本" : "右侧版本"}
                 <select
-                  className="h-9 min-w-44 border border-foreground bg-paper-raised px-3 font-mono text-xs"
+                  className="h-10 min-w-44 border border-border-default bg-paper-raised px-3 font-mono text-sm outline-none focus:border-focus-ring"
                   onChange={(event) =>
                     updateSelection({
                       [side]: event.target.value,
@@ -250,17 +252,17 @@ export function VersionCompareView({
           </div>
         </div>
         {comparison ? (
-          <div className="mt-3 flex gap-2 font-mono text-[10px]">
-            <span className="border border-rule px-2 py-1">
+          <div className="mt-4 flex flex-wrap gap-2 font-mono text-xs">
+            <span className="border border-border-default px-2 py-1">
               新增 {comparison.summary.added}
             </span>
-            <span className="border border-rule px-2 py-1">
+            <span className="border border-border-default px-2 py-1">
               修改 {comparison.summary.modified}
             </span>
-            <span className="border border-rule px-2 py-1">
+            <span className="border border-border-default px-2 py-1">
               删除 {comparison.summary.deleted}
             </span>
-            <span className="border border-rule px-2 py-1 text-muted-foreground">
+            <span className="border border-border-default px-2 py-1 text-muted-foreground">
               未变化 {comparison.summary.unchanged}
             </span>
           </div>
@@ -294,7 +296,7 @@ export function VersionCompareView({
           版本目录差异生成失败，请确认两个版本仍然可用。
         </div>
       ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] overflow-hidden">
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(16rem,19rem)_minmax(0,1fr)] overflow-hidden">
           <VersionFileTree
             copy={copy}
             fileCount={files.length}

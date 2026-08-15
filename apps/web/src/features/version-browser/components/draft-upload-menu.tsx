@@ -48,7 +48,7 @@ function PreviewMetric({
   return (
     <div className="border border-rule-soft bg-paper-muted px-2 py-2">
       <strong className="block font-mono text-sm">{value}</strong>
-      <span className="font-mono text-[9px] tracking-[0.03em] text-muted-foreground uppercase">
+      <span className="ui-label">
         {label}
       </span>
     </div>
@@ -103,7 +103,7 @@ export function DraftUploadMenu({
         <DropdownMenu.Portal>
           <DropdownMenu.Content
             align="end"
-            className="z-50 min-w-64 border border-foreground bg-paper-raised p-1 shadow-[6px_6px_0_var(--rule-soft)]"
+            className="z-50 min-w-64 border border-border-strong bg-paper-raised p-1 shadow-[6px_6px_0_var(--rule-soft)]"
             sideOffset={5}
           >
             <DropdownMenu.Item
@@ -118,7 +118,7 @@ export function DraftUploadMenu({
               />
               <span>
                 <strong className="block">{t("upload.singleTitle")}</strong>
-                <span className="mt-1 block text-[10px] leading-relaxed text-muted-foreground">
+                <span className="mt-1 block text-xs leading-5 text-muted-foreground">
                   {t("upload.singleDescription")}
                 </span>
               </span>
@@ -136,7 +136,7 @@ export function DraftUploadMenu({
               />
               <span>
                 <strong className="block">{t("upload.folderTitle")}</strong>
-                <span className="mt-1 block text-[10px] leading-relaxed text-muted-foreground">
+                <span className="mt-1 block text-xs leading-5 text-muted-foreground">
                   {t("upload.folderDescription")}
                 </span>
               </span>
@@ -180,16 +180,16 @@ export function DraftUploadMenu({
         open={mode !== null}
       >
         <DialogContent
-          className="max-h-[88vh] gap-0 overflow-hidden rounded-none border-foreground bg-paper-raised p-0 sm:max-w-2xl"
+          className="max-h-[88vh] gap-0 overflow-hidden rounded-none border-border-strong bg-paper-raised p-0 sm:max-w-2xl"
           showCloseButton={!pending}
         >
-          <DialogHeader className="border-b border-foreground px-5 py-4">
+          <DialogHeader className="border-b border-border-strong px-5 py-4">
             <DialogTitle className="font-mono text-base">
               {mode === "single"
                 ? t("upload.singleDialogTitle")
                 : t("upload.folderDialogTitle")}
             </DialogTitle>
-            <DialogDescription className="text-xs leading-relaxed">
+            <DialogDescription className="text-sm leading-6">
               {mode === "single"
                 ? t("upload.singleDialogDescription")
                 : t("upload.folderDialogDescription")}
@@ -199,31 +199,31 @@ export function DraftUploadMenu({
           {mode === "single" ? (
             <div className="grid gap-4 overflow-y-auto px-5 py-5">
               <div className="border border-rule bg-paper-muted px-3 py-3">
-                <span className="block font-mono text-[9px] text-muted-foreground uppercase">
+                <span className="ui-label block">
                   {t("upload.selectedFile")}
                 </span>
                 <strong className="mt-1.5 block truncate font-mono text-xs">
                   {singleFile?.name}
                 </strong>
               </div>
-              <label className="grid gap-1.5 font-mono text-[10px] uppercase">
+              <label className="grid gap-1.5 text-sm font-semibold">
                 {t("draft.uploadPath")}
                 <Input
-                  className="h-9 rounded-none font-mono text-xs"
+                  className="h-10 rounded-none font-mono text-sm"
                   disabled={pending}
                   onChange={(event) => setSinglePath(event.target.value)}
                   placeholder={t("draft.uploadPathPlaceholder")}
                   value={singlePath}
                 />
               </label>
-              <p className="text-[11px] leading-relaxed text-muted-foreground">
+              <p className="text-sm leading-6 text-muted-foreground">
                 {t("upload.replaceWarning")}
               </p>
             </div>
           ) : (
             <div className="grid gap-4 overflow-y-auto px-5 py-5">
               <div className="border border-technical/50 bg-technical/5 px-3 py-3">
-                <span className="block font-mono text-[9px] text-muted-foreground uppercase">
+                <span className="ui-label block">
                   {t("upload.selectedFolder")}
                 </span>
                 <strong className="mt-1.5 block text-xs">
@@ -232,22 +232,22 @@ export function DraftUploadMenu({
                   })}
                 </strong>
               </div>
-              <label className="grid gap-1.5 font-mono text-[10px] uppercase">
+              <label className="grid gap-1.5 text-sm font-semibold">
                 {t("draft.customIgnore")}
                 <textarea
-                  className="min-h-24 resize-y border border-rule bg-background p-2.5 font-mono text-[10px] outline-none focus:border-primary"
+                  className="min-h-24 resize-y border border-border-default bg-background p-2.5 font-mono text-sm leading-6 outline-none focus:border-focus-ring"
                   disabled={pending}
                   onChange={(event) => setIgnoreRules(event.target.value)}
                   value={ignoreRules}
                 />
               </label>
               {!folderPreview ? (
-                <div className="border border-dashed border-rule px-4 py-4 text-[11px] leading-relaxed text-muted-foreground">
+                <div className="border border-dashed border-border-default px-4 py-4 text-sm leading-6 text-muted-foreground">
                   {t("upload.previewRequired")}
                 </div>
               ) : (
                 <div className="grid gap-3 border border-technical/50 bg-technical/5 p-3">
-                  <strong className="font-mono text-[10px] uppercase">
+                    <strong className="ui-label">
                     {t("draft.replacementConfirmation", {
                       count: folderPreview.summary.totalFiles,
                       size: formatBytes(folderPreview.summary.totalBytes),
@@ -284,7 +284,7 @@ export function DraftUploadMenu({
             </div>
           )}
 
-          <DialogFooter className="border-t border-foreground px-5 py-4">
+          <DialogFooter className="border-t border-border-strong px-5 py-4">
             <Button
               className="rounded-none"
               disabled={pending}

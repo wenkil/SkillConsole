@@ -75,15 +75,15 @@ function GenerationSetup({
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">
       <div className="mx-auto max-w-2xl">
-        <div className="technical-heading text-[10px] text-signal-dark">
+        <div className="ui-label text-signal-dark">
           {t("controls.eyebrow")}
         </div>
         <h3 className="mt-1 text-xl font-[760]">{t("controls.title")}</h3>
         <div className="mt-6 grid gap-5">
-          <label className="grid gap-1.5 text-xs font-semibold">
+          <label className="grid gap-1.5 text-sm font-semibold">
             {t("controls.target")}
             <select
-              className="h-10 w-full border border-foreground bg-background px-3 font-mono text-[11px] outline-none focus:border-primary"
+              className="h-10 w-full border border-border-default bg-background px-3 font-mono text-sm outline-none focus:border-focus-ring"
               disabled={generationBlocked || pending}
               onChange={(event) => onTargetChange(event.target.value)}
               value={selectedTargetKey}
@@ -97,10 +97,10 @@ function GenerationSetup({
               ))}
             </select>
           </label>
-          <label className="grid gap-1.5 text-xs font-semibold">
+          <label className="grid gap-1.5 text-sm font-semibold">
             {t("controls.count")}
             <input
-              className="h-10 w-full border border-foreground bg-background px-3 font-mono text-xs outline-none focus:border-primary"
+              className="h-10 w-full border border-border-default bg-background px-3 font-mono text-sm outline-none focus:border-focus-ring"
               disabled={generationBlocked || pending}
               max={20}
               min={1}
@@ -109,10 +109,10 @@ function GenerationSetup({
               value={maxEvalCount}
             />
           </label>
-          <label className="grid gap-1.5 text-xs font-semibold">
+          <label className="grid gap-1.5 text-sm font-semibold">
             {t("controls.brief")}
             <textarea
-              className="min-h-32 resize-y border border-foreground bg-background p-3 text-xs leading-5 outline-none placeholder:text-muted-foreground focus:border-primary"
+              className="min-h-32 resize-y border border-border-default bg-background p-3 text-sm leading-6 outline-none placeholder:text-muted-foreground focus:border-focus-ring"
               disabled={generationBlocked || pending}
               maxLength={4000}
               onChange={(event) => onBriefChange(event.target.value)}
@@ -120,7 +120,7 @@ function GenerationSetup({
               value={generationBrief}
             />
           </label>
-          <div className="border border-technical/45 bg-technical/6 p-4 text-[11px] leading-5 text-muted-foreground">
+          <div className="border border-technical/45 bg-technical/6 p-4 text-[13px] leading-5 text-muted-foreground">
             <LockKeyhole className="mb-2 size-4 text-technical" />
             {generationBlocked
               ? t("drawer.activeTaskHint")
@@ -128,7 +128,7 @@ function GenerationSetup({
           </div>
         </div>
       </div>
-      <div className="sticky bottom-0 mx-auto mt-7 flex max-w-2xl justify-end border-t border-rule bg-background py-4">
+      <div className="sticky bottom-0 mx-auto mt-7 flex max-w-2xl justify-end border-t border-border-default bg-background py-4">
         <Button
           className="min-w-44 rounded-none"
           disabled={
@@ -215,11 +215,11 @@ export function EvalTaskDrawer({
     <>
       <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent
-        className="top-0 right-0 bottom-0 left-auto flex h-dvh w-[min(62rem,92vw)] max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-y-0 border-r-0 border-l border-foreground bg-background p-0 shadow-2xl sm:max-w-none"
+        className="top-0 right-0 bottom-0 left-auto flex h-dvh w-[min(62rem,92vw)] max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-y-0 border-r-0 border-l border-border-strong bg-background p-0 shadow-2xl sm:max-w-none"
         showCloseButton
       >
-        <DialogHeader className="shrink-0 border-b border-foreground px-7 py-5 pr-14">
-          <div className="technical-heading text-[10px] text-signal-dark">
+        <DialogHeader className="shrink-0 border-b border-border-strong px-7 py-5 pr-14">
+          <div className="ui-label text-signal-dark">
             {creating ? t("drawer.createEyebrow") : t("drawer.detailEyebrow")}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -233,12 +233,12 @@ export function EvalTaskDrawer({
                   : task?.target.displayVersion}
             </DialogTitle>
             {!creating && task ? (
-              <span className="border border-rule px-2 py-1 font-mono text-[9px] font-bold">
+              <span className="border border-border-default px-2 py-1 font-mono text-xs font-bold">
                 {t(`status.${task.status}`)}
               </span>
             ) : null}
           </div>
-          <DialogDescription className="text-xs">
+          <DialogDescription className="text-sm leading-6">
             {creating
               ? t("drawer.createDescription")
               : t("drawer.detailDescription")}
@@ -263,7 +263,7 @@ export function EvalTaskDrawer({
           <>
             <div
               aria-label={t("drawer.tabsLabel")}
-              className="flex shrink-0 border-b border-foreground bg-paper-muted px-5"
+              className="flex shrink-0 border-b border-border-strong bg-paper-muted px-5"
               role="tablist"
             >
               {(["process", "result"] as const).map((item) => {
@@ -273,7 +273,7 @@ export function EvalTaskDrawer({
                     aria-controls={`eval-drawer-${item}`}
                     aria-selected={tab === item}
                     className={cn(
-                      "border-x border-transparent border-b-2 px-5 py-3 font-mono text-[10px] font-bold",
+                      "border-x border-transparent border-b-2 px-5 py-3 font-mono text-xs font-bold",
                       tab === item
                         ? "border-b-primary text-foreground"
                         : "text-muted-foreground hover:text-foreground",
@@ -288,7 +288,7 @@ export function EvalTaskDrawer({
                   >
                     {t(`drawer.tabs.${item}`)}
                     {item === "result" && task.draftStatus ? (
-                      <span className="ml-2 border border-status-passed/50 px-1.5 py-0.5 text-[8px] text-status-passed">
+                      <span className="ml-2 border border-status-passed/50 px-1.5 py-0.5 text-[11px] leading-4 text-status-passed">
                         {t(`table.reviewStatus.${task.draftStatus}`)}
                       </span>
                     ) : null}
@@ -319,8 +319,8 @@ export function EvalTaskDrawer({
               )}
             </div>
 
-            <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-foreground bg-paper-muted px-6 py-3">
-              <div className="text-xs text-muted-foreground">
+            <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border-strong bg-surface-muted px-6 py-3">
+              <div className="text-sm text-muted-foreground">
                 {draft?.status === "PUBLISHED" ? (
                   <span className="flex items-center gap-2 font-semibold text-status-passed">
                     <CheckCircle2 className="size-4" />

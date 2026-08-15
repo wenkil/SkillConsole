@@ -74,8 +74,8 @@ export function EvalGenerationProgress({
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col px-5 py-4">
-      <div className="border-b border-foreground pb-3">
-        <div className="technical-heading text-[10px] text-signal-dark">
+      <div className="border-b border-border-strong pb-3">
+        <div className="ui-label text-signal-dark">
           {t("progress.eyebrow")}
         </div>
         <h2 className="mt-1 text-lg font-[780] tracking-[-0.02em]">
@@ -83,7 +83,7 @@ export function EvalGenerationProgress({
             ? t("progress.endedTitle")
             : t("progress.title")}
         </h2>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
           {t("progress.description", { skillName: task.target.skillName })}
         </p>
       </div>
@@ -92,15 +92,15 @@ export function EvalGenerationProgress({
         {stages.map((stage, index) => (
           <li
             className={cn(
-              "relative border-r border-rule-soft px-3 py-2 last:border-r-0",
+              "relative border-r border-border-subtle px-3 py-2 last:border-r-0",
               index <= currentIndex && "bg-technical/6",
             )}
             key={stage}
           >
-            <div className="font-mono text-[9px] text-muted-foreground">
+            <div className="ui-meta">
               {String(index + 1).padStart(2, "0")}
             </div>
-            <div className="mt-1 flex items-center gap-1.5 text-[11px] font-bold">
+            <div className="mt-1 flex items-center gap-1.5 text-xs font-bold">
               {index < currentIndex ||
               (generationSucceeded && index === currentIndex) ? (
                 <Check className="size-3.5 text-status-passed" />
@@ -116,7 +116,7 @@ export function EvalGenerationProgress({
       </ol>
 
       {generationSucceeded && !task.draftId ? (
-        <div className="mt-5 border border-rule bg-paper-muted px-4 py-3 text-xs leading-5 text-muted-foreground">
+        <div className="mt-5 border border-border-default bg-paper-muted px-4 py-3 text-sm leading-6 text-muted-foreground">
           {t("progress.noReviewableCases")}
         </div>
       ) : null}
@@ -216,14 +216,14 @@ function CaseDetail({
     <article className="min-w-0 overflow-y-auto px-6 py-5">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-foreground pb-4">
         <div>
-          <div className="font-mono text-[10px] font-bold text-signal-dark uppercase">
+        <div className="ui-label text-signal-dark">
             Eval {String(evalCase.externalId).padStart(2, "0")}
           </div>
           <h3 className="mt-1 text-xl font-[760] tracking-[-0.025em]">
             {evalCase.name}
           </h3>
         </div>
-        <span className="border border-technical/45 bg-technical/8 px-2 py-1 font-mono text-[9px] font-bold text-technical-foreground">
+        <span className="border border-technical/45 bg-technical/8 px-2 py-1 font-mono text-xs font-bold text-technical-foreground">
           {t("review.assertionCount", {
             count: evalCase.assertions.length,
           })}
@@ -231,7 +231,7 @@ function CaseDetail({
       </div>
 
       <section className="mt-5">
-        <h4 className="flex items-center gap-2 text-xs font-bold">
+          <h4 className="flex items-center gap-2 text-sm font-bold">
           <MessageSquareText className="size-4 text-technical" />
           {t("review.prompt")}
         </h4>
@@ -241,24 +241,24 @@ function CaseDetail({
       </section>
 
       <section className="mt-5">
-        <h4 className="text-xs font-bold">{t("review.expectedOutput")}</h4>
+        <h4 className="text-sm font-bold">{t("review.expectedOutput")}</h4>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
           {evalCase.expectedOutput}
         </p>
       </section>
 
       <section className="mt-5">
-        <h4 className="flex items-center gap-2 text-xs font-bold">
+        <h4 className="flex items-center gap-2 text-sm font-bold">
           <ShieldCheck className="size-4 text-technical" />
           {t("review.assertions")}
         </h4>
         <ol className="mt-2 grid gap-2">
           {evalCase.assertions.map((assertion, index) => (
             <li
-              className="grid grid-cols-[1.5rem_minmax(0,1fr)] border border-rule-soft bg-paper-raised px-3 py-2.5 text-xs leading-5"
+              className="grid grid-cols-[1.5rem_minmax(0,1fr)] border border-border-subtle bg-paper-raised px-3 py-2.5 text-[13px] leading-5"
               key={`${evalCase.externalId}:${index}`}
             >
-              <span className="font-mono text-[9px] text-muted-foreground">
+              <span className="ui-meta">
                 {String(index + 1).padStart(2, "0")}
               </span>
               {assertion}
@@ -268,19 +268,19 @@ function CaseDetail({
       </section>
 
       <section className="mt-5">
-        <h4 className="flex items-center gap-2 text-xs font-bold">
+        <h4 className="flex items-center gap-2 text-sm font-bold">
           <FileInput className="size-4 text-technical" />
           {t("review.inputFiles")}
         </h4>
         {evalCase.files.length === 0 ? (
-          <p className="mt-2 font-mono text-[10px] text-muted-foreground">
+          <p className="ui-meta mt-2">
             {t("review.noInputFiles")}
           </p>
         ) : (
           <div className="mt-2 grid gap-1.5">
             {evalCase.files.map((file) => (
               <code
-                className="border border-rule-soft bg-paper-muted px-3 py-2 font-mono text-[10px]"
+                className="border border-border-subtle bg-paper-muted px-3 py-2 font-mono text-xs"
                 key={file}
               >
                 {file}
@@ -328,7 +328,7 @@ export function EvalDraftReview({
   if (!draft) {
     if (loading && task.status === "SUCCEEDED") {
       return (
-        <div className="flex h-full items-center justify-center gap-2 text-xs">
+        <div className="flex h-full items-center justify-center gap-2 text-sm">
           <LoaderCircle className="size-4 animate-spin" />
           {t("review.loadingDraft")}
         </div>
@@ -351,19 +351,19 @@ export function EvalDraftReview({
 
   return (
     <section className="flex h-full min-h-0 flex-col">
-      <header className="shrink-0 border-b border-foreground px-5 py-3.5">
+      <header className="shrink-0 border-b border-border-strong px-5 py-3.5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="technical-heading text-[10px] text-signal-dark">
+            <div className="ui-label text-signal-dark">
               {t("review.eyebrow")}
             </div>
             <h2 className="mt-1 text-lg font-[760]">{t("review.title")}</h2>
           </div>
-          <div className="flex gap-2 font-mono text-[9px]">
-            <span className="border border-rule px-2 py-1">
+          <div className="flex gap-2 font-mono text-xs">
+            <span className="border border-border-default px-2 py-1">
               {t("review.caseCount", { count: draft.evalCount })}
             </span>
-            <span className="border border-rule px-2 py-1">
+            <span className="border border-border-default px-2 py-1">
               {t("review.fileCount", { count: draft.fileCount })}
             </span>
           </div>
@@ -371,7 +371,7 @@ export function EvalDraftReview({
       </header>
 
       <div className="grid min-h-0 flex-1 grid-cols-[14rem_minmax(0,1fr)]">
-        <div className="min-h-0 overflow-y-auto border-r border-rule-soft bg-paper-muted/45 p-2.5">
+        <div className="min-h-0 overflow-y-auto border-r border-border-subtle bg-paper-muted/45 p-2.5">
           {draft.cases.map((evalCase) => (
             <button
               className={cn(
@@ -384,10 +384,10 @@ export function EvalDraftReview({
               onClick={() => setSelectedCaseId(evalCase.externalId)}
               type="button"
             >
-              <span className="font-mono text-[9px] text-muted-foreground">
+              <span className="ui-meta">
                 EVAL {String(evalCase.externalId).padStart(2, "0")}
               </span>
-              <strong className="mt-1 block text-xs leading-5">
+              <strong className="mt-1 block text-sm leading-5">
                 {evalCase.name}
               </strong>
             </button>

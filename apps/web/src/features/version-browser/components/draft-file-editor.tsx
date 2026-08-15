@@ -85,12 +85,12 @@ export function DraftFileEditor({
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background">
-      <header className="flex min-h-12 shrink-0 items-center justify-between gap-3 border-b border-foreground bg-paper-raised px-4">
+      <header className="flex min-h-12 shrink-0 items-center justify-between gap-3 border-b border-border-strong bg-paper-raised px-4">
         <div className="min-w-0">
           <strong className="block truncate font-mono text-xs">
             {file.relativePath}
           </strong>
-          <span className="font-mono text-[9px] text-muted-foreground uppercase">
+          <span className="ui-label">
             {unsaved ? t("draft.unsaved") : t("draft.synced")}
           </span>
         </div>
@@ -125,10 +125,10 @@ export function DraftFileEditor({
 
       {errorMessage ? (
         <div
-          className="flex shrink-0 items-center justify-between gap-4 border-b border-destructive/60 bg-destructive/5 px-4 py-2 text-xs"
+          className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-destructive/60 bg-destructive/5 px-4 py-3 text-sm"
           role="alert"
         >
-          <span className="flex items-center gap-2">
+          <span className="flex min-w-0 items-center gap-2 break-words">
             <AlertTriangle
               aria-hidden="true"
               className="size-4 shrink-0 text-destructive"
@@ -138,7 +138,7 @@ export function DraftFileEditor({
               : errorMessage}
           </span>
           <button
-            className="shrink-0 font-mono text-[10px] underline"
+            className="shrink-0 font-mono text-xs underline underline-offset-2"
             onClick={onClearError}
             type="button"
           >
@@ -168,7 +168,7 @@ export function DraftFileEditor({
       </div>
 
       {unsaved ? (
-        <footer className="flex shrink-0 items-center justify-between border-t border-rule bg-paper-muted px-4 py-2 font-mono text-[10px]">
+        <footer className="flex shrink-0 items-center justify-between border-t border-border-default bg-surface-muted px-4 py-3 font-mono text-xs">
           <span>{t("draft.saveNotice")}</span>
           <button
             className="inline-flex items-center gap-1 underline"

@@ -32,7 +32,7 @@ export function TestRunStatusBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 border px-2 py-1 font-mono text-[9px] font-bold",
+        "inline-flex items-center gap-1.5 border px-2 py-1 font-mono text-xs leading-4 font-bold",
         isActiveTestRun(status) &&
           "border-status-running/55 text-status-running",
         status === "COMPLETED" &&
@@ -47,7 +47,7 @@ export function TestRunStatusBadge({
     >
       <Icon
         className={cn(
-          "size-3",
+          "size-3.5",
           isActiveTestRun(status) && "animate-spin",
         )}
       />

@@ -22,8 +22,8 @@ export function ModulePlaceholder({
   return (
     <main className="h-full min-h-0 min-w-0 overflow-y-auto px-8 py-8 lg:px-10">
       <div className="mx-auto max-w-4xl">
-        <header className="border-b border-foreground pb-6">
-          <div className="font-mono text-[11px] font-bold tracking-[0.08em] text-signal-dark uppercase">
+        <header className="border-b border-border-strong pb-6">
+          <div className="ui-label text-signal-dark">
             {eyebrow}
           </div>
           <h1 className="mt-2 text-[clamp(2rem,3vw,2.8rem)] leading-none font-[780] tracking-[-0.04em]">
@@ -34,15 +34,15 @@ export function ModulePlaceholder({
           </p>
         </header>
 
-        <section className="mt-7 border border-foreground bg-paper-raised p-7">
+        <section className="mt-7 border border-border-strong bg-paper-raised p-7">
           <Icon
             aria-hidden="true"
             className="size-9 text-technical"
             strokeWidth={1.6}
           />
           <strong className="mt-6 block text-lg">{status}</strong>
-          <div className="mt-5 border-t border-rule-soft pt-4">
-            <span className="block font-mono text-[11px] tracking-[0.04em] text-muted-foreground uppercase">
+          <div className="mt-5 border-t border-border-subtle pt-4">
+            <span className="ui-label block">
               {plannedLabel}
             </span>
             <span className="mt-1.5 block text-[13px] font-semibold">

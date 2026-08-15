@@ -49,14 +49,14 @@ export function EvalTaskRail({
   t: TFunction<"evals">
 }) {
   return (
-    <aside className="flex min-h-0 flex-col border-r border-foreground bg-sidebar">
-      <div className="shrink-0 border-b border-rule-soft px-4 py-3.5">
-        <div className="technical-heading text-[10px] text-muted-foreground">
+    <aside className="flex min-h-0 flex-col border-r border-border-strong bg-sidebar">
+      <div className="shrink-0 border-b border-border-subtle px-4 py-3.5">
+        <div className="ui-label">
           {t("tasks.eyebrow")}
         </div>
         <div className="mt-1 flex items-baseline justify-between gap-3">
           <h2 className="text-base font-[760]">{t("tasks.title")}</h2>
-          <span className="font-mono text-[10px] text-muted-foreground">
+          <span className="ui-meta">
             {String(tasks.length).padStart(2, "0")}
           </span>
         </div>
@@ -85,11 +85,11 @@ export function EvalTaskRail({
                 type="button"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="flex min-w-0 items-center gap-1.5 font-mono text-[10px] font-bold uppercase">
+                  <span className="flex min-w-0 items-center gap-1.5 font-mono text-xs font-bold uppercase">
                     <StatusIcon status={task.status} />
                     {t(`status.${task.status}`)}
                   </span>
-                  <time className="shrink-0 font-mono text-[9px] text-muted-foreground">
+                  <time className="shrink-0 font-mono text-xs text-muted-foreground">
                     {new Intl.DateTimeFormat(locale, {
                       month: "2-digit",
                       day: "2-digit",
@@ -101,7 +101,7 @@ export function EvalTaskRail({
                 <strong className="mt-2 block truncate text-[13px]">
                   {task.target.skillName}
                 </strong>
-                <div className="mt-1 flex items-center justify-between gap-2 font-mono text-[9px] text-muted-foreground">
+                <div className="ui-meta mt-1 flex items-center justify-between gap-2">
                   <span>
                     {task.target.sourceKind === "DRAFT_REVISION"
                       ? t("tasks.draftTarget")

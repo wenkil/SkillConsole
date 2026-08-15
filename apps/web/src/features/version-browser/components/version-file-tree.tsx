@@ -106,7 +106,7 @@ function TreeNode({
       <span className="min-w-0 truncate font-mono">{node.data.name}</span>
       {visibleStatus ? (
         <span
-          className="ml-auto shrink-0 font-mono text-[9px] font-bold text-technical-foreground"
+          className="ml-auto shrink-0 font-mono text-[11px] leading-4 font-bold text-technical-foreground"
           title={visibleStatus}
         >
           {visibleStatus.slice(0, 1)}
@@ -142,13 +142,13 @@ export function VersionFileTree({
     })
 
   return (
-    <section className="flex min-h-0 flex-col border-r border-foreground bg-paper-raised">
-      <header className="border-b border-rule px-4 py-3">
+    <section className="flex min-h-0 flex-col border-r border-border-strong bg-paper-raised">
+      <header className="border-b border-border-default px-4 py-3">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="technical-heading truncate text-[11px]">
+          <h2 className="ui-label truncate">
             {copy.files}
           </h2>
-          <span className="font-mono text-[10px] text-muted-foreground">
+          <span className="ui-meta">
             {String(fileCount).padStart(3, "0")}
           </span>
         </div>
@@ -164,7 +164,7 @@ export function VersionFileTree({
           />
           <Input
             aria-label={copy.searchFiles}
-            className="h-8 rounded-none border-rule bg-background pl-8 font-mono text-xs shadow-none"
+            className="h-9 rounded-none border-border-default bg-background pl-8 font-mono text-sm shadow-none"
             onChange={(event) => onSearchTermChange(event.target.value)}
             placeholder={copy.searchFiles}
             type="search"
@@ -207,13 +207,13 @@ export function VersionFileTree({
             )}
           </Tree>
         ) : (
-          <div className="flex h-full min-h-60 items-center justify-center px-6 text-center text-xs text-muted-foreground">
+          <div className="flex h-full min-h-60 items-center justify-center px-6 text-center text-sm text-muted-foreground">
             {copy.noSearchResults}
           </div>
         )}
       </div>
 
-      <p className="border-t border-rule-soft px-4 py-2.5 font-mono text-[9px] leading-relaxed text-muted-foreground uppercase">
+      <p className="ui-meta border-t border-border-subtle px-4 py-2.5 uppercase">
         {copy.fileTreeHelp}
       </p>
     </section>

@@ -68,7 +68,7 @@ function CollapsedTooltip({
       <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
       <Tooltip.Portal>
         <Tooltip.Content
-          className="z-50 border border-foreground bg-foreground px-2.5 py-1.5 text-[11px] font-semibold text-background shadow-sm"
+          className="z-50 border border-border-strong bg-foreground px-3 py-2 text-xs font-semibold text-background shadow-sm"
           side="right"
           sideOffset={8}
         >
@@ -139,10 +139,10 @@ export function WorkspaceNavigation({
 
   return (
     <Tooltip.Provider>
-      <aside className="flex h-full min-h-0 flex-col overflow-hidden border-r border-foreground bg-sidebar">
+      <aside className="flex h-full min-h-0 flex-col overflow-hidden border-r border-border-strong bg-sidebar">
         <div
           className={cn(
-            "shrink-0 border-b border-rule-soft",
+            "shrink-0 border-b border-border-subtle",
             collapsed ? "p-2" : "p-5",
           )}
         >
@@ -150,7 +150,7 @@ export function WorkspaceNavigation({
             <CollapsedTooltip label={workspace.name}>
               <div
                 aria-label={`${workspace.name} · ${workspaceState}`}
-                className="flex h-11 items-center justify-center border border-rule bg-paper-raised"
+                className="flex h-11 items-center justify-center border border-border-default bg-paper-raised"
                 role="img"
               >
                 <FolderOpen
@@ -160,17 +160,17 @@ export function WorkspaceNavigation({
               </div>
             </CollapsedTooltip>
           ) : (
-            <div className="border border-rule bg-paper-raised px-3.5 py-3.5">
+            <div className="border border-border-default bg-paper-raised px-3.5 py-3.5">
               <div className="flex min-w-0 items-center gap-2.5">
                 <FolderOpen
                   aria-hidden="true"
                   className="size-5 shrink-0 text-primary"
                 />
-                <strong className="truncate text-[13px]">
+                <strong className="truncate text-sm leading-5">
                   {workspace.name}
                 </strong>
               </div>
-              <span className="mt-1.5 block truncate pl-7.5 font-mono text-[11px] text-muted-foreground">
+              <span className="mt-1.5 block truncate pl-7.5 font-mono text-xs leading-5 text-muted-foreground">
                 {workspaceState}
               </span>
             </div>
@@ -185,12 +185,12 @@ export function WorkspaceNavigation({
           )}
         >
           {!collapsed ? (
-            <div className="mb-3 border-b border-rule-soft px-2 pb-2 font-mono text-[11px] tracking-[0.05em] text-muted-foreground uppercase">
+            <div className="ui-label mb-3 border-b border-border-subtle px-2 pb-2">
               {t("workspaceShell.navigation.label")}
             </div>
           ) : null}
 
-          <div className="grid gap-1.5">
+          <div className="grid gap-1">
             {items.map((item) => {
               const Icon = item.icon
               const link = (
@@ -198,10 +198,10 @@ export function WorkspaceNavigation({
                   aria-label={item.label}
                   className={({ isActive }) =>
                     cn(
-                      "relative flex h-11 items-center border border-transparent font-semibold transition-colors hover:border-rule hover:bg-accent",
+                      "relative flex h-11 items-center border border-transparent text-sm font-semibold transition-colors hover:border-border-default hover:bg-accent",
                       collapsed
                         ? "justify-center px-0"
-                        : "gap-3 px-3 text-[13px]",
+                        : "gap-3 px-3",
                       (isActive || activeModule === item.module) &&
                         "border-primary bg-accent text-signal-dark shadow-[inset_3px_0_0_var(--primary)]",
                     )
@@ -235,7 +235,7 @@ export function WorkspaceNavigation({
 
         <div
           className={cn(
-            "shrink-0 border-t border-rule-soft",
+            "shrink-0 border-t border-border-subtle",
             collapsed ? "grid gap-2 p-2" : "p-4",
           )}
         >
@@ -243,7 +243,7 @@ export function WorkspaceNavigation({
             <CollapsedTooltip label={t("workspaceShell.backToList")}>
               <NavLink
                 aria-label={t("workspaceShell.backToList")}
-                className="flex h-10 items-center justify-center border border-transparent hover:border-rule hover:bg-accent"
+                className="flex h-10 items-center justify-center border border-transparent hover:border-border-default hover:bg-accent"
                 to="/"
               >
                 <ArrowLeft aria-hidden="true" className="size-[18px]" />
@@ -251,7 +251,7 @@ export function WorkspaceNavigation({
             </CollapsedTooltip>
           ) : (
             <NavLink
-              className="flex h-10 items-center gap-2.5 px-3 text-[13px] font-semibold text-muted-foreground hover:bg-accent hover:text-foreground"
+              className="flex h-10 items-center gap-2.5 px-3 text-sm font-semibold text-muted-foreground hover:bg-accent hover:text-foreground"
               to="/"
             >
               <ArrowLeft aria-hidden="true" className="size-4" />
@@ -267,7 +267,7 @@ export function WorkspaceNavigation({
                 : t("workspaceShell.collapseSidebar")
             }
             className={cn(
-              "mt-2 h-10 rounded-none border-rule bg-paper-raised shadow-none",
+              "mt-2 h-10 rounded-none border-border-default bg-paper-raised shadow-none",
               collapsed ? "w-full px-0" : "w-full justify-start px-3",
             )}
             onClick={() => onCollapsedChange(!collapsed)}

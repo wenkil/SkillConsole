@@ -104,11 +104,11 @@ export function TestReportDetailView({
 
   return (
     <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-foreground bg-background px-6 py-5">
+      <header className="shrink-0 border-b border-border-strong bg-background px-6 py-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <Link
-              className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground hover:text-foreground"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
               to={`/workbenches/${workspace.id}/reports`}
             >
               <ArrowLeft className="size-3" />
@@ -120,11 +120,11 @@ export function TestReportDetailView({
                   `${report.baselineLabel} → ${report.targetLabel}`}
               </h1>
               <TestReportStatusBadge status={report.status} />
-              <span className="border border-rule px-2 py-1 font-mono text-[10px] font-bold">
+              <span className="border border-border-default px-2 py-1 font-mono text-xs font-bold">
                 {t(`type.${report.reportType}`)}
               </span>
             </div>
-            <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] text-muted-foreground">
+            <p className="ui-meta mt-2 flex flex-wrap gap-x-4 gap-y-1">
               <span>{t("detail.metadata.reportId")} {report.id}</span>
               <span>{t("detail.metadata.runId")} {report.runId}</span>
               <span>{t("detail.metadata.revision")} R{report.report?.reportRevisionNumber ?? "—"}</span>
@@ -159,7 +159,7 @@ export function TestReportDetailView({
 
       <div
         aria-label={t("detail.tabs.label")}
-        className="flex shrink-0 border-b border-foreground bg-paper-muted px-6"
+        className="flex shrink-0 border-b border-border-strong bg-paper-muted px-6"
         role="tablist"
       >
         {(["facts", "analysis"] as const).map((tab) => (
@@ -181,7 +181,7 @@ export function TestReportDetailView({
             {tab === "analysis" ? <Bot className="mr-1.5 inline size-3" /> : null}
             {t(`detail.tabs.${tab}`)}
             {tab === "analysis" && report.analysisStatus !== "NOT_REQUESTED" ? (
-              <span className="ml-2 border border-current px-1 py-0.5 text-[9px]">
+              <span className="ml-2 border border-current px-1.5 py-0.5 text-[11px] leading-4">
                 {t(`analysis.status.${report.analysisStatus}`)}
               </span>
             ) : null}
@@ -205,7 +205,7 @@ export function TestReportDetailView({
             />
           ) : (
             <section className="flex min-h-0 flex-1 items-center justify-center p-8">
-              <div className="max-w-lg border border-rule bg-paper-raised p-8 text-center">
+              <div className="max-w-lg border border-border-default bg-paper-raised p-8 text-center">
                 {report.status === "GENERATION_PENDING" ? (
                   <LoaderCircle className="mx-auto size-9 animate-spin text-technical" />
                 ) : (
@@ -251,8 +251,8 @@ export function TestReportDetailView({
       ) : (
         <AnalyzerPanel controller={analyzer} locale={locale} />
       )}
-      <footer className="flex shrink-0 items-center gap-2 border-t border-foreground bg-paper-muted px-6 py-2.5 font-mono text-[10px] text-muted-foreground">
-        <FileText className="size-3" />
+      <footer className="ui-meta flex h-9 shrink-0 items-center gap-2 border-t border-border-strong bg-surface-muted px-6">
+        <FileText className="size-3.5" />
         {t(
           activeTab === "facts"
             ? "detail.staticNotice"
@@ -290,13 +290,13 @@ function AnalyzerPanel({
       id="test-report-analysis-panel"
       role="tabpanel"
     >
-      <aside className="min-h-0 overflow-y-auto border-r border-foreground bg-paper-muted p-5">
+      <aside className="min-h-0 overflow-y-auto border-r border-border-strong bg-paper-muted p-5">
         <div className="border border-technical/50 bg-technical/6 p-3">
           <div className="flex items-start gap-2">
             <Bot className="mt-0.5 size-4 shrink-0 text-technical" />
             <div>
               <h2 className="text-base font-[760]">{t("analysis.title")}</h2>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
                 {t("analysis.disclaimer")}
               </p>
             </div>
@@ -305,12 +305,12 @@ function AnalyzerPanel({
 
         {controller.analyses.length > 0 ? (
           <label className="mt-4 block">
-            <span className="font-mono text-[10px] font-bold uppercase">
+            <span className="ui-label font-bold">
               {t("analysis.revision.label")}
             </span>
             <select
               aria-label={t("analysis.revision.label")}
-              className="mt-1.5 h-10 w-full border border-rule bg-background px-3 font-mono text-xs"
+              className="mt-1.5 h-10 w-full border border-border-default bg-background px-3 font-mono text-sm"
               onChange={(event) =>
                 controller.actions.selectAnalysis(event.target.value)
               }
@@ -329,22 +329,22 @@ function AnalyzerPanel({
         ) : null}
 
         <div className="mt-5 flex items-center justify-between gap-2">
-          <h3 className="font-mono text-[10px] font-bold uppercase">
+          <h3 className="ui-label font-bold">
             {t("analysis.selection.title")}
           </h3>
-          <span className="font-mono text-[10px] text-muted-foreground">
+          <span className="ui-meta">
             {t("analysis.selection.count", {
               selected: controller.selectedCaseIds.length,
               total: controller.selectableCases.length,
             })}
           </span>
         </div>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+        <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
           {t("analysis.selection.description")}
         </p>
         <div className="mt-2 flex flex-wrap gap-1">
           <Button
-            className="h-8 rounded-none px-3 text-[10px]"
+            className="h-9 rounded-none px-3 text-xs"
             onClick={controller.actions.selectDefaultCases}
             type="button"
             variant="outline"
@@ -352,7 +352,7 @@ function AnalyzerPanel({
             {t("analysis.selection.default")}
           </Button>
           <Button
-            className="h-8 rounded-none px-3 text-[10px]"
+            className="h-9 rounded-none px-3 text-xs"
             onClick={controller.actions.selectAllCases}
             type="button"
             variant="outline"
@@ -360,7 +360,7 @@ function AnalyzerPanel({
             {t("analysis.selection.all")}
           </Button>
           <Button
-            className="h-8 rounded-none px-3 text-[10px]"
+            className="h-9 rounded-none px-3 text-xs"
             onClick={controller.actions.clearCases}
             type="button"
             variant="outline"
@@ -371,7 +371,7 @@ function AnalyzerPanel({
         <div className="mt-2 grid gap-1.5">
           {controller.selectableCases.map((item) => (
             <label
-              className="flex cursor-pointer items-start gap-2 border border-rule-soft bg-background px-3 py-2.5 text-xs"
+              className="flex cursor-pointer items-start gap-2 border border-border-subtle bg-background px-3 py-2.5 text-sm"
               key={item.evalRevisionCaseId}
             >
               <input
@@ -388,7 +388,7 @@ function AnalyzerPanel({
                 <strong className="block truncate">
                   #{item.externalId} · {item.name}
                 </strong>
-                <span className="font-mono text-[10px] text-muted-foreground">
+                <span className="ui-meta">
                   {item.issueIds.length > 0
                     ? t("analysis.selection.issues", {
                         count: item.issueIds.length,
@@ -400,7 +400,7 @@ function AnalyzerPanel({
           ))}
         </div>
         {controller.selectableCases.length === 0 ? (
-          <p className="mt-2 border border-rule-soft bg-background p-3 text-xs text-muted-foreground">
+          <p className="mt-2 border border-border-subtle bg-background p-3 text-sm text-muted-foreground">
             {t("analysis.selection.unavailable")}
           </p>
         ) : null}
@@ -462,7 +462,7 @@ function AnalyzerPanel({
           />
         ) : (
           <>
-            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-rule bg-paper-raised px-6 py-5">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-default bg-paper-raised px-6 py-5">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <strong className="text-base">
@@ -470,14 +470,14 @@ function AnalyzerPanel({
                       revision: analysis.revisionNumber,
                     })}
                   </strong>
-                  <span className="border border-rule px-2 py-1 font-mono text-[10px] font-bold">
+                  <span className="border border-border-default px-2 py-1 font-mono text-xs font-bold">
                     {t(`analysis.status.${analysis.status}`)}
                   </span>
-                  <span className="border border-technical/50 bg-technical/6 px-2 py-1 font-mono text-[10px] font-bold text-technical">
+                  <span className="border border-technical/50 bg-technical/6 px-2 py-1 font-mono text-xs font-bold text-technical">
                     {t("analysis.modelGenerated")}
                   </span>
                 </div>
-                <p className="mt-2 font-mono text-[10px] leading-5 text-muted-foreground">
+                <p className="ui-meta mt-2 leading-5">
                   {t("analysis.meta", {
                     model: analysis.modelId || "—",
                     configuredModel: analysis.configuredModelId || "—",
@@ -485,7 +485,7 @@ function AnalyzerPanel({
                     count: analysis.selectedEvalRevisionCaseIds.length,
                   })}
                 </p>
-                <p className="mt-1 font-mono text-[10px] leading-5 text-muted-foreground">
+                <p className="ui-meta mt-1 leading-5">
                   {t("analysis.runtimePolicy", {
                     schema: analysis.runtimePolicy.schemaVersion,
                     capability:
@@ -499,7 +499,7 @@ function AnalyzerPanel({
                   })}
                 </p>
                 {analysis.usage ? (
-                  <p className="mt-1 font-mono text-[10px] leading-5 text-muted-foreground">
+                  <p className="ui-meta mt-1 leading-5">
                     {t("analysis.usage", {
                       input: analysis.usage.inputTokens.toLocaleString(),
                       output: analysis.usage.outputTokens.toLocaleString(),

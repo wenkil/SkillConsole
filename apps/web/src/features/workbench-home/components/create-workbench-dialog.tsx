@@ -143,11 +143,11 @@ export function CreateWorkbenchDialog({
     >
       <DialogContent
         aria-busy={interactionLocked}
-        className="gap-0 rounded-none border-foreground bg-paper-raised p-0 shadow-[12px_12px_0_rgb(16_24_32/18%)] sm:max-w-3xl"
+        className="gap-0 rounded-none border-border-strong bg-paper-raised p-0 shadow-[12px_12px_0_rgb(16_24_32/18%)] sm:max-w-3xl"
         showCloseButton={!interactionLocked}
       >
-        <DialogHeader className="border-b border-foreground px-6 py-5">
-          <div className="mb-2 flex items-center gap-2 font-mono text-[10px] font-bold tracking-[0.08em] text-signal-dark uppercase">
+        <DialogHeader className="border-b border-border-strong px-6 py-5">
+          <div className="ui-label mb-2 flex items-center gap-2 text-signal-dark">
             <span>01</span>
             <span>/</span>
             <span>{copy.initialCandidate}</span>
@@ -156,7 +156,7 @@ export function CreateWorkbenchDialog({
             <FolderPlus aria-hidden="true" className="size-5 text-primary" />
             {copy.createDialogTitle}
           </DialogTitle>
-          <DialogDescription className="mt-1 text-xs">
+          <DialogDescription className="mt-1 text-sm leading-6">
             {copy.createDialogDescription}
           </DialogDescription>
         </DialogHeader>
@@ -185,7 +185,7 @@ export function CreateWorkbenchDialog({
           <div className="grid gap-2">
             <div className="flex items-end justify-between gap-4">
               <Label>{copy.skillSource}</Label>
-              <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
+            <span className="ui-label">
                 {copy.sourceScope}
               </span>
             </div>
@@ -205,7 +205,7 @@ export function CreateWorkbenchDialog({
                 const Icon = sourceIcons[sourceKind]
                 return (
                   <ToggleGroupItem
-                    className="h-auto min-h-24 w-full max-w-full shrink items-start justify-start gap-3 overflow-hidden rounded-none border border-rule px-4 py-3 text-left whitespace-normal data-[state=on]:border-primary data-[state=on]:bg-accent"
+                    className="h-auto min-h-24 w-full max-w-full shrink items-start justify-start gap-3 overflow-hidden rounded-none border border-border-default px-4 py-3 text-left whitespace-normal data-[state=on]:border-primary data-[state=on]:bg-accent"
                     key={sourceKind}
                     value={sourceKind}
                   >
@@ -217,7 +217,7 @@ export function CreateWorkbenchDialog({
                       <strong className="block">
                         {copy.sourceKinds[sourceKind].label}
                       </strong>
-                      <span className="mt-1 block break-words text-xs leading-relaxed text-muted-foreground">
+                      <span className="mt-1 block break-words text-[13px] leading-5 text-muted-foreground">
                         {copy.sourceKinds[sourceKind].description}
                       </span>
                     </span>
@@ -303,13 +303,13 @@ export function CreateWorkbenchDialog({
                     {draft.source.name}
                   </strong>
                 </div>
-                <span className="font-mono text-[10px] font-bold tracking-wider text-technical-foreground uppercase">
+                <span className="ui-label font-bold text-technical-foreground">
                   {copy.readyForValidation}
                 </span>
               </div>
               <div className="grid grid-cols-[1.4fr_repeat(3,1fr)] divide-x divide-technical/30">
                 <div className="px-4 py-3">
-                  <span className="block font-mono text-[10px] text-muted-foreground uppercase">
+                  <span className="ui-label block">
                     {copy.sourceType}
                   </span>
                   <span className="mt-1 flex items-center gap-1.5 text-xs font-semibold">
@@ -321,7 +321,7 @@ export function CreateWorkbenchDialog({
                   </span>
                 </div>
                 <div className="px-4 py-3">
-                  <span className="block font-mono text-[10px] text-muted-foreground uppercase">
+                  <span className="ui-label block">
                     {copy.fileCount}
                   </span>
                   <strong className="mt-1 block font-mono text-xs">
@@ -329,7 +329,7 @@ export function CreateWorkbenchDialog({
                   </strong>
                 </div>
                 <div className="px-4 py-3">
-                  <span className="block font-mono text-[10px] text-muted-foreground uppercase">
+                  <span className="ui-label block">
                     {copy.totalSize}
                   </span>
                   <strong className="mt-1 block font-mono text-xs">
@@ -337,7 +337,7 @@ export function CreateWorkbenchDialog({
                   </strong>
                 </div>
                 <div className="px-4 py-3">
-                  <span className="block font-mono text-[10px] text-muted-foreground uppercase">
+                  <span className="ui-label block">
                     {copy.directoryDepth}
                   </span>
                   <strong className="mt-1 block font-mono text-xs">
@@ -345,7 +345,7 @@ export function CreateWorkbenchDialog({
                   </strong>
                 </div>
               </div>
-              <p className="flex items-center gap-2 border-t border-technical/30 px-4 py-2.5 text-[11px] text-muted-foreground">
+              <p className="flex items-center gap-2 border-t border-technical/30 px-4 py-2.5 text-[13px] leading-5 text-muted-foreground">
                 <ScanSearch
                   aria-hidden="true"
                   className="size-3.5 text-technical"
@@ -353,7 +353,7 @@ export function CreateWorkbenchDialog({
                 {copy.serverValidationNote}
               </p>
               {draft.source.ignoredFileCount > 0 && (
-                <p className="border-t border-technical/30 px-4 py-2.5 text-[11px] font-semibold text-technical-foreground">
+                <p className="border-t border-technical/30 px-4 py-2.5 text-[13px] leading-5 font-semibold text-technical-foreground">
                   {copy.ignoredFolderFiles(
                     draft.source.ignoredFileCount,
                   )}

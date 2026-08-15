@@ -16,7 +16,7 @@ export function ApplicationFrame({
   return (
     <div
       className={cn(
-        "grid h-[calc(100dvh-var(--app-header-height))] min-h-0 overflow-hidden border-x border-b border-foreground transition-[grid-template-columns]",
+        "grid h-[calc(100dvh-var(--app-header-height))] min-h-0 min-w-0 overflow-hidden border-x border-b border-border-strong transition-[grid-template-columns]",
         sidebar
           ? sidebarCollapsed
             ? "grid-cols-[var(--workspace-nav-collapsed-width)_minmax(0,1fr)]"

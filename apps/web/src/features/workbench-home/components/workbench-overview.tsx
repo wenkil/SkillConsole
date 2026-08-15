@@ -8,11 +8,14 @@ import {
   PencilLine,
   Tags,
 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import type { SkillWorkspace } from "@/features/workbench-home/model/workbench"
 import type { WorkbenchHomeCopy } from "@/features/workbench-home/model/workbench-home-copy"
 import { Button } from "@/shared/components/ui/button"
+import { MetricStrip } from "@/shared/components/layout/metric-strip"
+import { WorkbenchPageHeader } from "@/shared/components/layout/workbench-page-header"
 
 interface WorkbenchOverviewProps {
   workspace: SkillWorkspace
@@ -20,47 +23,25 @@ interface WorkbenchOverviewProps {
   locale: string
 }
 
-function Metric({
-  label,
-  value,
-  hint,
-}: {
-  label: string
-  value: React.ReactNode
-  hint?: string
-}) {
-  return (
-    <article className="min-w-0 border-r border-rule-soft px-5 py-5 last:border-r-0">
-      <span className="font-mono text-[10px] tracking-[0.05em] text-muted-foreground uppercase">
-        {label}
-      </span>
-      <strong className="mt-2 block truncate text-lg">{value}</strong>
-      {hint ? (
-        <span className="mt-1 block text-xs text-muted-foreground">{hint}</span>
-      ) : null}
-    </article>
-  )
-}
-
 function TodoPanel({
   icon: Icon,
   title,
   description,
 }: {
-  icon: typeof Activity
+  icon: LucideIcon
   title: string
   description: string
 }) {
   return (
-    <article className="border border-rule bg-paper-raised p-5">
+    <article className="border border-border-default bg-paper-raised p-5">
       <div className="flex items-center justify-between gap-4">
         <Icon className="size-5 text-technical" />
-        <span className="border border-rule bg-paper-muted px-2 py-1 font-mono text-[9px] text-muted-foreground uppercase">
+        <span className="ui-label border border-border-default bg-surface-muted px-2 py-1">
           TODO
         </span>
       </div>
-      <strong className="mt-4 block text-sm">{title}</strong>
-      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+      <strong className="mt-4 block text-[15px] leading-5">{title}</strong>
+      <p className="mt-2 text-[13px] leading-5 text-muted-foreground">
         {description}
       </p>
     </article>
@@ -87,88 +68,87 @@ export function WorkbenchOverview({
     : null
 
   return (
-    <main className="h-full min-h-0 min-w-0 overflow-y-auto px-8 py-7">
-      <header>
-        <div className="font-mono text-[11px] font-bold tracking-[0.1em] text-signal-dark uppercase">
-          {dashboard.eyebrow}
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <h1 className="text-[clamp(2rem,3vw,3rem)] leading-none font-[780] tracking-[-0.04em]">
-            {workspace.name}
-          </h1>
-          {online ? (
-            <span className="border border-technical/50 bg-technical/8 px-3 py-1.5 font-mono text-[10px] font-bold text-technical-foreground">
-              {dashboard.publishedVersion(online.name)}
-            </span>
-          ) : (
-            <span className="border border-rule bg-paper-muted px-3 py-1.5 font-mono text-[10px] text-muted-foreground">
-              {dashboard.noPublishedVersion}
-            </span>
-          )}
-        </div>
-        <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-          {dashboard.description}
-        </p>
-      </header>
-
-      <section className="mt-7 border border-foreground bg-paper-raised">
-        <h2 className="border-b border-rule px-5 py-3 font-mono text-[11px] font-bold tracking-[0.08em] text-muted-foreground uppercase">
-          {dashboard.statusTitle}
-        </h2>
-        <div className="grid grid-cols-3">
-          <Metric
-            hint={onlineLabels ?? dashboard.currentPublishedVersionHint}
-            label={dashboard.currentPublishedVersion}
-            value={online?.name ?? dashboard.noPublishedVersionValue}
-          />
-          <Metric
-            hint={dashboard.savedVersionsHint}
-            label={dashboard.savedVersions}
-            value={workspace.versionCount}
-          />
-          <Metric
-            hint={
-              draft
-                ? dashboard.recentUpdated(updatedAt)
-                : dashboard.createFromPublished
-            }
-            label={dashboard.workingCopy}
-            value={
-              draft
-                ? dashboard.revision(draft.contentRevision)
-                : dashboard.noActiveDraft
-            }
-          />
-        </div>
-      </section>
-
-      <div className="mt-4 flex flex-wrap gap-2.5">
-        <Button asChild className="h-10 rounded-none">
-          <Link to={`/workbenches/${workspace.id}/versions`}>
-            <PencilLine data-icon="inline-start" />
-            {draft ? dashboard.continueEditingDraft : dashboard.viewSkillVersions}
-          </Link>
-        </Button>
-        {workspace.versionCount >= 2 ? (
-          <Button asChild className="h-10 rounded-none" variant="outline">
-            <Link to={`/workbenches/${workspace.id}/versions/compare`}>
-              <GitCompareArrows data-icon="inline-start" />
-              {dashboard.compareVersions}
-            </Link>
-          </Button>
-        ) : null}
-      </div>
+    <main className="h-full min-h-0 min-w-0 overflow-y-auto px-6 py-6 lg:px-8 lg:py-7">
+      <WorkbenchPageHeader
+        actions={
+          <>
+            <Button asChild className="h-10 rounded-none">
+              <Link to={`/workbenches/${workspace.id}/versions`}>
+                <PencilLine data-icon="inline-start" />
+                {draft
+                  ? dashboard.continueEditingDraft
+                  : dashboard.viewSkillVersions}
+              </Link>
+            </Button>
+            {workspace.versionCount >= 2 ? (
+              <Button asChild className="h-10 rounded-none" variant="outline">
+                <Link to={`/workbenches/${workspace.id}/versions/compare`}>
+                  <GitCompareArrows data-icon="inline-start" />
+                  {dashboard.compareVersions}
+                </Link>
+              </Button>
+            ) : null}
+          </>
+        }
+        description={dashboard.description}
+        eyebrow={dashboard.eyebrow}
+        icon={Activity}
+        metrics={
+          <div>
+            <div className="ui-label mb-2">{dashboard.statusTitle}</div>
+            <MetricStrip
+              ariaLabel={dashboard.statusTitle}
+              items={[
+                {
+                  hint: onlineLabels ?? dashboard.currentPublishedVersionHint,
+                  label: dashboard.currentPublishedVersion,
+                  value: online?.name ?? dashboard.noPublishedVersionValue,
+                  tone: online ? "technical" : "default",
+                },
+                {
+                  hint: dashboard.savedVersionsHint,
+                  label: dashboard.savedVersions,
+                  value: workspace.versionCount,
+                },
+                {
+                  hint: draft
+                    ? dashboard.recentUpdated(updatedAt)
+                    : dashboard.createFromPublished,
+                  label: dashboard.workingCopy,
+                  value: draft
+                    ? dashboard.revision(draft.contentRevision)
+                    : dashboard.noActiveDraft,
+                },
+              ]}
+            />
+          </div>
+        }
+        title={
+          <span className="flex flex-wrap items-center gap-3">
+            <span>{workspace.name}</span>
+            {online ? (
+              <span className="border border-technical/50 bg-technical/8 px-3 py-1.5 font-mono text-xs font-bold leading-5 text-technical-foreground">
+                {dashboard.publishedVersion(online.name)}
+              </span>
+            ) : (
+              <span className="border border-border-default bg-surface-muted px-3 py-1.5 font-mono text-xs font-normal leading-5 text-muted-foreground">
+                {dashboard.noPublishedVersion}
+              </span>
+            )}
+          </span>
+        }
+      />
 
       <section className="mt-6">
         <div className="mb-3 flex items-center justify-between gap-4">
-          <h2 className="font-mono text-[11px] font-bold tracking-[0.08em] text-muted-foreground uppercase">
+          <h2 className="ui-label">
             {dashboard.evidenceWorkspace}
           </h2>
-          <span className="font-mono text-[10px] text-muted-foreground">
+          <span className="ui-meta">
             {dashboard.futureIteration}
           </span>
         </div>
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           <TodoPanel
             description={dashboard.cards.testCases.description}
             icon={FlaskConical}
@@ -192,12 +172,14 @@ export function WorkbenchOverview({
         </div>
       </section>
 
-      <section className="mt-6 border border-rule bg-paper-muted p-5">
+      <section className="mt-6 border border-border-default bg-surface-muted p-5">
         <div className="flex items-start gap-3">
           <Tags className="mt-0.5 size-5 text-technical" />
           <div>
-            <strong className="text-sm">{dashboard.versionTagsTitle}</strong>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            <strong className="text-[15px] leading-5">
+              {dashboard.versionTagsTitle}
+            </strong>
+            <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
               {dashboard.versionTagsDescription}
             </p>
           </div>

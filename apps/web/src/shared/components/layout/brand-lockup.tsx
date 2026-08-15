@@ -10,7 +10,7 @@ export function BrandLockup() {
         <p className="truncate font-mono text-[17px] font-bold tracking-[0.035em]">
           SKILLCONSOLE
         </p>
-        <p className="truncate font-mono text-[10px] tracking-[0.06em] text-muted-foreground uppercase">
+        <p className="truncate font-mono text-[11px] leading-4 tracking-[0.04em] text-muted-foreground uppercase">
           Skill quality measurement workbench
         </p>
       </div>

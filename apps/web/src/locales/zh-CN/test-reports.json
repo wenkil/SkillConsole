@@ -50,6 +50,8 @@
     "allChanges": "全部变化",
     "hasNegative": "存在回归或退化",
     "noNegative": "没有回归或退化",
+    "more": "更多筛选项",
+    "less": "收起筛选项",
     "sort": "排序",
     "sortOptions": {
       "completedAt": "按完成时间",

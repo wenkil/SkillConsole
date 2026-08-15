@@ -94,7 +94,7 @@ function PreviewMessage({
         </div>
         <strong className="block text-sm">{title}</strong>
         {description ? (
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
             {description}
           </p>
         ) : null}
@@ -178,11 +178,11 @@ export function VersionFilePreview({
 
   return (
     <section className="flex min-h-0 min-w-0 flex-col bg-background">
-      <header className="border-b border-foreground bg-paper-raised">
+      <header className="border-b border-border-strong bg-paper-raised">
         <div className="flex min-h-11 items-center justify-between gap-4 px-4">
           <nav
             aria-label={copy.path}
-            className="flex min-w-0 items-center gap-1 overflow-hidden font-mono text-[10px]"
+            className="flex min-w-0 items-center gap-1 overflow-hidden font-mono text-xs"
           >
             <span className="shrink-0 text-primary">/</span>
             {pathSegments.map((segment, index) => (
@@ -222,7 +222,7 @@ export function VersionFilePreview({
                 <button
                   aria-pressed={markdownView === "rendered"}
                   className={cn(
-                    "h-7 px-2.5 font-mono text-[10px] uppercase",
+                    "h-8 px-2.5 font-mono text-xs uppercase",
                     markdownView === "rendered" &&
                       "bg-foreground text-background",
                   )}
@@ -234,7 +234,7 @@ export function VersionFilePreview({
                 <button
                   aria-pressed={markdownView === "source"}
                   className={cn(
-                    "h-7 border-l border-rule px-2.5 font-mono text-[10px] uppercase",
+                    "h-8 border-l border-rule px-2.5 font-mono text-xs uppercase",
                     markdownView === "source" &&
                       "bg-foreground text-background",
                   )}
@@ -309,7 +309,7 @@ export function VersionFilePreview({
           textPreview.kind === "markdown" &&
           markdownView === "rendered" ? (
             <article className="mx-auto max-w-4xl px-10 py-9">
-              <div className="mb-6 flex items-center gap-2 border-b border-rule pb-3 font-mono text-[10px] text-technical-foreground uppercase">
+              <div className="ui-label mb-6 flex items-center gap-2 border-b border-border-default pb-3 text-technical-foreground">
                 <ShieldCheck aria-hidden="true" className="size-4" />
                 {copy.rawHtmlDisabled}
               </div>

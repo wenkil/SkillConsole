@@ -18,6 +18,7 @@ import {
   type EvalGenerationTask,
 } from "@/features/evals/model/evals"
 import { Button } from "@/shared/components/ui/button"
+import { EmptyState } from "@/shared/components/ui/empty-state"
 import { cn } from "@/shared/lib/utils"
 
 const tableColumns = [
@@ -93,9 +94,9 @@ export function EvalTaskTable({
 }) {
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
-      <div className="flex shrink-0 items-center justify-between gap-4 border-b border-foreground px-5 py-3.5">
+      <div className="flex shrink-0 items-center justify-between gap-4 border-b border-border-strong px-5 py-3.5">
         <div>
-          <div className="technical-heading text-[10px] text-muted-foreground">
+          <div className="ui-label">
             {t("tasks.eyebrow")}
           </div>
           <h2 className="mt-1 text-base font-[760]">{t("tasks.title")}</h2>
@@ -107,23 +108,19 @@ export function EvalTaskTable({
       </div>
 
       {tasks.length === 0 ? (
-        <div className="flex min-h-0 flex-1 items-center justify-center p-8 text-center">
-          <div className="max-w-sm border border-dashed border-rule px-8 py-10">
-            <FlaskConical className="mx-auto size-9 text-technical" />
-            <h3 className="mt-4 text-lg font-[760]">{t("review.emptyTitle")}</h3>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {t("review.emptyDescription")}
-            </p>
-          </div>
-        </div>
+        <EmptyState
+          description={t("review.emptyDescription")}
+          icon={FlaskConical}
+          title={t("review.emptyTitle")}
+        />
       ) : (
         <div className="min-h-0 flex-1 overflow-auto">
-          <table className="w-full min-w-[58rem] border-collapse text-left">
+          <table className="w-full min-w-[48rem] border-collapse text-left">
             <thead className="sticky top-0 z-10 bg-paper-muted">
-              <tr className="border-b border-foreground">
+              <tr className="border-b border-border-strong">
                 {tableColumns.map((column) => (
                   <th
-                    className="px-4 py-3 font-mono text-[9px] font-bold tracking-[0.06em] text-muted-foreground uppercase"
+                    className="px-4 py-3 font-mono text-[11px] leading-4 font-bold tracking-[0.06em] text-muted-foreground uppercase"
                     key={column}
                     scope="col"
                   >
@@ -135,7 +132,7 @@ export function EvalTaskTable({
             <tbody>
               {tasks.map((task) => (
                 <tr
-                  className="border-b border-rule-soft hover:bg-paper-muted/45"
+                  className="border-b border-border-subtle hover:bg-paper-muted/45"
                   key={task.id}
                 >
                   <td className="px-4 py-3.5">
@@ -153,7 +150,7 @@ export function EvalTaskTable({
                         : task.target.displayVersion}
                     </strong>
                   </td>
-                  <td className="px-4 py-3.5 font-mono text-[10px]">
+                  <td className="px-4 py-3.5 font-mono text-xs">
                     {task.evalCount === null ? (
                       "—"
                     ) : (
@@ -166,7 +163,7 @@ export function EvalTaskTable({
                     )}
                   </td>
                   <td className="px-4 py-3.5">
-                    <time className="font-mono text-[10px]">
+                    <time className="font-mono text-xs">
                       {new Intl.DateTimeFormat(locale, {
                         year: "numeric",
                         month: "2-digit",
@@ -176,13 +173,13 @@ export function EvalTaskTable({
                       }).format(new Date(task.createdAt))}
                     </time>
                   </td>
-                  <td className="px-4 py-3.5 font-mono text-[10px]">
+                  <td className="px-4 py-3.5 font-mono text-xs">
                     {formatDuration(task, t)}
                   </td>
                   <td className="px-4 py-3.5">
                     <span
                       className={cn(
-                        "inline-flex border px-2 py-1 font-mono text-[9px] font-bold",
+                        "inline-flex border px-2 py-1 font-mono text-[11px] leading-4 font-bold",
                         task.draftStatus === "PUBLISHED" &&
                           "border-status-passed/55 text-status-passed",
                         task.draftStatus === "READY" &&
@@ -213,13 +210,13 @@ export function EvalTaskTable({
         </div>
       )}
 
-      <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-foreground bg-paper-muted px-5 py-3">
-        <div className="flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
+      <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border-strong bg-surface-muted px-5 py-3">
+        <div className="ui-meta flex items-center gap-3">
           <span>{t("table.total", { count: total })}</span>
           <label className="flex items-center gap-2">
             {t("table.pageSize")}
             <select
-              className="h-7 border border-rule bg-background px-2 outline-none focus:border-primary"
+              className="h-8 border border-border-default bg-background px-2 text-xs outline-none focus:border-focus-ring"
               onChange={(event) => onPageSizeChange(Number(event.target.value))}
               value={pageSize}
             >
@@ -243,7 +240,7 @@ export function EvalTaskTable({
           >
             <ChevronLeft />
           </Button>
-          <span className="min-w-24 text-center font-mono text-[10px]">
+          <span className="ui-meta min-w-24 text-center">
             {t("table.page", {
               page: pageCount === 0 ? 0 : page,
               pageCount,

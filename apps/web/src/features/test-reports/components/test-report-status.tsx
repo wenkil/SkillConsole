@@ -8,7 +8,7 @@ export function TestReportStatusBadge({ status }: { status: TestReportStatus }) 
   return (
     <span
       className={cn(
-        "inline-flex border px-2 py-1 font-mono text-[9px] font-bold tracking-[0.04em]",
+        "inline-flex border px-2 py-1 font-mono text-xs leading-4 font-bold tracking-[0.04em]",
         status === "AVAILABLE" &&
           "border-status-passed/55 text-status-passed",
         status === "PARTIAL" &&

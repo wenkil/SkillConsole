@@ -22,6 +22,7 @@ import { useVersionBrowserController } from "@/features/version-browser/hooks/us
 import type { SkillBrowserTarget } from "@/features/version-browser/model/version-browser"
 import type { SkillWorkspace } from "@/features/workbench-home/model/workbench"
 import { Button } from "@/shared/components/ui/button"
+import { StatusBanner } from "@/shared/components/ui/status-banner"
 
 interface VersionBrowserViewProps {
   workspace: SkillWorkspace
@@ -80,10 +81,10 @@ export function VersionBrowserView({
 
   return (
     <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-foreground bg-background px-6 py-4">
+      <header className="shrink-0 border-b border-border-strong bg-background px-6 py-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="min-w-0">
-            <div className="mb-1.5 flex items-center gap-2 font-mono text-[10px] font-bold tracking-[0.08em] text-signal-dark uppercase">
+            <div className="ui-label mb-1.5 flex items-center gap-2 text-signal-dark">
               {selectedTarget.kind === "draft" ? (
                 <PencilLine className="size-3.5" />
               ) : selectedTarget.isOnline ? (
@@ -96,16 +97,16 @@ export function VersionBrowserView({
                 ? copy.initialCandidate
                 : selectedTarget.name}
             </div>
-            <h1 className="truncate text-3xl leading-none font-[780] tracking-[-0.035em]">
+            <h1 className="truncate text-[clamp(2rem,3vw,2.75rem)] leading-[1.08] font-[780] tracking-[-0.04em]">
               {workspace.name}
             </h1>
           </div>
 
           <div className="flex flex-wrap items-end gap-2">
-            <label className="grid gap-1 font-mono text-[9px] text-muted-foreground uppercase">
+            <label className="ui-label grid gap-1">
               {copy.versionPicker}
               <select
-                className="h-9 min-w-48 border border-foreground bg-paper-raised px-3 font-mono text-xs outline-none focus:border-primary"
+                className="h-10 min-w-48 border border-border-default bg-paper-raised px-3 font-mono text-sm outline-none focus:border-focus-ring"
                 onChange={(event) => {
                   const target = controller.targets.find(
                     (item) =>
@@ -176,7 +177,7 @@ export function VersionBrowserView({
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border border-technical/55 bg-technical/5 px-3.5 py-2 text-xs">
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border border-technical/55 bg-technical/5 px-3.5 py-3 text-sm">
           {selectedTarget.kind === "draft" ? (
             <PencilLine className="size-4 shrink-0 text-technical" />
           ) : (
@@ -201,7 +202,7 @@ export function VersionBrowserView({
                 )}
           </span>
           {selectedTarget.kind === "version" && selectedTarget.isOnline ? (
-            <span className="ml-auto border border-technical/50 bg-technical/10 px-2 py-1 font-mono text-[10px] font-bold text-technical-foreground">
+            <span className="ml-auto border border-technical/50 bg-technical/10 px-2 py-1 font-mono text-xs font-bold text-technical-foreground">
               {copy.currentOnlineBadge}
             </span>
           ) : null}
@@ -209,25 +210,24 @@ export function VersionBrowserView({
       </header>
 
       {controller.mutationError ? (
-        <div
-          className="flex shrink-0 items-center justify-between gap-4 border-b border-destructive/60 bg-destructive/5 px-4 py-2 text-xs"
-          role="alert"
+        <StatusBanner
+          action={
+            <button
+              className="font-mono text-xs underline underline-offset-2"
+              onClick={controller.actions.clearMutationError}
+              type="button"
+            >
+              {t("draft.close")}
+            </button>
+          }
+          icon={AlertTriangle}
+          variant="error"
         >
-          <span className="flex items-center gap-2">
-            <AlertTriangle className="size-4 text-destructive" />
-            {controller.mutationError.message}
-          </span>
-          <button
-            className="font-mono text-[10px] underline"
-            onClick={controller.actions.clearMutationError}
-            type="button"
-          >
-            {t("draft.close")}
-          </button>
-        </div>
+          {controller.mutationError.message}
+        </StatusBanner>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(15rem,18rem)_minmax(0,1fr)] overflow-hidden">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(15rem,17rem)_minmax(0,1fr)] overflow-hidden">
         <VersionFileTree
           actions={
             selectedTarget.kind === "draft" ? (

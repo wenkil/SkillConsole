@@ -23,7 +23,7 @@
   --border: #a49c8d;
   --input: #a49c8d;
   --ring: #2563eb;
-  --radius: 0.125rem;
+  --radius: 0.25rem;
   --sidebar: #fbf8ef;
   --sidebar-foreground: #101820;
   --sidebar-primary: #ef4b35;
@@ -41,14 +41,20 @@
   --technical-foreground: #0f514e;
   --trace: #0b1220;
   --trace-foreground: #d7e0ea;
+  --border-strong: #101820;
+  --border-default: #a49c8d;
+  --border-subtle: #d2cabb;
+  --surface-muted: #eee8da;
+  --focus-ring: #2563eb;
   --status-passed: #15803d;
   --status-failed: #dc2626;
   --status-blocked: #b45309;
   --status-running: #2563eb;
   --status-cancelled: #64748b;
-  --app-header-height: 4.5rem;
-  --workbench-sidebar-width: 17.875rem;
-  --workspace-nav-collapsed-width: 4rem;
+  --app-header-height: 4rem;
+  --app-min-width: 64rem;
+  --workbench-sidebar-width: 15rem;
+  --workspace-nav-collapsed-width: 3.5rem;
 }
 
 @theme inline {
@@ -90,6 +96,11 @@
   --color-technical-foreground: var(--technical-foreground);
   --color-trace: var(--trace);
   --color-trace-foreground: var(--trace-foreground);
+  --color-border-strong: var(--border-strong);
+  --color-border-default: var(--border-default);
+  --color-border-subtle: var(--border-subtle);
+  --color-surface-muted: var(--surface-muted);
+  --color-focus-ring: var(--focus-ring);
   --color-status-passed: var(--status-passed);
   --color-status-failed: var(--status-failed);
   --color-status-blocked: var(--status-blocked);
@@ -108,26 +119,28 @@
 
   html {
     height: 100%;
-    min-width: 1280px;
+    min-width: var(--app-min-width);
     overflow: hidden;
     background: var(--background);
   }
 
   body {
     height: 100%;
-    min-width: 1280px;
+    min-width: var(--app-min-width);
     margin: 0;
     overflow: hidden;
     background: var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
+    font-size: 0.875rem;
+    line-height: 1.5;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
   }
 
   #root {
     height: 100%;
-    min-width: 1280px;
+    min-width: var(--app-min-width);
     overflow: hidden;
   }
 
@@ -142,6 +155,11 @@
   textarea {
     font: inherit;
   }
+
+  :where(button, a, input, select, textarea, summary, [tabindex]):not(:disabled):focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
 }
 
 @layer components {
@@ -150,6 +168,23 @@
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
+  }
+
+  .ui-label {
+    color: var(--muted-foreground);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1rem;
+    text-transform: uppercase;
+  }
+
+  .ui-meta {
+    color: var(--muted-foreground);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.125rem;
   }
 
   .technical-panel {

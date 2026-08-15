@@ -421,11 +421,11 @@ export function TestRunDetailView({
 
   return (
     <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-foreground px-6 py-4">
+      <header className="shrink-0 border-b border-border-strong px-6 py-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <button
-              className="flex items-center gap-1.5 font-mono text-[9px] text-muted-foreground hover:text-foreground"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
               onClick={() =>
                 navigate(`/workbenches/${workspace.id}/runs`)
               }
@@ -453,7 +453,7 @@ export function TestRunDetailView({
                 {run.target.evalRevisionNumber}
               </h1>
               <TestRunStatusBadge status={run.status} t={t} />
-              <span className="border border-rule px-2 py-1 font-mono text-[9px] font-bold">
+              <span className="border border-border-default px-2 py-1 font-mono text-xs font-bold">
                 {t(
                   versionComparison
                     ? "detail.versionComparisonMode"
@@ -461,15 +461,15 @@ export function TestRunDetailView({
                 )}
               </span>
             </div>
-            <p className="mt-1.5 font-mono text-[9px] text-muted-foreground">
+            <p className="ui-meta mt-1.5">
               RUN {run.id}
             </p>
-            <p className="mt-1 font-mono text-[9px] text-muted-foreground">
+            <p className="ui-meta mt-1">
               {t("detail.confirmedVersion")}: {run.target.skillVersionName
                 ? `${run.target.skillVersionName} · #${run.target.skillVersionNumber}`
                 : "—"}
             </p>
-            <p className="mt-1 font-mono text-[9px] text-muted-foreground">
+            <p className="ui-meta mt-1">
               BASELINE:{" "}
               {run.baseline.kind === "no_skill"
                 ? "No-Skill"
@@ -515,7 +515,7 @@ export function TestRunDetailView({
             style={{ width: `${progress}%` }}
           />
         </div>
-        <div className="mt-1 flex justify-between font-mono text-[9px] text-muted-foreground">
+        <div className="ui-meta mt-1 flex justify-between">
           <span>{t("detail.progress")}</span>
           <span>
             {run.progress.completedCases} / {run.progress.totalCases}
@@ -533,9 +533,9 @@ export function TestRunDetailView({
         </div>
       ) : null}
 
-      <div className="shrink-0 border-b border-foreground bg-paper-muted/40 px-6 py-4">
+      <div className="shrink-0 border-b border-border-strong bg-paper-muted/40 px-6 py-4">
         {run.benchmark && !benchmarkComparable ? (
-          <div className="mb-3 flex items-start gap-2 border border-status-blocked/50 bg-status-blocked/5 p-3 text-[11px] leading-5">
+          <div className="mb-3 flex items-start gap-2 border border-status-blocked/50 bg-status-blocked/5 p-3 text-[13px] leading-5">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-blocked" />
             <div>
               <strong className="block">
@@ -564,14 +564,14 @@ export function TestRunDetailView({
 
       <div
         aria-label={t("detail.tabsLabel")}
-        className="flex shrink-0 border-b border-foreground bg-paper-muted px-6"
+        className="flex shrink-0 border-b border-border-strong bg-paper-muted px-6"
         role="tablist"
       >
         {(["results", "logs"] as const).map((item) => (
           <button
             aria-selected={tab === item}
             className={cn(
-              "border-b-2 px-5 py-3 font-mono text-[10px] font-bold",
+              "border-b-2 px-5 py-3 font-mono text-xs font-bold",
               tab === item
                 ? "border-primary text-foreground"
                 : "border-transparent text-muted-foreground",
@@ -589,8 +589,8 @@ export function TestRunDetailView({
 
       {tab === "results" ? (
         <div className="grid min-h-0 flex-1 grid-cols-[15rem_minmax(0,1fr)] overflow-hidden">
-          <aside className="min-h-0 overflow-y-auto border-r border-foreground bg-sidebar p-3">
-            <div className="flex items-center gap-2 px-2 pb-2 font-mono text-[9px] font-bold text-muted-foreground uppercase">
+          <aside className="min-h-0 overflow-y-auto border-r border-border-strong bg-sidebar p-3">
+            <div className="ui-label flex items-center gap-2 px-2 pb-2 font-bold">
               <ListTree className="size-3.5" />
               {t("detail.cases")}
             </div>
@@ -610,7 +610,7 @@ export function TestRunDetailView({
                   onClick={() => setRequestedExternalId(externalId)}
                   type="button"
                 >
-                  <span className="font-mono text-[9px] text-muted-foreground">
+                  <span className="ui-meta">
                     EVAL {String(externalId).padStart(2, "0")}
                   </span>
                   <strong className="mt-1 block text-xs leading-5">
@@ -624,19 +624,19 @@ export function TestRunDetailView({
           <div className="min-h-0 overflow-y-auto p-5">
             {target || baseline ? (
               <section className="mb-4 border border-rule-soft bg-paper-muted p-4">
-                <div className="font-mono text-[9px] text-muted-foreground uppercase">
+                <div className="ui-label">
                   {t("detail.userTask")}
                 </div>
                 <p className="mt-2 text-sm leading-6">
                   {(target ?? baseline)?.prompt}
                 </p>
-                <div className="mt-3 font-mono text-[9px] text-muted-foreground">
+                <div className="ui-meta mt-3">
                   INPUT {(target ?? baseline)?.inputFingerprint}
                 </div>
-                <div className="mt-1 font-mono text-[9px] text-muted-foreground">
+                <div className="ui-meta mt-1">
                   TARGET {target?.participantExecutionFingerprint ?? "-"}
                 </div>
-                <div className="mt-1 font-mono text-[9px] text-muted-foreground">
+                <div className="ui-meta mt-1">
                   BASELINE {baseline?.participantExecutionFingerprint ?? "-"}
                 </div>
               </section>

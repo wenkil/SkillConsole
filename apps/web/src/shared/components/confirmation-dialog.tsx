@@ -51,16 +51,16 @@ export function ConfirmationDialog({
       open={open}
     >
       <DialogContent
-        className="gap-0 rounded-none border-foreground bg-paper-raised p-0 sm:max-w-md"
+        className="gap-0 rounded-none border-border-strong bg-paper-raised p-0 sm:max-w-md"
         showCloseButton={false}
       >
-        <DialogHeader className="border-b border-rule-soft px-5 py-4 pr-12">
+        <DialogHeader className="border-b border-border-subtle px-5 py-4 pr-12">
           <DialogTitle className="text-base">{title}</DialogTitle>
-          <DialogDescription className="pt-1 text-xs leading-5">
+          <DialogDescription className="pt-1 text-sm leading-6">
             {description}
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter className="border-t border-rule-soft bg-paper-muted px-5 py-3 sm:justify-end">
+        <DialogFooter className="border-t border-border-subtle bg-surface-muted px-5 py-3 sm:justify-end">
           <Button
             disabled={pending}
             onClick={() => onOpenChange(false)}

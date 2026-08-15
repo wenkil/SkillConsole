@@ -13,7 +13,10 @@ import { EvalTaskDrawer } from "@/features/evals/components/eval-task-drawer"
 import { EvalTaskTable } from "@/features/evals/components/eval-task-table"
 import { useEvalsController } from "@/features/evals/hooks/use-evals-controller"
 import type { SkillWorkspace } from "@/features/workbench-home/model/workbench"
+import { MetricStrip } from "@/shared/components/layout/metric-strip"
+import { WorkbenchPageHeader } from "@/shared/components/layout/workbench-page-header"
 import { Button } from "@/shared/components/ui/button"
+import { StatusBanner } from "@/shared/components/ui/status-banner"
 
 export function EvalsWorkbenchView({
   workspace,
@@ -30,7 +33,7 @@ export function EvalsWorkbenchView({
 
   if (controller.loading) {
     return (
-      <main className="flex h-full items-center justify-center gap-2 text-xs">
+      <main className="flex h-full items-center justify-center gap-2 text-sm">
         <LoaderCircle className="size-4 animate-spin" />
         {t("states.loading")}
       </main>
@@ -63,66 +66,54 @@ export function EvalsWorkbenchView({
 
   return (
     <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-foreground bg-background px-6 py-4">
-        <div className="flex flex-wrap items-end justify-between gap-5">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 font-mono text-[10px] font-bold tracking-[0.08em] text-signal-dark uppercase">
-              <Sparkles className="size-3.5" />
-              {t("header.eyebrow")}
-            </div>
-            <h1 className="mt-1.5 text-3xl leading-none font-[790] tracking-[-0.04em]">
-              {t("header.title")}
-            </h1>
-            <p className="mt-2 max-w-2xl text-xs leading-5 text-muted-foreground">
-              {t("header.description", { name: workspace.name })}
-            </p>
-          </div>
-          <div className="grid grid-cols-3 border border-foreground bg-rule gap-px">
-            <div className="min-w-24 bg-background px-3 py-2">
-              <span className="block font-mono text-[9px] text-muted-foreground uppercase">
-                {t("header.metrics.tasks")}
-              </span>
-              <strong className="mt-0.5 block text-lg">
-                {controller.taskSummary.total}
-              </strong>
-            </div>
-            <div className="min-w-24 bg-background px-3 py-2">
-              <span className="block font-mono text-[9px] text-muted-foreground uppercase">
-                {t("header.metrics.review")}
-              </span>
-              <strong className="mt-0.5 block text-lg">
-                {controller.taskSummary.awaitingReview}
-              </strong>
-            </div>
-            <div className="min-w-24 bg-background px-3 py-2">
-              <span className="block font-mono text-[9px] text-muted-foreground uppercase">
-                {t("header.metrics.saved")}
-              </span>
-              <strong className="mt-0.5 block text-lg">
-                {controller.taskSummary.published}
-              </strong>
-            </div>
-          </div>
-        </div>
-      </header>
+      <WorkbenchPageHeader
+        description={t("header.description", { name: workspace.name })}
+        eyebrow={t("header.eyebrow")}
+        icon={Sparkles}
+        metrics={
+          <MetricStrip
+            ariaLabel={t("header.title")}
+            items={[
+              {
+                label: t("header.metrics.tasks"),
+                value: controller.taskSummary.total,
+              },
+              {
+                hint: t("table.reviewStatus.READY"),
+                label: t("header.metrics.review"),
+                value: controller.taskSummary.awaitingReview,
+                tone: controller.taskSummary.awaitingReview
+                  ? "warning"
+                  : "default",
+              },
+              {
+                hint: t("status.SUCCEEDED"),
+                label: t("header.metrics.saved"),
+                value: controller.taskSummary.published,
+                tone: "technical",
+              },
+            ]}
+          />
+        }
+        title={t("header.title")}
+      />
 
       {controller.mutationError ? (
-        <div
-          className="flex shrink-0 items-center justify-between gap-4 border-b border-destructive/50 bg-destructive/5 px-5 py-2 text-xs"
-          role="alert"
+        <StatusBanner
+          action={
+            <button
+              className="font-mono text-xs underline underline-offset-2"
+              onClick={controller.actions.clearMutationError}
+              type="button"
+            >
+              {t("states.dismiss")}
+            </button>
+          }
+          icon={AlertTriangle}
+          variant="error"
         >
-          <span className="flex items-center gap-2">
-            <AlertTriangle className="size-4 text-destructive" />
-            {controller.mutationError}
-          </span>
-          <button
-            className="font-mono text-[10px] underline"
-            onClick={controller.actions.clearMutationError}
-            type="button"
-          >
-            {t("states.dismiss")}
-          </button>
-        </div>
+          {controller.mutationError}
+        </StatusBanner>
       ) : null}
 
       <div className="min-h-0 flex-1 overflow-hidden">
@@ -189,13 +180,13 @@ export function EvalsWorkbenchView({
         onTabChange={setDrawerTab}
       />
 
-      <footer className="flex h-7 shrink-0 items-center justify-between border-t border-foreground bg-paper-muted px-5 font-mono text-[9px] text-muted-foreground uppercase">
+      <footer className="ui-meta flex h-9 shrink-0 items-center justify-between border-t border-border-strong bg-surface-muted px-5 uppercase">
         <span className="flex items-center gap-1.5">
-          <Layers3 className="size-3" />
+          <Layers3 className="size-3.5" />
           {t("footer.snapshotBoundary")}
         </span>
         <span className="flex items-center gap-1.5">
-          <CheckCircle2 className="size-3 text-status-passed" />
+          <CheckCircle2 className="size-3.5 text-status-passed" />
           {t("footer.saveBoundary")}
         </span>
       </footer>

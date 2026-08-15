@@ -73,10 +73,10 @@ export function EvalControlPanel({
 
   return (
     <>
-      <aside className="min-h-0 overflow-y-auto border-l border-foreground bg-sidebar p-4">
-      <section className="border border-foreground bg-paper-raised">
-        <div className="border-b border-rule-soft px-4 py-3">
-          <div className="technical-heading text-[10px] text-signal-dark">
+      <aside className="min-h-0 overflow-y-auto border-l border-border-strong bg-sidebar p-4">
+      <section className="border border-border-strong bg-paper-raised">
+        <div className="border-b border-border-subtle px-4 py-3">
+          <div className="ui-label text-signal-dark">
             {t("controls.eyebrow")}
           </div>
           <h2 className="mt-1 text-base font-[760]">
@@ -84,10 +84,10 @@ export function EvalControlPanel({
           </h2>
         </div>
         <div className="grid gap-4 p-4">
-          <label className="grid gap-1.5 text-xs font-semibold">
+          <label className="grid gap-1.5 text-sm font-semibold">
             {t("controls.target")}
             <select
-              className="h-9 w-full border border-foreground bg-background px-2.5 font-mono text-[11px] outline-none focus:border-primary"
+              className="h-10 w-full border border-border-default bg-background px-2.5 font-mono text-sm outline-none focus:border-focus-ring"
               disabled={Boolean(activeTask) || pending}
               onChange={(event) => onTargetChange(event.target.value)}
               value={selectedTargetKey}
@@ -101,10 +101,10 @@ export function EvalControlPanel({
               ))}
             </select>
           </label>
-          <label className="grid gap-1.5 text-xs font-semibold">
+          <label className="grid gap-1.5 text-sm font-semibold">
             {t("controls.count")}
             <input
-              className="h-9 w-full border border-foreground bg-background px-2.5 font-mono text-xs outline-none focus:border-primary"
+              className="h-10 w-full border border-border-default bg-background px-2.5 font-mono text-sm outline-none focus:border-focus-ring"
               disabled={Boolean(activeTask) || pending}
               max={20}
               min={1}
@@ -115,10 +115,10 @@ export function EvalControlPanel({
               value={maxEvalCount}
             />
           </label>
-          <label className="grid gap-1.5 text-xs font-semibold">
+          <label className="grid gap-1.5 text-sm font-semibold">
             {t("controls.brief")}
             <textarea
-              className="min-h-24 resize-y border border-foreground bg-background p-2.5 text-xs leading-5 outline-none placeholder:text-muted-foreground focus:border-primary"
+              className="min-h-24 resize-y border border-border-default bg-background p-2.5 text-sm leading-6 outline-none placeholder:text-muted-foreground focus:border-focus-ring"
               disabled={Boolean(activeTask) || pending}
               maxLength={4000}
               onChange={(event) => onBriefChange(event.target.value)}
@@ -126,7 +126,7 @@ export function EvalControlPanel({
               value={generationBrief}
             />
           </label>
-          <div className="border border-technical/45 bg-technical/6 p-3 text-[11px] leading-5 text-muted-foreground">
+          <div className="border border-technical/45 bg-technical/6 p-3 text-[13px] leading-5 text-muted-foreground">
             <LockKeyhole className="mb-2 size-4 text-technical" />
             {t("controls.freezeHint")}
           </div>
@@ -162,15 +162,15 @@ export function EvalControlPanel({
       </section>
 
       <section className="mt-4 border border-foreground bg-paper-raised">
-        <div className="border-b border-rule-soft px-4 py-3">
-          <div className="technical-heading text-[10px] text-signal-dark">
+        <div className="border-b border-border-subtle px-4 py-3">
+          <div className="ui-label text-signal-dark">
             {t("save.eyebrow")}
           </div>
           <h2 className="mt-1 text-base font-[760]">{t("save.title")}</h2>
         </div>
         <div className="p-4">
           {!draft ? (
-            <p className="text-xs leading-5 text-muted-foreground">
+            <p className="text-sm leading-6 text-muted-foreground">
               {t("save.noDraft")}
             </p>
           ) : (
@@ -178,22 +178,22 @@ export function EvalControlPanel({
               <div className="grid grid-cols-2 gap-px border border-rule bg-rule text-center">
                 <div className="bg-background p-2.5">
                   <strong className="block text-lg">{draft.evalCount}</strong>
-                  <span className="font-mono text-[9px] text-muted-foreground uppercase">
+                  <span className="ui-label">
                     {t("save.cases")}
                   </span>
                 </div>
                 <div className="bg-background p-2.5">
                   <strong className="block text-lg">{draft.fileCount}</strong>
-                  <span className="font-mono text-[9px] text-muted-foreground uppercase">
+                  <span className="ui-label">
                     {t("save.files")}
                   </span>
                 </div>
               </div>
               <div className="mt-3 border border-rule-soft bg-paper-muted p-2.5">
-                <span className="block font-mono text-[9px] text-muted-foreground uppercase">
+                <span className="ui-label block">
                   Manifest
                 </span>
-                <code className="mt-1 block truncate font-mono text-[10px]">
+                <code className="ui-meta mt-1 block truncate">
                   {draft.manifestHash}
                 </code>
               </div>
@@ -253,13 +253,13 @@ export function EvalControlPanel({
       </section>
 
       <section className="mt-4 border border-foreground bg-paper-raised">
-        <div className="flex items-center justify-between border-b border-rule-soft px-4 py-3">
+        <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
           <h2 className="text-sm font-[760]">{t("revisions.title")}</h2>
           <Archive className="size-4 text-technical" />
         </div>
         <div className="max-h-52 overflow-y-auto p-2.5">
           {revisions.length === 0 ? (
-            <p className="p-2 text-xs text-muted-foreground">
+            <p className="p-2 text-sm text-muted-foreground">
               {t("revisions.empty")}
             </p>
           ) : (
@@ -269,17 +269,17 @@ export function EvalControlPanel({
                 key={revision.id}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <strong className="font-mono text-[10px]">
+                  <strong className="font-mono text-xs">
                     EVALS R{revision.sequenceNumber}
                   </strong>
-                  <span className="font-mono text-[9px] text-muted-foreground">
+                  <span className="ui-meta">
                     {revision.evalCount} / {revision.fileCount}
                   </span>
                 </div>
-                <code className="mt-1.5 block truncate font-mono text-[9px] text-muted-foreground">
+                <code className="ui-meta mt-1.5 block truncate">
                   {revision.manifestHash}
                 </code>
-                <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-[9px] text-muted-foreground">
+                <div className="ui-meta mt-1.5 flex min-w-0 items-center gap-1.5">
                   <span className="shrink-0">
                     {t("revisions.sourceSnapshot")}
                   </span>

@@ -50,6 +50,8 @@
     "allChanges": "All changes",
     "hasNegative": "Has regression or degradation",
     "noNegative": "No regression or degradation",
+    "more": "More filters",
+    "less": "Hide filters",
     "sort": "Sort",
     "sortOptions": {
       "completedAt": "Completion time",

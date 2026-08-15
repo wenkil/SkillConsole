@@ -25,13 +25,13 @@ const stepIcons: LucideIcon[] = [
 
 export function WorkbenchSetupGuide({ copy }: WorkbenchSetupGuideProps) {
   return (
-    <section aria-labelledby="workbench-initialization" className="mt-7">
+    <section aria-labelledby="workbench-initialization" className="mt-8">
       <h2
-        className="flex items-center gap-2.5 border-b border-rule pb-3 font-mono text-base tracking-[0.015em]"
+        className="flex items-center gap-2.5 border-b border-border-default pb-3 text-base leading-6 font-semibold"
         id="workbench-initialization"
       >
-        <span className="font-extrabold text-primary">00</span>
-        <span>/</span>
+        <span className="font-mono text-sm font-extrabold text-primary">00</span>
+        <span className="font-mono text-muted-foreground">/</span>
         <span>{copy.initialization}</span>
       </h2>
 
@@ -39,37 +39,37 @@ export function WorkbenchSetupGuide({ copy }: WorkbenchSetupGuideProps) {
         {copy.setupDescription}
       </p>
 
-      <div className="technical-panel">
+      <div className="technical-panel overflow-hidden">
         <TechnicalRuler orientation="horizontal" />
-        <div className="grid grid-cols-4">
+        <div className="grid grid-cols-2 xl:grid-cols-4">
           {copy.steps.map((step, index) => {
             const Icon = stepIcons[index] ?? ShieldCheck
             const isTechnicalStep = index >= 2
 
             return (
               <article
-                className="relative min-h-64 border-r border-dotted border-rule px-5 py-6 last:border-r-0"
+                className="relative min-h-56 border-r border-dotted border-border-default px-5 py-6 last:border-r-0"
                 key={step.title}
               >
                 <span className="font-mono text-[17px] font-extrabold text-primary">
                   {String(index + 1).padStart(2, "0")}
                 </span>
-                <h3 className="technical-heading mt-1.5 text-[13px]">
+                <h3 className="mt-1.5 text-sm leading-5 font-semibold">
                   {step.title}
                 </h3>
                 <Icon
                   aria-hidden="true"
                   className={cn(
-                    "mt-5 size-11",
+                    "mt-5 size-10",
                     isTechnicalStep && "text-technical",
                   )}
                   strokeWidth={1.7}
                 />
-                <p className="mt-5 text-xs leading-relaxed text-muted-foreground">
+                <p className="mt-5 text-[13px] leading-5 text-muted-foreground">
                   {step.description}
                 </p>
                 {index < copy.steps.length - 1 && (
-                  <span className="absolute top-[6.1rem] -right-2 z-10 grid size-4 place-items-center bg-paper-raised">
+                  <span className="absolute top-[5.8rem] -right-2 z-10 hidden size-4 place-items-center bg-paper-raised xl:grid">
                     <ArrowRight aria-hidden="true" className="size-3" />
                   </span>
                 )}
@@ -79,7 +79,7 @@ export function WorkbenchSetupGuide({ copy }: WorkbenchSetupGuideProps) {
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-[auto_1fr] items-center gap-4 border border-foreground bg-paper-muted px-5 py-4">
+      <div className="mt-4 grid grid-cols-[auto_1fr] items-center gap-4 border border-border-strong bg-surface-muted px-5 py-4">
         <ShieldCheck
           aria-hidden="true"
           className="size-8 text-technical"
@@ -89,7 +89,7 @@ export function WorkbenchSetupGuide({ copy }: WorkbenchSetupGuideProps) {
           <strong className="block text-technical-foreground">
             {copy.localFirstTitle}
           </strong>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-[13px] leading-5 text-muted-foreground">
             {copy.localFirstDescription}
           </span>
         </div>

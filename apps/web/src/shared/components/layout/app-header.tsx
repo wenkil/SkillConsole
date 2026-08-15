@@ -15,7 +15,7 @@ export function AppHeader({
   onLocaleChange,
 }: AppHeaderProps) {
   return (
-    <header className="sticky top-0 z-30 flex h-[var(--app-header-height)] items-center justify-between border border-foreground bg-paper-raised px-6">
+    <header className="sticky top-0 z-30 flex h-[var(--app-header-height)] min-w-0 items-center justify-between border border-border-strong bg-paper-raised px-5">
       <BrandLockup />
 
       <div className="flex items-center gap-2.5">

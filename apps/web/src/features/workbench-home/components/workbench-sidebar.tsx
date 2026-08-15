@@ -33,18 +33,18 @@ export function WorkbenchSidebar({
   onRetry,
 }: WorkbenchSidebarProps) {
   return (
-    <aside className="relative flex h-full min-h-0 flex-col overflow-hidden border-r border-foreground bg-sidebar">
+    <aside className="relative flex h-full min-h-0 flex-col overflow-hidden border-r border-border-strong bg-sidebar">
       <TechnicalRuler orientation="vertical" />
 
       <div className="flex h-full min-h-0 flex-1 flex-col px-5 pt-6 pb-5 pl-9">
         <div className="mb-4 flex items-baseline justify-between">
           <h2 className="technical-heading text-[13px]">{copy.workbenches}</h2>
-          <span className="font-mono text-[11px] text-muted-foreground">
+          <span className="ui-meta">
             {String(workspaces.length).padStart(2, "0")}
           </span>
         </div>
 
-        <div className="mb-2 flex items-center gap-2 border-b border-rule-soft pb-2.5 font-mono text-[11px] tracking-[0.05em] text-muted-foreground uppercase">
+        <div className="ui-label mb-2 flex items-center gap-2 border-b border-border-subtle pb-2.5">
           <Layers3 aria-hidden="true" className="size-3.5" />
           {copy.workbenchList}
         </div>
@@ -54,7 +54,7 @@ export function WorkbenchSidebar({
           className="min-h-0 flex-1 overflow-y-auto pr-1"
         >
           {loading ? (
-            <div className="mt-2 flex items-center justify-center gap-2 border border-dashed border-rule px-3 py-8 font-mono text-[11px] text-muted-foreground uppercase">
+            <div className="mt-2 flex items-center justify-center gap-2 border border-dashed border-border-default px-3 py-8 font-mono text-xs text-muted-foreground uppercase">
               <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
               {copy.loadingWorkbenches}
             </div>
@@ -97,7 +97,7 @@ export function WorkbenchSidebar({
               {workspaces.map((workspace) => (
                 <button
                   className={cn(
-                    "w-full border border-rule-soft px-3 py-3 text-left transition-colors hover:border-primary hover:bg-accent",
+                    "w-full border border-border-subtle px-3 py-3 text-left transition-colors hover:border-primary hover:bg-accent",
                     activeWorkspaceId === workspace.id &&
                       "border-primary bg-accent shadow-[inset_3px_0_0_var(--primary)]",
                   )}
@@ -112,7 +112,7 @@ export function WorkbenchSidebar({
                     />
                     <span className="truncate">{workspace.name}</span>
                   </span>
-                  <span className="mt-1.5 flex items-center justify-between gap-2 font-mono text-[10px] text-muted-foreground">
+                  <span className="ui-meta mt-1.5 flex items-center justify-between gap-2">
                     <span className="truncate">
                       {workspace.activeDraft?.sourceName ??
                         workspace.onlineVersion?.sourceName ??

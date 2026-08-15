@@ -8,6 +8,7 @@ import {
   LoaderCircle,
   RotateCcw,
 } from "lucide-react"
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useNavigate } from "react-router-dom"
 
@@ -21,7 +22,10 @@ import type {
   TestReportType,
 } from "@/features/test-reports/model/test-report"
 import type { SkillWorkspace } from "@/features/workbench-home/model/workbench"
+import { MetricStrip } from "@/shared/components/layout/metric-strip"
+import { WorkbenchPageHeader } from "@/shared/components/layout/workbench-page-header"
 import { Button } from "@/shared/components/ui/button"
+import { EmptyState } from "@/shared/components/ui/empty-state"
 
 function formatRate(value: number | null): string {
   return value === null ? "—" : `${(value * 100).toFixed(1)}%`
@@ -44,6 +48,7 @@ export function TestReportsWorkbenchView({
   const { t } = useTranslation("testReports")
   const navigate = useNavigate()
   const controller = useTestReportsListController(workspace.id)
+  const [filtersExpanded, setFiltersExpanded] = useState(false)
   const filtersActive =
     controller.filters.reportType !== "" ||
     controller.filters.status !== "" ||
@@ -83,61 +88,59 @@ export function TestReportsWorkbenchView({
     )
   }
 
-  const summary = [
-    ["total", controller.summary.total],
-    ["available", controller.summary.available],
-    ["partial", controller.summary.partial],
-    ["negative", controller.summary.withNegativeTransitions],
-    ["failed", controller.summary.generationFailed],
-    [
-      "cost",
-      `$${(
-        controller.summary.executionCostUsd +
-        controller.summary.gradingCostUsd
-      ).toFixed(4)}`,
-    ],
-  ] as const
-
   return (
     <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-foreground bg-background px-6 py-4">
-        <div className="flex flex-wrap items-end justify-between gap-5">
-          <div>
-            <div className="flex items-center gap-2 font-mono text-[10px] font-bold tracking-[0.08em] text-signal-dark uppercase">
-              <FileChartColumn className="size-3.5" />
-              {t("header.eyebrow")}
-            </div>
-            <h1 className="mt-1.5 text-3xl leading-none font-[790] tracking-[-0.04em]">
-              {t("header.title")}
-            </h1>
-            <p className="mt-2 max-w-2xl text-xs leading-5 text-muted-foreground">
-              {t("header.description", { name: workspace.name })}
-            </p>
-          </div>
-          {controller.refreshing ? (
-            <span className="flex items-center gap-2 font-mono text-[9px] text-muted-foreground">
-              <LoaderCircle className="size-3 animate-spin" />
+      <WorkbenchPageHeader
+        actions={
+          controller.refreshing ? (
+            <span className="ui-meta flex items-center gap-2">
+              <LoaderCircle className="size-4 animate-spin" />
               {t("states.refreshing")}
             </span>
-          ) : null}
-        </div>
-        <div className="mt-4 grid grid-cols-6 gap-px border border-foreground bg-rule">
-          {summary.map(([key, value]) => (
-            <div className="bg-background px-3 py-2" key={key}>
-              <span className="block font-mono text-[8px] text-muted-foreground uppercase">
-                {t(`summary.${key}`)}
-              </span>
-              <strong className="mt-0.5 block text-lg">{value}</strong>
-            </div>
-          ))}
-        </div>
-      </header>
+          ) : null
+        }
+        description={t("header.description", { name: workspace.name })}
+        eyebrow={t("header.eyebrow")}
+        icon={FileChartColumn}
+        metrics={
+          <MetricStrip
+            ariaLabel={t("header.title")}
+            items={[
+              {
+                label: t("summary.total"),
+                value: controller.summary.total,
+              },
+              {
+                hint: `${t("summary.negative")}: ${controller.summary.withNegativeTransitions}`,
+                label: t("summary.available"),
+                value: controller.summary.available,
+                tone: "technical",
+              },
+              {
+                hint: `${t("summary.failed")}: ${controller.summary.generationFailed}`,
+                label: t("summary.partial"),
+                value: controller.summary.partial,
+                tone: controller.summary.partial ? "warning" : "default",
+              },
+              {
+                label: t("summary.cost"),
+                value: `$${(
+                  controller.summary.executionCostUsd +
+                  controller.summary.gradingCostUsd
+                ).toFixed(4)}`,
+                tone: "technical",
+              },
+            ]}
+          />
+        }
+        title={t("header.title")}
+      />
 
-      <section className="shrink-0 border-b border-foreground bg-paper-muted/35 px-5 py-3">
+      <section className="shrink-0 border-b border-border-strong bg-paper-muted/35 px-5 py-3">
         <div className="flex flex-wrap items-center gap-2">
           <select
             aria-label={t("filters.reportType")}
-            className="h-8 border border-rule bg-background px-2 font-mono text-[9px]"
+            className="h-9 border border-border-default bg-background px-2 font-mono text-xs"
             onChange={(event) =>
               controller.actions.updateFilters({
                 reportType: event.target.value as "" | TestReportType,
@@ -153,7 +156,7 @@ export function TestReportsWorkbenchView({
           </select>
           <select
             aria-label={t("filters.reportStatus")}
-            className="h-8 border border-rule bg-background px-2 font-mono text-[9px]"
+            className="h-9 border border-border-default bg-background px-2 font-mono text-xs"
             onChange={(event) =>
               controller.actions.updateFilters({
                 status: event.target.value as "" | TestReportStatus,
@@ -176,7 +179,7 @@ export function TestReportsWorkbenchView({
           </select>
           <select
             aria-label={t("filters.runStatus")}
-            className="h-8 border border-rule bg-background px-2 font-mono text-[9px]"
+            className="h-9 border border-border-default bg-background px-2 font-mono text-xs"
             onChange={(event) =>
               controller.actions.updateFilters({
                 runStatus: event.target.value as "" | TestReportRunStatus,
@@ -191,96 +194,107 @@ export function TestReportsWorkbenchView({
                   {t(`runStatus.${status}`)}
                 </option>
               ),
-            )}
-          </select>
-          <select
-            aria-label={t("filters.comparability")}
-            className="h-8 border border-rule bg-background px-2 font-mono text-[9px]"
-            onChange={(event) =>
-              controller.actions.updateFilters({
-                comparability: event.target.value as
-                  | ""
-                  | TestReportComparability,
-              })
-            }
-            value={controller.filters.comparability}
+              )}
+            </select>
+          <details
+            className="group basis-full lg:basis-auto"
+            onToggle={(event) => setFiltersExpanded(event.currentTarget.open)}
+            open={filtersExpanded}
           >
-            <option value="">{t("filters.allComparability")}</option>
-            {([
-              "COMPARABLE",
-              "COMPARABLE_WITH_LIMITATIONS",
-              "NOT_COMPARABLE",
-              "UNKNOWN_LEGACY",
-            ] as const).map((status) => (
-              <option key={status} value={status}>
-                {t(`comparability.${status}`)}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label={t("filters.analysisStatus")}
-            className="h-8 border border-rule bg-background px-2 font-mono text-[9px]"
-            onChange={(event) =>
-              controller.actions.updateFilters({
-                analysisStatus: event.target.value as
-                  | ""
-                  | TestReportAnalysisSummaryStatus,
-              })
-            }
-            value={controller.filters.analysisStatus}
-          >
-            <option value="">{t("filters.allAnalysisStatuses")}</option>
-            {([
-              "NOT_REQUESTED",
-              "PENDING",
-              "RUNNING",
-              "AVAILABLE",
-              "FAILED",
-            ] as const).map((status) => (
-              <option key={status} value={status}>
-                {t(`analysis.status.${status}`)}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label={t("filters.changes")}
-            className="h-8 border border-rule bg-background px-2 font-mono text-[9px]"
-            onChange={(event) =>
-              controller.actions.updateFilters({
-                hasNegativeTransition: event.target.value as
-                  | ""
-                  | "true"
-                  | "false",
-              })
-            }
-            value={controller.filters.hasNegativeTransition}
-          >
-            <option value="">{t("filters.allChanges")}</option>
-            <option value="true">{t("filters.hasNegative")}</option>
-            <option value="false">{t("filters.noNegative")}</option>
-          </select>
-          <select
-            aria-label={t("filters.sort")}
-            className="h-8 border border-rule bg-background px-2 font-mono text-[9px]"
-            onChange={(event) =>
-              controller.actions.updateFilters({
-                sort: event.target.value as typeof controller.filters.sort,
-              })
-            }
-            value={controller.filters.sort}
-          >
-            {([
-              "completedAt",
-              "issueCount",
-              "passRate",
-              "cost",
-              "duration",
-            ] as const).map((sort) => (
-              <option key={sort} value={sort}>
-                {t(`filters.sortOptions.${sort}`)}
-              </option>
-            ))}
-          </select>
+            <summary className="inline-flex h-9 cursor-pointer list-none items-center border border-border-default bg-background px-3 font-mono text-xs font-semibold marker:hidden hover:bg-accent">
+              {t(filtersExpanded ? "filters.less" : "filters.more")}
+            </summary>
+            <div className="mt-2 flex flex-wrap items-center gap-2 lg:mt-0 lg:inline-flex">
+              <select
+                aria-label={t("filters.comparability")}
+                className="h-9 border border-border-default bg-background px-2 font-mono text-xs"
+                onChange={(event) =>
+                  controller.actions.updateFilters({
+                    comparability: event.target.value as
+                      | ""
+                      | TestReportComparability,
+                  })
+                }
+                value={controller.filters.comparability}
+              >
+                <option value="">{t("filters.allComparability")}</option>
+                {([
+                  "COMPARABLE",
+                  "COMPARABLE_WITH_LIMITATIONS",
+                  "NOT_COMPARABLE",
+                  "UNKNOWN_LEGACY",
+                ] as const).map((status) => (
+                  <option key={status} value={status}>
+                    {t(`comparability.${status}`)}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label={t("filters.analysisStatus")}
+                className="h-9 border border-border-default bg-background px-2 font-mono text-xs"
+                onChange={(event) =>
+                  controller.actions.updateFilters({
+                    analysisStatus: event.target.value as
+                      | ""
+                      | TestReportAnalysisSummaryStatus,
+                  })
+                }
+                value={controller.filters.analysisStatus}
+              >
+                <option value="">{t("filters.allAnalysisStatuses")}</option>
+                {([
+                  "NOT_REQUESTED",
+                  "PENDING",
+                  "RUNNING",
+                  "AVAILABLE",
+                  "FAILED",
+                ] as const).map((status) => (
+                  <option key={status} value={status}>
+                    {t(`analysis.status.${status}`)}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label={t("filters.changes")}
+                className="h-9 border border-border-default bg-background px-2 font-mono text-xs"
+                onChange={(event) =>
+                  controller.actions.updateFilters({
+                    hasNegativeTransition: event.target.value as
+                      | ""
+                      | "true"
+                      | "false",
+                  })
+                }
+                value={controller.filters.hasNegativeTransition}
+              >
+                <option value="">{t("filters.allChanges")}</option>
+                <option value="true">{t("filters.hasNegative")}</option>
+                <option value="false">{t("filters.noNegative")}</option>
+              </select>
+              <select
+                aria-label={t("filters.sort")}
+                className="h-9 border border-border-default bg-background px-2 font-mono text-xs"
+                onChange={(event) =>
+                  controller.actions.updateFilters({
+                    sort: event.target.value as typeof controller.filters.sort,
+                  })
+                }
+                value={controller.filters.sort}
+              >
+                {([
+                  "completedAt",
+                  "issueCount",
+                  "passRate",
+                  "cost",
+                  "duration",
+                ] as const).map((sort) => (
+                  <option key={sort} value={sort}>
+                    {t(`filters.sortOptions.${sort}`)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </details>
           <Button
             className="rounded-none"
             disabled={!filtersActive}
@@ -296,22 +310,18 @@ export function TestReportsWorkbenchView({
       </section>
 
       {controller.reports.length === 0 ? (
-        <section className="flex min-h-0 flex-1 items-center justify-center p-8 text-center">
-          <div className="max-w-md border border-dashed border-rule px-8 py-10">
-            <FileText className="mx-auto size-9 text-technical" />
-            <h2 className="mt-4 text-lg font-[760]">
-              {t(filtersActive ? "empty.filteredTitle" : "empty.title")}
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {t(filtersActive ? "empty.filteredDescription" : "empty.description")}
-            </p>
-          </div>
-        </section>
+        <EmptyState
+          description={t(
+            filtersActive ? "empty.filteredDescription" : "empty.description",
+          )}
+          icon={FileText}
+          title={t(filtersActive ? "empty.filteredTitle" : "empty.title")}
+        />
       ) : (
         <div className="min-h-0 flex-1 overflow-auto">
-          <table className="w-full min-w-[88rem] border-collapse text-left">
+          <table className="w-full min-w-[64rem] border-collapse text-left">
             <thead className="sticky top-0 z-10 bg-paper-muted">
-              <tr className="border-b border-foreground">
+              <tr className="border-b border-border-strong">
                 {([
                   "report",
                   "type",
@@ -326,8 +336,9 @@ export function TestReportsWorkbenchView({
                   "actions",
                 ] as const).map((column) => (
                   <th
-                    className="px-4 py-3 font-mono text-[9px] font-bold tracking-[0.06em] text-muted-foreground uppercase"
+                    className="px-4 py-3 font-mono text-[11px] leading-4 font-bold tracking-[0.06em] text-muted-foreground uppercase"
                     key={column}
+                    scope="col"
                   >
                     {t(`list.columns.${column}`)}
                   </th>
@@ -337,46 +348,46 @@ export function TestReportsWorkbenchView({
             <tbody>
               {controller.reports.map((report) => (
                 <tr
-                  className="border-b border-rule-soft hover:bg-paper-muted/45"
+                  className="border-b border-border-subtle hover:bg-paper-muted/45"
                   key={report.id}
                 >
                   <td className="px-4 py-3.5">
                     <strong className="block max-w-60 text-xs">
                       {report.baselineLabel} → {report.targetLabel}
                     </strong>
-                    <span className="mt-1 block font-mono text-[8px] text-muted-foreground">
+                    <span className="ui-meta mt-1 block">
                       {report.id.slice(0, 8)}
                     </span>
                   </td>
-                  <td className="px-4 py-3.5 font-mono text-[9px] font-bold">
+                  <td className="px-4 py-3.5 font-mono text-xs font-bold">
                     {t(`type.${report.reportType}`)}
                   </td>
                   <td className="px-4 py-3.5">
                     <TestReportStatusBadge status={report.status} />
-                    <span className="mt-1 block font-mono text-[8px] text-muted-foreground">
+                    <span className="ui-meta mt-1 block">
                       {t(`runStatus.${report.runStatus}`)}
                     </span>
                   </td>
-                  <td className="px-4 py-3.5 text-[11px]">
+                  <td className="px-4 py-3.5 text-[13px] leading-5">
                     <span className="block">← {report.baselineLabel}</span>
                     <span className="mt-1 block">→ {report.targetLabel}</span>
-                    <span className="mt-1 block font-mono text-[8px] text-muted-foreground">
+                    <span className="ui-meta mt-1 block">
                       {report.comparabilityStatus
                         ? t(`comparability.${report.comparabilityStatus}`)
                         : "—"}
                     </span>
                   </td>
-                  <td className="px-4 py-3.5 font-mono text-[10px]">
+                  <td className="px-4 py-3.5 font-mono text-xs">
                     <strong className="block">
                       {formatRate(report.primaryPassRate)}
                     </strong>
-                    <span className="mt-1 block text-[8px] text-muted-foreground">
+                    <span className="ui-meta mt-1 block">
                       {t("list.coverage", {
                         value: formatRate(report.assessmentCoverageRate),
                       })}
                     </span>
                   </td>
-                  <td className="px-4 py-3.5 font-mono text-[9px]">
+                  <td className="px-4 py-3.5 font-mono text-xs">
                     <span className="text-status-passed">
                       +{report.positiveTransitionCount}
                     </span>{" "}
@@ -388,10 +399,10 @@ export function TestReportsWorkbenchView({
                       {t("list.issues", { count: report.issueCount })}
                     </span>
                   </td>
-                  <td className="px-4 py-3.5 font-mono text-[9px]">
+                  <td className="px-4 py-3.5 font-mono text-xs">
                     {t(`analysis.status.${report.analysisStatus}`)}
                   </td>
-                  <td className="px-4 py-3.5 font-mono text-[9px]">
+                  <td className="px-4 py-3.5 font-mono text-xs">
                     <strong className="block">
                       ${report.totalCostUsd.toFixed(4)}
                     </strong>
@@ -399,10 +410,10 @@ export function TestReportsWorkbenchView({
                       {formatDuration(report.wallClockDurationMs)}
                     </span>
                   </td>
-                  <td className="px-4 py-3.5 font-mono text-[9px]">
+                  <td className="px-4 py-3.5 font-mono text-xs">
                     R{report.evalRevisionNumber} · {report.evalCount}
                   </td>
-                  <td className="px-4 py-3.5 font-mono text-[9px]">
+                  <td className="px-4 py-3.5 font-mono text-xs">
                     {report.completedAt
                       ? new Intl.DateTimeFormat(locale, {
                           year: "numeric",
@@ -436,8 +447,8 @@ export function TestReportsWorkbenchView({
         </div>
       )}
 
-      <footer className="flex shrink-0 items-center justify-between border-t border-foreground bg-paper-muted px-5 py-3">
-        <span className="font-mono text-[10px] text-muted-foreground">
+      <footer className="flex shrink-0 items-center justify-between border-t border-border-strong bg-surface-muted px-5 py-3">
+        <span className="ui-meta">
           {t("list.total", { count: controller.pagination.total })}
         </span>
         <div className="flex items-center gap-2">
@@ -456,7 +467,7 @@ export function TestReportsWorkbenchView({
           >
             <ChevronLeft />
           </Button>
-          <span className="min-w-24 text-center font-mono text-[10px]">
+          <span className="ui-meta min-w-24 text-center">
             {t("list.page", {
               page:
                 controller.pagination.pageCount === 0
