@@ -631,8 +631,8 @@ function AnalysisLogsPanel({
   return (
     <details
       className="shrink-0 border-t border-foreground bg-[#101414] text-white"
-      defaultOpen={!available}
       key={`${analysisId}:${available ? "available" : "active"}`}
+      open={!available}
     >
       <summary className="flex cursor-pointer items-center justify-between gap-3 border-b border-white/15 px-4 py-2 font-mono text-[9px] font-bold uppercase">
         <span>{t("analysis.logs.title")}</span>

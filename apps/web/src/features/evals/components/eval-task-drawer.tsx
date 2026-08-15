@@ -7,6 +7,7 @@ import {
   Square,
 } from "lucide-react"
 import type { TFunction } from "i18next"
+import { useState } from "react"
 import { Link } from "react-router-dom"
 
 import {
@@ -20,6 +21,7 @@ import {
   type EvalGenerationTask,
 } from "@/features/evals/model/evals"
 import { Button } from "@/shared/components/ui/button"
+import { ConfirmationDialog } from "@/shared/components/confirmation-dialog"
 import {
   Dialog,
   DialogContent,
@@ -30,6 +32,14 @@ import {
 import { cn } from "@/shared/lib/utils"
 
 type DrawerTab = "process" | "result"
+
+type PendingConfirmation = {
+  readonly title: string
+  readonly description: string
+  readonly confirmLabel: string
+  readonly confirmVariant: "default" | "destructive"
+  readonly onConfirm: () => Promise<unknown>
+}
 
 interface TargetOption {
   readonly key: string
@@ -197,9 +207,13 @@ export function EvalTaskDrawer({
 }) {
   const canOpenResult = Boolean(task?.draftId)
   const active = task ? isActiveEvalGeneration(task.status) : false
+  const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(
+    null,
+  )
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
+    <>
+      <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent
         className="top-0 right-0 bottom-0 left-auto flex h-dvh w-[min(62rem,92vw)] max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-y-0 border-r-0 border-l border-foreground bg-background p-0 shadow-2xl sm:max-w-none"
         showCloseButton
@@ -356,9 +370,13 @@ export function EvalTaskDrawer({
                       className="rounded-none"
                       disabled={pending}
                       onClick={() => {
-                        if (window.confirm(t("save.discardConfirm"))) {
-                          void onDiscard(task.id).catch(() => undefined)
-                        }
+                        setConfirmation({
+                          title: t("save.discardTitle"),
+                          description: t("save.discardConfirm"),
+                          confirmLabel: t("save.discard"),
+                          confirmVariant: "destructive",
+                          onConfirm: () => onDiscard(task.id),
+                        })
                       }}
                       type="button"
                       variant="outline"
@@ -370,9 +388,13 @@ export function EvalTaskDrawer({
                       className="rounded-none"
                       disabled={pending}
                       onClick={() => {
-                        if (window.confirm(t("save.confirm"))) {
-                          void onSave(task.id).catch(() => undefined)
-                        }
+                        setConfirmation({
+                          title: t("save.confirmTitle"),
+                          description: t("save.confirm"),
+                          confirmLabel: t("save.action"),
+                          confirmVariant: "default",
+                          onConfirm: () => onSave(task.id),
+                        })
                       }}
                       type="button"
                     >
@@ -390,6 +412,19 @@ export function EvalTaskDrawer({
           </div>
         )}
       </DialogContent>
-    </Dialog>
+      </Dialog>
+      <ConfirmationDialog
+        cancelLabel={t("controls.cancel")}
+        confirmLabel={confirmation?.confirmLabel ?? ""}
+        confirmVariant={confirmation?.confirmVariant}
+        description={confirmation?.description ?? ""}
+        onConfirm={() => confirmation?.onConfirm()}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setConfirmation(null)
+        }}
+        open={Boolean(confirmation)}
+        title={confirmation?.title ?? ""}
+      />
+    </>
   )
 }

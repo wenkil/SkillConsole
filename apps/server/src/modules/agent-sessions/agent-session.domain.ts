@@ -220,6 +220,7 @@ export interface OpenAgentRuntimeSessionInput {
   readonly tools?: readonly string[]
   readonly allowedTools?: readonly string[]
   readonly disallowedTools?: readonly string[]
+  readonly canUseTool?: CanUseTool
   readonly skills?: readonly string[]
   readonly environment?: Readonly<Record<string, string | undefined>>
   readonly protectedEnvironmentNames?: readonly string[]
@@ -252,6 +253,7 @@ export interface AgentRuntimeAdapter {
   ) => AgentRuntimeSession
 }
 import type {
+  CanUseTool,
   PermissionMode,
   SDKMessage,
   SessionStore,

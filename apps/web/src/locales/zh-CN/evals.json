@@ -150,9 +150,11 @@
     "cases": "用例",
     "files": "文件",
     "action": "保存此份测试用例",
+    "confirmTitle": "确认保存测试用例",
     "runTest": "使用此份测试用例运行测试",
     "confirm": "保存后该 Evals 修订不可修改。确认已审阅所有用例并保存？",
     "discard": "丢弃此草稿",
+    "discardTitle": "确认丢弃草稿",
     "discardConfirm": "丢弃后不能保存此份测试用例，但任务记录仍会保留。确认丢弃？",
     "status": {
       "PUBLISHED": "已保存为测试用例修订",

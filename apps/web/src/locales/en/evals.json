@@ -150,9 +150,11 @@
     "cases": "Cases",
     "files": "Files",
     "action": "Save this test case set",
+    "confirmTitle": "Save test cases",
     "runTest": "Run tests with this test case set",
     "confirm": "Saved Evals revisions cannot be changed. Confirm that every case has been reviewed and that you want to save this test case set?",
     "discard": "Discard this draft",
+    "discardTitle": "Discard draft",
     "discardConfirm": "A discarded draft cannot be saved, but its task record remains. Discard it?",
     "status": {
       "PUBLISHED": "Saved as a test case revision",

@@ -7,6 +7,7 @@ import {
   Square,
 } from "lucide-react"
 import type { TFunction } from "i18next"
+import { useState } from "react"
 
 import type {
   EvalGenerationDraft,
@@ -14,6 +15,15 @@ import type {
   EvalRevision,
 } from "@/features/evals/model/evals"
 import { Button } from "@/shared/components/ui/button"
+import { ConfirmationDialog } from "@/shared/components/confirmation-dialog"
+
+type PendingConfirmation = {
+  readonly title: string
+  readonly description: string
+  readonly confirmLabel: string
+  readonly confirmVariant: "default" | "destructive"
+  readonly onConfirm: () => void
+}
 
 export function EvalControlPanel({
   activeTask,
@@ -52,14 +62,18 @@ export function EvalControlPanel({
   onBriefChange: (brief: string) => void
   onStart: () => void
   onCancel: (taskId: string) => void
-  onSave: (taskId: string) => void
-  onDiscard: (taskId: string) => void
+  onSave: (taskId: string) => Promise<unknown>
+  onDiscard: (taskId: string) => Promise<unknown>
   t: TFunction<"evals">
 }) {
   const canSave = draft?.status === "READY" && selectedTask
+  const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(
+    null,
+  )
 
   return (
-    <aside className="min-h-0 overflow-y-auto border-l border-foreground bg-sidebar p-4">
+    <>
+      <aside className="min-h-0 overflow-y-auto border-l border-foreground bg-sidebar p-4">
       <section className="border border-foreground bg-paper-raised">
         <div className="border-b border-rule-soft px-4 py-3">
           <div className="technical-heading text-[10px] text-signal-dark">
@@ -189,12 +203,14 @@ export function EvalControlPanel({
                     className="w-full rounded-none"
                     disabled={pending || !canSave}
                     onClick={() => {
-                      if (
-                        selectedTask &&
-                        window.confirm(t("save.confirm"))
-                      ) {
-                        onSave(selectedTask.id)
-                      }
+                      if (!selectedTask) return
+                      setConfirmation({
+                        title: t("save.confirmTitle"),
+                        description: t("save.confirm"),
+                        confirmLabel: t("save.action"),
+                        confirmVariant: "default",
+                        onConfirm: () => onSave(selectedTask.id),
+                      })
                     }}
                     type="button"
                   >
@@ -205,12 +221,14 @@ export function EvalControlPanel({
                     className="w-full rounded-none"
                     disabled={pending || !selectedTask}
                     onClick={() => {
-                      if (
-                        selectedTask &&
-                        window.confirm(t("save.discardConfirm"))
-                      ) {
-                        onDiscard(selectedTask.id)
-                      }
+                      if (!selectedTask) return
+                      setConfirmation({
+                        title: t("save.discardTitle"),
+                        description: t("save.discardConfirm"),
+                        confirmLabel: t("save.discard"),
+                        confirmVariant: "destructive",
+                        onConfirm: () => onDiscard(selectedTask.id),
+                      })
                     }}
                     type="button"
                     variant="outline"
@@ -277,6 +295,19 @@ export function EvalControlPanel({
           )}
         </div>
       </section>
-    </aside>
+      </aside>
+      <ConfirmationDialog
+        cancelLabel={t("controls.cancel")}
+        confirmLabel={confirmation?.confirmLabel ?? ""}
+        confirmVariant={confirmation?.confirmVariant}
+        description={confirmation?.description ?? ""}
+        onConfirm={() => confirmation?.onConfirm()}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setConfirmation(null)
+        }}
+        open={Boolean(confirmation)}
+        title={confirmation?.title ?? ""}
+      />
+    </>
   )
 }

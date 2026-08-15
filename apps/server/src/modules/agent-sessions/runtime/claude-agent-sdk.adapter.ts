@@ -182,6 +182,7 @@ class ClaudeAgentSdkSession implements AgentRuntimeSession {
         ...(input.disallowedTools
           ? { disallowedTools: [...input.disallowedTools] }
           : {}),
+        ...(input.canUseTool ? { canUseTool: input.canUseTool } : {}),
         ...(input.skills ? { skills: [...input.skills] } : {}),
         ...(input.resumeSessionId
           ? { resume: input.resumeSessionId }

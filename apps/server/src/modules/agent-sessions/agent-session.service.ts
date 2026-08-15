@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto"
 
+import type { CanUseTool } from "@anthropic-ai/claude-agent-sdk"
+
 import type { Database } from "../../infrastructure/database/index.js"
 import type {
   AgentRuntimeAdapter,
@@ -53,6 +55,7 @@ export interface CreateAgentSessionInWorkspaceInput {
   readonly tools?: readonly string[]
   readonly allowedTools?: readonly string[]
   readonly disallowedTools?: readonly string[]
+  readonly canUseTool?: CanUseTool
   readonly skills?: readonly string[]
   readonly environment?: Readonly<Record<string, string | undefined>>
   readonly protectedEnvironmentNames?: readonly string[]
@@ -161,6 +164,7 @@ export class AgentSessionService {
         ...(input.disallowedTools
           ? { disallowedTools: input.disallowedTools }
           : {}),
+        ...(input.canUseTool ? { canUseTool: input.canUseTool } : {}),
         ...(input.skills ? { skills: input.skills } : {}),
         ...(input.environment ? { environment: input.environment } : {}),
         ...(input.protectedEnvironmentNames
@@ -359,6 +363,7 @@ export class AgentSessionService {
     readonly tools?: readonly string[]
     readonly allowedTools?: readonly string[]
     readonly disallowedTools?: readonly string[]
+    readonly canUseTool?: CanUseTool
     readonly skills?: readonly string[]
     readonly environment?: Readonly<Record<string, string | undefined>>
     readonly protectedEnvironmentNames?: readonly string[]
@@ -396,6 +401,7 @@ export class AgentSessionService {
       ...(input.disallowedTools
         ? { disallowedTools: input.disallowedTools }
         : {}),
+      ...(input.canUseTool ? { canUseTool: input.canUseTool } : {}),
       ...(input.skills ? { skills: input.skills } : {}),
       ...(input.environment ? { environment: input.environment } : {}),
       ...(input.protectedEnvironmentNames
@@ -508,6 +514,7 @@ export class AgentSessionService {
     readonly tools?: readonly string[]
     readonly allowedTools?: readonly string[]
     readonly disallowedTools?: readonly string[]
+    readonly canUseTool?: CanUseTool
     readonly skills?: readonly string[]
     readonly environment?: Readonly<Record<string, string | undefined>>
     readonly protectedEnvironmentNames?: readonly string[]
@@ -545,6 +552,7 @@ export class AgentSessionService {
         ...(input.disallowedTools
           ? { disallowedTools: input.disallowedTools }
           : {}),
+        ...(input.canUseTool ? { canUseTool: input.canUseTool } : {}),
         ...(input.skills ? { skills: input.skills } : {}),
         ...(input.environment ? { environment: input.environment } : {}),
         ...(input.protectedEnvironmentNames

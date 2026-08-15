@@ -30,6 +30,7 @@ import {
   resolveEvidenceAnchors,
   TestRunGraderProtocolError,
 } from "./test-run-grader-protocol.js"
+import { createTestRunExecutionPermissionPolicy } from "./test-run-execution-permission.js"
 import {
   buildExecutionPrompt,
   buildGraderPrompt,
@@ -1101,6 +1102,9 @@ export class TestRunService {
         environment: caseRuntimeEnvironment.values,
         protectedEnvironmentNames:
           caseRuntimeEnvironment.protectedNames,
+        canUseTool: createTestRunExecutionPermissionPolicy(
+          workspace.absolutePath,
+        ),
         additionalRedactedValues: [
           workspace.taskPath,
           ...caseRuntimeEnvironment.sensitiveValues,
