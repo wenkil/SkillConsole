@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import {
+  mkdir,
   mkdtemp,
   readFile,
   rm,
@@ -693,6 +694,29 @@ test("copies root Claude settings into an isolated session workspace once", asyn
     assert.equal(
       await readFile(copiedSettingsPath, "utf8"),
       sourceSettings,
+    )
+  } finally {
+    await rm(dataRoot, { recursive: true, force: true })
+  }
+})
+
+test("creates the Claude settings directory for a prepared external workspace", async () => {
+  const dataRoot = await mkdtemp(
+    path.join(tmpdir(), "skillconsole-agent-external-workspace-"),
+  )
+  const sourceSettingsPath = path.join(dataRoot, "root-settings.json")
+  const workspacePath = path.join(dataRoot, "eval-generations", "task", "workspace")
+
+  try {
+    await writeFile(sourceSettingsPath, '{"env":{"TOKEN":"value"}}', "utf8")
+    await mkdir(workspacePath, { recursive: true })
+    const store = new AgentSessionWorkspaceStore(dataRoot, sourceSettingsPath)
+
+    await store.installSettings(workspacePath)
+
+    assert.equal(
+      await readFile(path.join(workspacePath, ".claude", "settings.json"), "utf8"),
+      '{"env":{"TOKEN":"value"}}',
     )
   } finally {
     await rm(dataRoot, { recursive: true, force: true })

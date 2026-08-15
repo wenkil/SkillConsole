@@ -156,6 +156,7 @@ export class AgentSessionWorkspaceStore {
     const destination = this.getWorkspaceSettingsPath(absoluteWorkspacePath)
 
     try {
+      await mkdir(path.dirname(destination), { recursive: true })
       await copyFile(
         this.claudeSettingsPath,
         destination,
