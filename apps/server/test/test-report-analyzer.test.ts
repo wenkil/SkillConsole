@@ -205,8 +205,6 @@ function createReport(): StructuredTestReportV1 {
     traceability: {
       protocolVersion: "skill-test-run-v2",
       sdkVersion: "0.3.220",
-      skillCreatorCommit: "a".repeat(40),
-      skillCreatorTreeHash: "b".repeat(64),
       configurationFingerprint: "c".repeat(64),
       evalManifestHash: "c".repeat(64),
       semanticConfigurationFingerprint: "d".repeat(64),
@@ -1071,7 +1069,7 @@ test("Analyzer accepts project-settings tools, Skills, MCP, and tool use", async
   const harness = await createHarness({
     output: validOutput,
     initializedTools: ["Read"],
-    initializedSkills: ["skill-creator"],
+    initializedSkills: [],
     initializedMcpServers: ["filesystem"],
     includeToolUse: true,
   })

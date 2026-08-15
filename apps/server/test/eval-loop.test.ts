@@ -58,8 +58,8 @@ class EvalsFakeRuntime implements AgentRuntimeSession {
       type: "initialized",
       sdkSessionId: this.sdkSessionId,
       model: "claude-fake-evals",
-      tools: ["Read", "Write", "Edit", "Skill", "Bash"],
-      skills: ["skill-creator"],
+      tools: ["Read", "Write", "Edit"],
+      skills: [],
       mcpServers: [],
     })
     const outputRoot = path.join(this.input.cwd, "output")

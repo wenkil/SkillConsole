@@ -235,8 +235,6 @@ export const TestRunTraceabilitySchema = Type.Object(
   {
     protocolVersion: Type.String({ minLength: 1 }),
     sdkVersion: Type.String({ minLength: 1 }),
-    skillCreatorCommit: Type.String({ pattern: "^[0-9a-f]{40}$" }),
-    skillCreatorTreeHash: HashSchema,
     configurationFingerprint: HashSchema,
     semanticConfigurationFingerprint: HashSchema,
     executionSettingsFingerprint: HashSchema,

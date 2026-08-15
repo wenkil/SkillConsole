@@ -49,8 +49,6 @@ interface CreateTaskInput {
   readonly maxEvalCount: number
   readonly generationBrief: string | null
   readonly promptContractVersion: string
-  readonly skillCreatorCommit: string
-  readonly skillCreatorTreeHash: string
   readonly configurationFingerprint: string
   readonly idempotencyKey: string
   readonly requestHash: string
@@ -158,8 +156,6 @@ export class EvalGenerationRepository {
             maxEvalCount: input.maxEvalCount,
             generationBrief: input.generationBrief,
             promptContractVersion: input.promptContractVersion,
-            skillCreatorCommit: input.skillCreatorCommit,
-            skillCreatorTreeHash: input.skillCreatorTreeHash,
             configurationFingerprint: input.configurationFingerprint,
             idempotencyKey: input.idempotencyKey,
             requestHash: input.requestHash,

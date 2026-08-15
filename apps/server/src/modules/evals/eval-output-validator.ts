@@ -48,8 +48,6 @@ export interface EvalOutputProvenance {
   readonly taskId: string
   readonly targetSnapshotId: string
   readonly promptContractVersion: string
-  readonly skillCreatorCommit: string
-  readonly skillCreatorTreeHash: string
   readonly configurationFingerprint: string
 }
 
@@ -337,7 +335,7 @@ export class EvalOutputValidator {
       parsed.skill_name !== input.skillName ||
       !Array.isArray(parsed.evals) ||
       parsed.evals.length < 1 ||
-      parsed.evals.length > input.maxEvalCount ||
+      parsed.evals.length !== input.maxEvalCount ||
       parsed.evals.length > 20
     ) {
       throw validationError(

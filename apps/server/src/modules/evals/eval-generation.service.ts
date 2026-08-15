@@ -38,7 +38,6 @@ const evalGenerationRuntimePolicy = {
     "TaskUpdate",
     "SendMessage",
   ] as const,
-  skills: ["skill-creator"] as const,
 }
 
 const agentEventTypes: Partial<
@@ -172,7 +171,7 @@ export class EvalGenerationService {
       maxEvalCount: input.maxEvalCount,
       generationBrief: input.generationBrief,
       promptContractVersion: systemPrompt.version,
-      ...provenance,
+      configurationFingerprint: provenance.configurationFingerprint,
       idempotencyKey: input.idempotencyKey,
       requestHash,
     })
@@ -431,12 +430,6 @@ export class EvalGenerationService {
             maxEvalCount: task.maxEvalCount,
             generationBrief: task.generationBrief,
           },
-          {
-            skillCreatorCommit: task.skillCreatorCommit,
-            skillCreatorTreeHash: task.skillCreatorTreeHash,
-            configurationFingerprint:
-              task.configurationFingerprint,
-          },
         )
         const validated = await this.validator.validate({
           generationId: taskId,
@@ -447,8 +440,6 @@ export class EvalGenerationService {
             taskId,
             targetSnapshotId: task.targetSnapshotId,
             promptContractVersion: task.promptContractVersion,
-            skillCreatorCommit: task.skillCreatorCommit,
-            skillCreatorTreeHash: task.skillCreatorTreeHash,
             configurationFingerprint:
               task.configurationFingerprint,
           },

@@ -2,7 +2,7 @@
   "header": {
     "eyebrow": "EVALS GENERATION LOOP · 生成闭环",
     "title": "测试用例生成工作台",
-    "description": "为「{{name}}」冻结一个 Skill 目标，由 Claude 与固定版本 skill-creator 生成用例；校验通过后先人工审阅，再保存为不可变修订。",
+    "description": "为「{{name}}」冻结一个 Skill 目标，由 Claude 生成用例；校验通过后先人工审阅，再保存为不可变修订。",
     "metrics": {
       "tasks": "生成任务",
       "review": "待审阅",
@@ -135,7 +135,7 @@
     "count": "最多生成用例数",
     "brief": "补充要求",
     "briefPlaceholder": "例如：重点覆盖扫描件、字段缺失和多币种边界；不需要重复正常路径。",
-    "freezeHint": "启动时会冻结当前目标，并把 Skill、skill-creator 与 Claude 配置复制到隔离工作区。源文件不会被写回。",
+    "freezeHint": "启动时会冻结当前目标，并把 Skill 与 Claude 配置复制到隔离工作区。源文件不会被写回。",
     "start": "生成 Evals 草稿",
     "cancel": "取消当前生成"
   },

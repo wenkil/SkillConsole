@@ -2,7 +2,7 @@
   "header": {
     "eyebrow": "EVALS GENERATION LOOP",
     "title": "Test case generation workbench",
-    "description": "Freeze a Skill target for “{{name}}”, generate cases with Claude and a pinned skill-creator, then review the validated draft before saving an immutable revision.",
+    "description": "Freeze a Skill target for “{{name}}”, generate cases with Claude, then review the validated draft before saving an immutable revision.",
     "metrics": {
       "tasks": "Tasks",
       "review": "Awaiting review",
@@ -135,7 +135,7 @@
     "count": "Maximum cases",
     "brief": "Additional requirements",
     "briefPlaceholder": "For example: prioritize scanned documents, missing fields, and multi-currency boundaries.",
-    "freezeHint": "Starting freezes the selected target and copies the Skill, skill-creator, and Claude settings into an isolated workspace. Source files are never written back.",
+    "freezeHint": "Starting freezes the selected target and copies the Skill and Claude settings into an isolated workspace. Source files are never written back.",
     "start": "Generate Evals draft",
     "cancel": "Cancel generation"
   },

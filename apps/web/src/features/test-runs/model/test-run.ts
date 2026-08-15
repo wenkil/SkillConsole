@@ -143,8 +143,6 @@ export interface TestRunView {
   traceability: {
     protocolVersion: string
     sdkVersion: string
-    skillCreatorCommit: string
-    skillCreatorTreeHash: string
     configurationFingerprint: string
     semanticConfigurationFingerprint: string
     executionSettingsFingerprint: string

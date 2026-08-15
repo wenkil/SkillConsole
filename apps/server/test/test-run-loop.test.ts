@@ -116,7 +116,7 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
         sdkSessionId: this.sdkSessionId,
         model: "claude-fake-test-run",
         tools: ["Read", "Write", "Edit", "Skill", "Bash"],
-        skills: ["skill-creator"],
+        skills: [],
         mcpServers: [],
       })
 
@@ -1880,8 +1880,6 @@ test(
         executionPolicy: "target_then_no_skill_serial_v1",
         protocolVersion: "skill-test-run-v2",
         sdkVersion: "legacy-sdk",
-        skillCreatorCommit: "b".repeat(40),
-        skillCreatorTreeHash: legacyHash,
         configurationFingerprint: legacyHash,
         semanticConfigurationFingerprint: legacyHash,
         environmentFingerprint: legacyHash,

@@ -172,8 +172,6 @@ export const skillTestRuns = pgTable(
     executionPolicy: testRunExecutionPolicy("execution_policy").notNull(),
     protocolVersion: text("protocol_version").notNull(),
     sdkVersion: text("sdk_version").notNull(),
-    skillCreatorCommit: text("skill_creator_commit").notNull(),
-    skillCreatorTreeHash: text("skill_creator_tree_hash").notNull(),
     configurationFingerprint: text("configuration_fingerprint").notNull(),
     semanticConfigurationFingerprint: text(
       "semantic_configuration_fingerprint",
@@ -250,8 +248,7 @@ export const skillTestRuns = pgTable(
     ),
     check(
       "skill_test_runs_hashes_check",
-      sql`${table.skillCreatorTreeHash} ~ '^[0-9a-f]{64}$'
-        and ${table.configurationFingerprint} ~ '^[0-9a-f]{64}$'
+      sql`${table.configurationFingerprint} ~ '^[0-9a-f]{64}$'
         and ${table.semanticConfigurationFingerprint} ~ '^[0-9a-f]{64}$'
         and ${table.environmentFingerprint} ~ '^[0-9a-f]{64}$'
         and ${table.skillManifestHash} ~ '^[0-9a-f]{64}$'
@@ -261,10 +258,6 @@ export const skillTestRuns = pgTable(
         and ${table.comparabilityFingerprint} ~ '^[0-9a-f]{64}$'
         and ${table.runInputFingerprint} ~ '^[0-9a-f]{64}$'
         and ${table.requestHash} ~ '^[0-9a-f]{64}$'`,
-    ),
-    check(
-      "skill_test_runs_creator_commit_check",
-      sql`${table.skillCreatorCommit} ~ '^[0-9a-f]{40}$'`,
     ),
     check(
       "skill_test_runs_environment_snapshot_check",

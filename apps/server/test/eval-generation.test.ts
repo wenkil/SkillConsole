@@ -15,8 +15,6 @@ const provenance = {
   taskId: "00000000-0000-4000-8000-000000000001",
   targetSnapshotId: "00000000-0000-4000-8000-000000000002",
   promptContractVersion: "test-v1",
-  skillCreatorCommit: "a".repeat(40),
-  skillCreatorTreeHash: "b".repeat(64),
   configurationFingerprint: "c".repeat(64),
 } as const
 
@@ -66,10 +64,28 @@ test("validates and normalizes generated expectations", async () => {
       "utf8",
     )
 
+    await assert.rejects(
+      () =>
+        new EvalOutputValidator(storage).validate({
+          generationId,
+          skillName: "sample-skill",
+          maxEvalCount: 2,
+          sensitiveValues: [],
+          provenance,
+        }),
+      (error: unknown) =>
+        Boolean(
+          error &&
+            typeof error === "object" &&
+            "code" in error &&
+            error.code === "EVAL_OUTPUT_SCHEMA_INVALID",
+        ),
+    )
+
     const result = await new EvalOutputValidator(storage).validate({
       generationId,
       skillName: "sample-skill",
-      maxEvalCount: 3,
+      maxEvalCount: 1,
       sensitiveValues: [],
       provenance,
     })
@@ -118,7 +134,7 @@ test("rejects undeclared generated files", async () => {
         new EvalOutputValidator(storage).validate({
           generationId,
           skillName: "sample-skill",
-          maxEvalCount: 3,
+      maxEvalCount: 1,
           sensitiveValues: [],
           provenance,
         }),
@@ -164,7 +180,7 @@ test("rejects case-insensitive generated file path collisions", async () => {
         new EvalOutputValidator(storage).validate({
           generationId,
           skillName: "sample-skill",
-          maxEvalCount: 3,
+      maxEvalCount: 1,
           sensitiveValues: [],
           provenance,
         }),
@@ -220,7 +236,7 @@ test("detects Claude settings changes after workspace installation", async () =>
   })
 })
 
-test("verifies bundled skill-creator provenance before use", async () => {
+test("captures the generation configuration fingerprint", async () => {
   await withTempRoot(async (root) => {
     const settingsPath = path.join(root, "settings.json")
     await writeFile(settingsPath, '{"env":{"TOKEN":"secret"}}', "utf8")
@@ -232,14 +248,6 @@ test("verifies bundled skill-creator provenance before use", async () => {
       settingsPath,
     )
     const inspected = await preparer.inspectProvenance()
-    assert.equal(
-      inspected.skillCreatorCommit,
-      "b29e7cf65e5cb78a5ac33d582270551bc74a14eb",
-    )
-    assert.equal(
-      inspected.skillCreatorTreeHash,
-      "82538987d2e399537643460f98c2fc7e4d6632ccd08d83f7c0c5a6c99759f0b5",
-    )
     assert.match(inspected.configurationFingerprint, /^[0-9a-f]{64}$/)
   })
 })
@@ -323,7 +331,6 @@ test("rejects a target Skill copy changed during Agent execution", async () => {
             maxEvalCount: 3,
             generationBrief: null,
           },
-          inspected,
         ),
       (error: unknown) =>
         Boolean(

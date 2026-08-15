@@ -112,8 +112,6 @@ export const evalGenerationTasks = pgTable(
     maxEvalCount: integer("max_eval_count").notNull(),
     generationBrief: text("generation_brief"),
     promptContractVersion: text("prompt_contract_version").notNull(),
-    skillCreatorCommit: text("skill_creator_commit").notNull(),
-    skillCreatorTreeHash: text("skill_creator_tree_hash").notNull(),
     configurationFingerprint: text("configuration_fingerprint").notNull(),
     idempotencyKey: text("idempotency_key").notNull(),
     requestHash: text("request_hash").notNull(),
@@ -168,14 +166,6 @@ export const evalGenerationTasks = pgTable(
     check(
       "eval_generation_tasks_brief_check",
       sql`${table.generationBrief} is null or char_length(${table.generationBrief}) <= 4000`,
-    ),
-    check(
-      "eval_generation_tasks_commit_check",
-      sql`${table.skillCreatorCommit} ~ '^[0-9a-f]{40}$'`,
-    ),
-    check(
-      "eval_generation_tasks_tree_hash_check",
-      sql`${table.skillCreatorTreeHash} ~ '^[0-9a-f]{64}$'`,
     ),
     check(
       "eval_generation_tasks_config_hash_check",
@@ -339,8 +329,6 @@ export const evalRevisions = pgTable(
     fileCount: integer("file_count").notNull(),
     totalBytes: bigint("total_bytes", { mode: "number" }).notNull(),
     promptContractVersion: text("prompt_contract_version").notNull(),
-    skillCreatorCommit: text("skill_creator_commit").notNull(),
-    skillCreatorTreeHash: text("skill_creator_tree_hash").notNull(),
     configurationFingerprint: text("configuration_fingerprint").notNull(),
     createdAt: timestamp("created_at", {
       mode: "date",
@@ -374,12 +362,7 @@ export const evalRevisions = pgTable(
       "eval_revisions_hashes_check",
       sql`${table.manifestHash} ~ '^[0-9a-f]{64}$'
         and ${table.rawEvalsSha256} ~ '^[0-9a-f]{64}$'
-        and ${table.skillCreatorTreeHash} ~ '^[0-9a-f]{64}$'
         and ${table.configurationFingerprint} ~ '^[0-9a-f]{64}$'`,
-    ),
-    check(
-      "eval_revisions_commit_check",
-      sql`${table.skillCreatorCommit} ~ '^[0-9a-f]{40}$'`,
     ),
     check(
       "eval_revisions_counts_check",

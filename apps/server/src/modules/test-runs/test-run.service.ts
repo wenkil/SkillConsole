@@ -576,8 +576,6 @@ export class TestRunService {
       executionPromptVersion: executionSystemPrompt.version,
       graderProtocolVersion: graderSystemPrompt.version,
       toolPermissionPolicyVersion: projectSettingsPermissionPolicyVersion,
-      skillCreatorCommit: targetSelection.revision.skillCreatorCommit,
-      skillCreatorTreeHash: targetSelection.revision.skillCreatorTreeHash,
     })
     const runInputFingerprint = stableHash({
       comparabilityFingerprint,
@@ -635,8 +633,6 @@ export class TestRunService {
       traceability: {
         protocolVersion: testRunProtocolVersion,
         sdkVersion: claudeAgentSdkVersion,
-        skillCreatorCommit: targetSelection.revision.skillCreatorCommit,
-        skillCreatorTreeHash: targetSelection.revision.skillCreatorTreeHash,
         configurationFingerprint,
         semanticConfigurationFingerprint,
         executionSettingsFingerprint: configurationFingerprint,

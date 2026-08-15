@@ -66,8 +66,6 @@ export interface TestRunError {
 export interface TestRunTraceability {
   readonly protocolVersion: string
   readonly sdkVersion: string
-  readonly skillCreatorCommit: string
-  readonly skillCreatorTreeHash: string
   readonly configurationFingerprint: string
   readonly semanticConfigurationFingerprint: string
   readonly executionSettingsFingerprint: string

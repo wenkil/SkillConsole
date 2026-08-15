@@ -92,8 +92,6 @@ export interface FrozenTestRunSelection {
     readonly manifestHash: string
     readonly storageLocator: string
     readonly evalCount: number
-    readonly skillCreatorCommit: string
-    readonly skillCreatorTreeHash: string
   }
   readonly cases: readonly EvalRevisionCaseRow[]
   readonly files: readonly EvalRevisionFileRow[]
@@ -263,8 +261,6 @@ function mapRun(record: RunWithDisplay): TestRunView {
     traceability: {
       protocolVersion: run.protocolVersion,
       sdkVersion: run.sdkVersion,
-      skillCreatorCommit: run.skillCreatorCommit,
-      skillCreatorTreeHash: run.skillCreatorTreeHash,
       configurationFingerprint: run.configurationFingerprint,
       semanticConfigurationFingerprint:
         run.semanticConfigurationFingerprint,
@@ -535,8 +531,6 @@ export class TestRunRepository {
         manifestHash: revision.manifestHash,
         storageLocator: revision.storageLocator,
         evalCount: revision.evalCount,
-        skillCreatorCommit: revision.skillCreatorCommit,
-        skillCreatorTreeHash: revision.skillCreatorTreeHash,
       },
       cases,
       files,
@@ -675,8 +669,6 @@ export class TestRunRepository {
         manifestHash: evalRevisions.manifestHash,
         storageLocator: evalRevisions.storageLocator,
         evalCount: evalRevisions.evalCount,
-        skillCreatorCommit: evalRevisions.skillCreatorCommit,
-        skillCreatorTreeHash: evalRevisions.skillCreatorTreeHash,
       })
       .from(evalRevisions)
       .innerJoin(evalSuites, eq(evalSuites.id, evalRevisions.suiteId))
@@ -726,9 +718,6 @@ export class TestRunRepository {
           status: "PREPARING",
           protocolVersion: input.traceability.protocolVersion,
           sdkVersion: input.traceability.sdkVersion,
-          skillCreatorCommit: input.traceability.skillCreatorCommit,
-          skillCreatorTreeHash:
-            input.traceability.skillCreatorTreeHash,
           configurationFingerprint:
             input.traceability.configurationFingerprint,
           semanticConfigurationFingerprint:

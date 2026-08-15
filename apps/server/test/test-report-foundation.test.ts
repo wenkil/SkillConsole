@@ -189,8 +189,6 @@ function createRun(
     traceability: {
       protocolVersion: "protocol-v1",
       sdkVersion: "0.3.220",
-      skillCreatorCommit: "e".repeat(40),
-      skillCreatorTreeHash: hash,
       configurationFingerprint: hash,
       semanticConfigurationFingerprint: hash,
       executionSettingsFingerprint: hash,

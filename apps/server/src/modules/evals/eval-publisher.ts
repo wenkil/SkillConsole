@@ -215,8 +215,6 @@ export class EvalPublisher {
           sourceDraftRevisionId: record.task.targetDraftRevisionId,
           skillName: record.task.skillName,
           promptContractVersion: record.task.promptContractVersion,
-          skillCreatorCommit: record.task.skillCreatorCommit,
-          skillCreatorTreeHash: record.task.skillCreatorTreeHash,
           configurationFingerprint:
             record.task.configurationFingerprint,
           rawEvalsSha256: record.draft.rawEvalsSha256,
@@ -256,8 +254,6 @@ export class EvalPublisher {
             fileCount: record.draft.fileCount,
             totalBytes: record.draft.totalBytes,
             promptContractVersion: record.task.promptContractVersion,
-            skillCreatorCommit: record.task.skillCreatorCommit,
-            skillCreatorTreeHash: record.task.skillCreatorTreeHash,
             configurationFingerprint:
               record.task.configurationFingerprint,
             createdAt: now,
