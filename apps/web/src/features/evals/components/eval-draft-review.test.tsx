@@ -48,6 +48,30 @@ describe("EvalGenerationProgress", () => {
 
     expect(screen.getByText("生成成功")).toBeInTheDocument()
     expect(container.querySelector("ol .animate-spin")).toBeNull()
+    expect(container.querySelectorAll("ol > li")).toHaveLength(3)
+    expect(screen.queryByText("服务端校验")).toBeNull()
+  })
+
+  it("keeps a valid JSON task successful when there are no displayable cases", () => {
+    render(
+      <I18nextProvider i18n={i18n}>
+        <EvalGenerationProgress
+          events={[]}
+          t={i18n.getFixedT("zh-CN", "evals")}
+          task={{
+            ...succeededTask,
+            draftId: null,
+            draftStatus: null,
+            evalCount: null,
+            fileCount: null,
+          }}
+        />
+      </I18nextProvider>,
+    )
+
+    expect(
+      screen.getByText("JSON 已生成，但没有可展示的测试用例。你可以关闭此窗口后重新生成。"),
+    ).toBeInTheDocument()
   })
 
   it("shows localized failure text without rendering the internal error code", () => {
@@ -55,7 +79,7 @@ describe("EvalGenerationProgress", () => {
       ...succeededTask,
       status: "FAILED",
       error: {
-        code: "EVAL_OUTPUT_ROOT_INVALID",
+        code: "EVAL_OUTPUT_JSON_INVALID",
         message: "internal error message",
         details: null,
       },
@@ -66,19 +90,13 @@ describe("EvalGenerationProgress", () => {
       <I18nextProvider i18n={i18n}>
         <EvalGenerationProgress
           events={[]}
-          failureSummary={{
-            evalsJsonState: "ROOT_INVALID",
-            evalCount: null,
-            incompleteCaseIndexes: [],
-            ignoredFiles: [],
-          }}
           t={i18n.getFixedT("zh-CN", "evals")}
           task={failedTask}
         />
       </I18nextProvider>,
     )
 
-    expect(screen.getByText("生成结果中没有可用的测试用例列表。")).toBeInTheDocument()
-    expect(screen.queryByText("EVAL_OUTPUT_ROOT_INVALID")).toBeNull()
+    expect(screen.getByText("生成的测试用例文件不是可读取的 JSON。")).toBeInTheDocument()
+    expect(screen.queryByText("EVAL_OUTPUT_JSON_INVALID")).toBeNull()
   })
 })

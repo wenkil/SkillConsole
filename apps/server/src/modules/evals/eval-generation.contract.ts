@@ -188,21 +188,6 @@ export const EvalGenerationTaskPageSchema = Type.Object(
   { additionalProperties: false },
 )
 
-export const EvalGenerationFailureSummarySchema = Type.Object(
-  {
-    evalsJsonState: Type.Union([
-      Type.Literal("MISSING"),
-      Type.Literal("INVALID_JSON"),
-      Type.Literal("ROOT_INVALID"),
-      Type.Literal("VALID"),
-    ]),
-    evalCount: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),
-    incompleteCaseIndexes: Type.Array(Type.Integer({ minimum: 1 })),
-    ignoredFiles: Type.Array(Type.String({ minLength: 1, maxLength: 512 })),
-  },
-  { additionalProperties: false },
-)
-
 const StoredEvalCaseSchema = Type.Object(
   {
     externalId: Type.Integer({ minimum: 1 }),

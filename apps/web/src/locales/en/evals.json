@@ -12,7 +12,7 @@
   "status": {
     "PREPARING": "Preparing",
     "RUNNING": "Generating",
-    "VALIDATING": "Validating",
+    "VALIDATING": "Organizing result",
     "SUCCEEDED": "Generation succeeded",
     "CANCELING": "Canceling",
     "CANCELED": "Canceled",
@@ -60,7 +60,7 @@
     "detailEyebrow": "EVALS TASK DETAIL",
     "createTitle": "Generate an Evals draft",
     "createDescription": "Configure the frozen target and start generation. Closing the drawer does not cancel a running task.",
-    "detailDescription": "Inspect the controlled Agent process, validated result, and human save state.",
+    "detailDescription": "Inspect the controlled Agent process, reviewable result, and human save state.",
     "activeTaskHint": "A generation task is already running. Wait for it to finish, or open that task and cancel it.",
     "tabsLabel": "Task details",
     "tabs": {
@@ -77,7 +77,8 @@
     "eyebrow": "CONTROLLED AGENT SESSION",
     "title": "Building an Evals draft",
     "endedTitle": "This generation did not produce a reviewable draft",
-    "description": "Target Skill: {{skillName}}. Output is checked for basic structure and declared input files.",
+    "description": "Target Skill: {{skillName}}. Recognizable generated content is organized into reviewable cases; other content is not shown.",
+    "noReviewableCases": "JSON was generated, but no test cases could be shown. Close this window and generate again if needed.",
     "trace": "Generation events",
     "waiting": "Waiting for complete Agent events…",
     "agentThinking": "The Agent completed an analysis message",
@@ -95,37 +96,18 @@
     "generic": "The generated result cannot be used as test cases yet. Adjust the task and try again.",
     "outputMissing": "No generated test case file was found.",
     "jsonInvalid": "The generated test case file is not readable JSON.",
-    "rootInvalid": "The generated result has no usable test case list.",
-    "caseInvalid": "At least one test case is incomplete or incorrectly formatted.",
-    "promptInvalid": "The test task includes internal execution instructions and cannot run as a real user task.",
-    "fileMissing": "A test case references an input file that does not exist.",
-    "fileInvalid": "A referenced input file path or file type is invalid.",
     "startFailed": "The generation environment could not be prepared. Try again."
-  },
-  "failureSummary": {
-    "evalsJson": {
-      "MISSING": "No test case file was generated.",
-      "INVALID_JSON": "The test case file could not be parsed.",
-      "ROOT_INVALID": "The test case file has no valid case list.",
-      "VALID": "The test case file was read. Its generation summary is shown below."
-    },
-    "caseCount": "{{count}} test cases were identified.",
-    "incompleteCase": "Test case {{index}} is missing required content.",
-    "ignoredFiles": "These extra files will not be used by later tests: {{files}}."
   },
   "event": {
     "task": {
       "created": "Task created",
       "running": "Controlled Agent Session started",
-      "validating": "Generation finished; server validation started",
-      "succeeded": "Validation passed; draft ready",
+      "validating": "Generation finished; organizing result",
+      "succeeded": "Generation finished",
       "canceling": "Cancellation requested",
       "canceled": "Task canceled",
       "interrupted": "Task interrupted by server restart",
       "failed": "Task failed"
-    },
-    "validation": {
-      "succeeded": "Schema and file validation passed"
     },
     "draft": {
       "discarded": "Draft discarded"
@@ -135,10 +117,10 @@
     "eyebrow": "REVIEW BEFORE SAVE",
     "title": "Review Evals draft",
     "emptyTitle": "Generate reusable Evals first",
-    "emptyDescription": "Generation never saves automatically. Review every user task, expected result, objective assertion, and input file after validation.",
-    "loadingDraft": "Loading validated draft",
+    "emptyDescription": "Generation never saves automatically. Review every user task, expected result, objective assertion, and input file after generation.",
+    "loadingDraft": "Loading generated draft",
     "resultPendingTitle": "The generation result is not ready",
-    "resultPendingDescription": "The complete cases will be available here after the Agent finishes and server validation succeeds.",
+    "resultPendingDescription": "Recognizable cases will be available here after the Agent finishes.",
     "caseCount": "{{count}} cases",
     "fileCount": "{{count}} input files",
     "assertionCount": "{{count}} assertions",

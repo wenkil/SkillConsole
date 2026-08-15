@@ -432,22 +432,43 @@ export class EvalGenerationRepository {
           updatedAt: now,
         })
         .where(eq(evalGenerationTasks.id, taskId))
-      await this.appendEvent(
-        transaction,
-        taskId,
-        "validation.succeeded",
-        {
-          schemaVersion: 1,
-          draftId: draft.id,
-          evalCount: draft.evalCount,
-          fileCount: draft.fileCount,
-        },
-      )
       await this.appendEvent(transaction, taskId, "task.succeeded", {
         schemaVersion: 1,
         draftId: draft.id,
       })
       return mapDraft(draft)
+    })
+  }
+
+  async completeWithoutDraft(taskId: string): Promise<void> {
+    await this.database.transaction(async (transaction) => {
+      const [task] = await transaction
+        .select()
+        .from(evalGenerationTasks)
+        .where(eq(evalGenerationTasks.id, taskId))
+        .for("update")
+      if (!task) throw notFound(taskId)
+      if (task.status !== "VALIDATING") {
+        throw new DomainError({
+          code: "EVAL_GENERATION_STATE_CONFLICT",
+          message: "The Evals generation task is no longer being finalized.",
+          kind: "conflict",
+          details: { taskId, status: task.status },
+        })
+      }
+      const now = new Date()
+      await transaction
+        .update(evalGenerationTasks)
+        .set({
+          status: "SUCCEEDED",
+          completedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(evalGenerationTasks.id, taskId))
+      await this.appendEvent(transaction, taskId, "task.succeeded", {
+        schemaVersion: 1,
+        draftId: null,
+      })
     })
   }
 

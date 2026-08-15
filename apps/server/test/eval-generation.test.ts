@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { createHash, randomUUID } from "node:crypto"
+import { randomUUID } from "node:crypto"
 import { mkdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -8,7 +8,6 @@ import test from "node:test"
 import type { Database } from "../src/infrastructure/database/index.js"
 import { AgentSessionWorkspaceStore } from "../src/modules/agent-sessions/session-workspace.js"
 import { EvalOutputValidator } from "../src/modules/evals/eval-output-validator.js"
-import { EvalGenerationFailureSummaryReader } from "../src/modules/evals/eval-generation-failure-summary.js"
 import { buildEvalGenerationPrompt } from "../src/modules/evals/eval-prompt.js"
 import { EvalStorage } from "../src/modules/evals/eval-storage.js"
 import { EvalWorkspacePreparer } from "../src/modules/evals/eval-workspace.js"
@@ -44,7 +43,7 @@ test("injects the selected generation options into the Agent prompt", () => {
   assert.match(prompt, /补充要求：\{覆盖文件输入场景\}/)
 })
 
-test("accepts a valid Evals document without skill name or target-count matching", async () => {
+test("reads recognizable cases from a JSON Evals document", async () => {
   await withTempRoot(async (root) => {
     const generationId = randomUUID()
     const storage = new EvalStorage(root)
@@ -61,7 +60,7 @@ test("accepts a valid Evals document without skill name or target-count matching
             name: "sample",
             prompt: "请根据输入内容生成摘要",
             expected_output: "生成包含关键结论的摘要",
-            files: ["files/input.txt"],
+            files: ["input.txt"],
             expectations: ["摘要包含输入中的关键结论"],
           },
         ],
@@ -87,6 +86,7 @@ test("accepts a valid Evals document without skill name or target-count matching
       "摘要包含输入中的关键结论",
     ])
     assert.equal(result.files.length, 1)
+    assert.deepEqual(result.cases[0]?.files, ["files/input.txt"])
     assert.match(result.manifestHash, /^[0-9a-f]{64}$/)
   })
 })
@@ -130,36 +130,31 @@ test("ignores generated files that are not referenced by an Eval", async () => {
   })
 })
 
-test("summarizes failed output without exposing file content", async () => {
+test("accepts any parseable JSON and omits unrecognizable content", async () => {
   await withTempRoot(async (root) => {
     const generationId = randomUUID()
     const storage = new EvalStorage(root)
     await storage.initialize()
-    await mkdir(storage.getGenerationFilesPath(generationId), {
+    await mkdir(path.dirname(storage.getGenerationEvalsJsonPath(generationId)), {
       recursive: true,
     })
     await writeFile(
       storage.getGenerationEvalsJsonPath(generationId),
-      JSON.stringify({ evals: [{ id: 1 }] }),
-      "utf8",
-    )
-    await writeFile(
-      storage.getGenerationFilePath(generationId, "files/README.md"),
-      "do not expose this content",
+      JSON.stringify({ unexpected: { arbitrary: true } }),
       "utf8",
     )
 
-    const summary = await new EvalGenerationFailureSummaryReader(storage).read(
+    const result = await new EvalOutputValidator(storage).validate({
       generationId,
-    )
-    assert.equal(summary.evalsJsonState, "VALID")
-    assert.equal(summary.evalCount, 1)
-    assert.deepEqual(summary.incompleteCaseIndexes, [1])
-    assert.deepEqual(summary.ignoredFiles, ["files/README.md"])
+      skillName: "sample-skill",
+      provenance,
+    })
+    assert.equal(result.cases.length, 0)
+    assert.equal(result.files.length, 0)
   })
 })
 
-test("rejects case-insensitive generated file path collisions", async () => {
+test("omits unavailable input files without failing the JSON result", async () => {
   await withTempRoot(async (root) => {
     const generationId = randomUUID()
     const storage = new EvalStorage(root)
@@ -176,7 +171,7 @@ test("rejects case-insensitive generated file path collisions", async () => {
             name: "sample",
             prompt: "生成摘要",
             expected_output: "摘要",
-            files: ["files/Input.txt", "files/input.txt"],
+            files: ["missing.txt", "../outside.txt"],
             assertions: ["输出包含摘要正文"],
           },
         ],
@@ -184,21 +179,13 @@ test("rejects case-insensitive generated file path collisions", async () => {
       "utf8",
     )
 
-    await assert.rejects(
-      () =>
-        new EvalOutputValidator(storage).validate({
-          generationId,
-          skillName: "sample-skill",
-          provenance,
-        }),
-      (error: unknown) =>
-        Boolean(
-          error &&
-            typeof error === "object" &&
-            "code" in error &&
-            error.code === "EVAL_OUTPUT_FILE_PATH_COLLISION",
-        ),
-    )
+    const result = await new EvalOutputValidator(storage).validate({
+      generationId,
+      skillName: "sample-skill",
+      provenance,
+    })
+    assert.equal(result.cases.length, 1)
+    assert.deepEqual(result.cases[0]?.files, [])
   })
 })
 
@@ -256,96 +243,5 @@ test("captures the generation configuration fingerprint", async () => {
     )
     const inspected = await preparer.inspectProvenance()
     assert.match(inspected.configurationFingerprint, /^[0-9a-f]{64}$/)
-  })
-})
-
-test("rejects a target Skill copy changed during Agent execution", async () => {
-  await withTempRoot(async (root) => {
-    const snapshotId = randomUUID()
-    const generationId = randomUUID()
-    const settingsPath = path.join(root, "settings.json")
-    const skillContent =
-      "---\nname: sample-skill\ndescription: test\n---\n"
-    const snapshotSkillPath = path.join(
-      root,
-      "snapshots",
-      snapshotId,
-      "files",
-      "SKILL.md",
-    )
-    await mkdir(path.dirname(snapshotSkillPath), { recursive: true })
-    await writeFile(snapshotSkillPath, skillContent, "utf8")
-    await writeFile(settingsPath, '{"env":{"TOKEN":"secret"}}', "utf8")
-    const fileRecord = {
-      relativePath: "SKILL.md",
-      byteSize: Buffer.byteLength(skillContent),
-      sha256: createHash("sha256").update(skillContent).digest("hex"),
-    }
-    const database = {
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            orderBy: async () => [fileRecord],
-          }),
-        }),
-      }),
-    } as unknown as Database
-    const storage = new EvalStorage(root)
-    await storage.initialize()
-    const preparer = new EvalWorkspacePreparer(
-      database,
-      storage,
-      root,
-      settingsPath,
-    )
-    const inspected = await preparer.inspectProvenance()
-    await preparer.prepare(
-      generationId,
-      {
-        sourceKind: "SKILL_VERSION",
-        versionId: randomUUID(),
-        draftRevisionId: null,
-        snapshotId,
-        skillName: "sample-skill",
-        manifestHash: "d".repeat(64),
-        fileCount: 1,
-        totalBytes: fileRecord.byteSize,
-      },
-      inspected,
-      {
-        maxEvalCount: 3,
-        generationBrief: null,
-      },
-    )
-    await writeFile(
-      path.join(
-        storage.getGenerationWorkspacePath(generationId),
-        "target-skill",
-        "sample-skill",
-        "SKILL.md",
-      ),
-      `${skillContent}\nchanged`,
-      "utf8",
-    )
-
-    await assert.rejects(
-      () =>
-        preparer.verifyImmutableInputs(
-          generationId,
-          {
-            snapshotId,
-            skillName: "sample-skill",
-            maxEvalCount: 3,
-            generationBrief: null,
-          },
-        ),
-      (error: unknown) =>
-        Boolean(
-          error &&
-            typeof error === "object" &&
-            "code" in error &&
-            error.code === "EVAL_WORKSPACE_INPUT_CHANGED",
-        ),
-    )
   })
 })

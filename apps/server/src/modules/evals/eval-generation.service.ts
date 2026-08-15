@@ -9,14 +9,12 @@ import { EvalTargetService } from "../skill-workspaces/eval-target.service.js"
 import type {
   EvalGenerationDraftView,
   EvalGenerationEvent,
-  EvalGenerationFailureSummaryView,
   EvalGenerationTaskPage,
   EvalGenerationTaskView,
   PublishEvalRevisionResult,
   EvalRevisionView,
 } from "./eval-generation.domain.js"
 import { EvalGenerationRepository } from "./eval-generation.repository.js"
-import { EvalGenerationFailureSummaryReader } from "./eval-generation-failure-summary.js"
 import { EvalOutputValidator } from "./eval-output-validator.js"
 import { EvalPublisher } from "./eval-publisher.js"
 import {
@@ -261,20 +259,6 @@ export class EvalGenerationService {
     return this.repository.getDraft(taskId)
   }
 
-  async getFailureSummary(
-    taskId: string,
-  ): Promise<EvalGenerationFailureSummaryView> {
-    const task = await this.repository.getRow(taskId)
-    if (task.status !== "FAILED") {
-      throw new DomainError({
-        code: "EVAL_FAILURE_SUMMARY_UNAVAILABLE",
-        message: "A failure summary is only available after a failed task.",
-        kind: "conflict",
-      })
-    }
-    return new EvalGenerationFailureSummaryReader(this.storage).read(taskId)
-  }
-
   async discardDraft(taskId: string): Promise<EvalGenerationDraftView> {
     const draft = await this.repository.discardDraft(taskId)
     await this.publishNewEvents(taskId)
@@ -434,19 +418,6 @@ export class EvalGenerationService {
       const task = await this.repository.getRow(taskId)
       this.agentSessions.release(event.sessionId)
       try {
-        await this.agentSessions.assertWorkspaceConfigurationFingerprint(
-          this.storage.getGenerationWorkspaceLocator(taskId),
-          task.configurationFingerprint,
-        )
-        await this.workspacePreparer.verifyImmutableInputs(
-          taskId,
-          {
-            snapshotId: task.targetSnapshotId,
-            skillName: task.skillName,
-            maxEvalCount: task.maxEvalCount,
-            generationBrief: task.generationBrief,
-          },
-        )
         const validated = await this.validator.validate({
           generationId: taskId,
           skillName: task.skillName,
@@ -458,24 +429,16 @@ export class EvalGenerationService {
               task.configurationFingerprint,
           },
         })
-        await this.agentSessions.annotateFinalOutputProtocol(
-          event.sessionId,
-          "VALID",
-        )
-        await this.repository.completeWithDraft(taskId, {
-          storageLocator: this.storage.getGenerationOutputLocator(taskId),
-          ...validated,
-        })
+        if (validated.cases.length > 0) {
+          await this.repository.completeWithDraft(taskId, {
+            storageLocator: this.storage.getGenerationOutputLocator(taskId),
+            ...validated,
+          })
+        } else {
+          await this.repository.completeWithoutDraft(taskId)
+        }
         await this.publishNewEvents(taskId)
       } catch (error) {
-        await this.agentSessions
-          .annotateFinalOutputProtocol(event.sessionId, "INVALID")
-          .catch((annotationError) => {
-            this.logger.error(
-              { taskId, sessionId: event.sessionId, error: annotationError },
-              "Evals native final-output protocol status could not be recorded",
-            )
-          })
         const current = await this.repository.getRow(taskId)
         if (current.status === "CANCELING") {
           await this.repository.fail(taskId, "CANCELED", {

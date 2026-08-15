@@ -12,7 +12,7 @@
   "status": {
     "PREPARING": "准备工作区",
     "RUNNING": "正在生成",
-    "VALIDATING": "服务端校验",
+    "VALIDATING": "正在整理结果",
     "SUCCEEDED": "生成成功",
     "CANCELING": "正在取消",
     "CANCELED": "已取消",
@@ -60,7 +60,7 @@
     "detailEyebrow": "EVALS TASK DETAIL",
     "createTitle": "生成 Evals 草稿",
     "createDescription": "配置冻结目标并启动生成。关闭抽屉不会取消正在执行的任务。",
-    "detailDescription": "查看受控 Agent 生成过程、校验结果和人工保存状态。",
+    "detailDescription": "查看受控 Agent 生成过程、可审阅结果和人工保存状态。",
     "activeTaskHint": "当前已有生成任务正在运行。请等待任务结束，或打开该任务详情后取消。",
     "tabsLabel": "任务详情",
     "tabs": {
@@ -77,7 +77,8 @@
     "eyebrow": "CONTROLLED AGENT SESSION",
     "title": "正在构建 Evals 草稿",
     "endedTitle": "本次生成未形成可审阅草稿",
-    "description": "目标 Skill：{{skillName}}。生成产物会进行基本结构和已声明输入文件校验。",
+    "description": "目标 Skill：{{skillName}}。可识别的生成内容会整理为可审阅用例，其他内容不展示。",
+    "noReviewableCases": "JSON 已生成，但没有可展示的测试用例。你可以关闭此窗口后重新生成。",
     "trace": "生成事件",
     "waiting": "等待 Agent 返回完整事件…",
     "agentThinking": "Agent 已提交一段完整分析",
@@ -95,37 +96,18 @@
     "generic": "生成结果暂时无法作为测试用例使用，请根据生成过程调整后重试。",
     "outputMissing": "未找到生成的测试用例文件。",
     "jsonInvalid": "生成的测试用例文件不是可读取的 JSON。",
-    "rootInvalid": "生成结果中没有可用的测试用例列表。",
-    "caseInvalid": "至少有一条测试用例的内容不完整或格式不正确。",
-    "promptInvalid": "测试任务包含内部执行说明，无法作为真实用户任务运行。",
-    "fileMissing": "测试用例引用的输入文件不存在。",
-    "fileInvalid": "测试用例引用的输入文件路径或文件类型无效。",
     "startFailed": "生成环境未能准备完成，请重试。"
-  },
-  "failureSummary": {
-    "evalsJson": {
-      "MISSING": "未生成测试用例文件。",
-      "INVALID_JSON": "测试用例文件内容无法解析。",
-      "ROOT_INVALID": "测试用例文件缺少有效的用例列表。",
-      "VALID": "测试用例文件已读取，可查看下面的生成摘要。"
-    },
-    "caseCount": "已识别 {{count}} 条测试用例。",
-    "incompleteCase": "第 {{index}} 条测试用例缺少必要内容。",
-    "ignoredFiles": "这些额外文件不会被带入后续测试：{{files}}。"
   },
   "event": {
     "task": {
       "created": "任务已创建",
       "running": "受控 Agent Session 已启动",
-      "validating": "生成完成，正在执行服务端校验",
-      "succeeded": "校验通过，草稿已就绪",
+      "validating": "生成完成，正在整理结果",
+      "succeeded": "生成完成",
       "canceling": "正在请求取消",
       "canceled": "任务已取消",
       "interrupted": "任务被服务重启中断",
       "failed": "任务执行失败"
-    },
-    "validation": {
-      "succeeded": "结构与文件校验通过"
     },
     "draft": {
       "discarded": "草稿已丢弃"
@@ -135,10 +117,10 @@
     "eyebrow": "REVIEW BEFORE SAVE",
     "title": "Evals 草稿审阅",
     "emptyTitle": "先生成一组可复用 Evals",
-    "emptyDescription": "生成任务不会自动保存。校验通过后，你可以逐条检查用户任务、预期结果、客观断言和输入文件。",
-    "loadingDraft": "正在读取已校验草稿",
+    "emptyDescription": "生成任务不会自动保存。生成后，你可以逐条检查用户任务、预期结果、客观断言和输入文件。",
+    "loadingDraft": "正在读取生成草稿",
     "resultPendingTitle": "生成结果尚未就绪",
-    "resultPendingDescription": "Agent 完成生成并通过服务端校验后，可在这里审阅完整用例。",
+    "resultPendingDescription": "Agent 完成生成后，可在这里审阅可识别的用例。",
     "caseCount": "{{count}} 个用例",
     "fileCount": "{{count}} 个输入文件",
     "assertionCount": "{{count}} 项断言",

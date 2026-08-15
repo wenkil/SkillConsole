@@ -161,7 +161,6 @@ export function EvalsWorkbenchView({
           )?.id ?? null
         }
         draft={controller.selectedDraft}
-        failureSummary={controller.failureSummary}
         draftLoading={controller.draftLoading}
         events={controller.events}
         generationBlocked={controller.taskSummary.running > 0}

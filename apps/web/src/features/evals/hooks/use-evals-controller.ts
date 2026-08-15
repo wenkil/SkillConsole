@@ -10,7 +10,6 @@ import {
   discardEvalGenerationDraft,
   getEvalGeneration,
   getEvalGenerationDraft,
-  getEvalGenerationFailureSummary,
   listEvalGenerations,
   listEvalRevisions,
   saveEvalGeneration,
@@ -91,12 +90,6 @@ export function useEvalsController(workspace: SkillWorkspace) {
     queryFn: () => getEvalGenerationDraft(selectedTaskId ?? ""),
     enabled: Boolean(selectedTask?.draftId),
   })
-  const failureSummaryQuery = useQuery({
-    queryKey: ["eval-generations", selectedTaskId, "failure-summary"],
-    queryFn: () => getEvalGenerationFailureSummary(selectedTaskId ?? ""),
-    enabled: selectedTask?.status === "FAILED",
-  })
-
   const targetOptions = useMemo(() => {
     const targets: Array<{
       key: string
@@ -384,7 +377,6 @@ export function useEvalsController(workspace: SkillWorkspace) {
     },
     selectedTask,
     selectedDraft: draftQuery.data ?? null,
-    failureSummary: failureSummaryQuery.data ?? null,
     events:
       eventState.taskId === selectedTaskId ? eventState.events : [],
     targetOptions,

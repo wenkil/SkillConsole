@@ -5,7 +5,6 @@ import {
   lstat,
   mkdir,
   readFile,
-  readdir,
   rm,
   unlink,
   writeFile,
@@ -65,27 +64,6 @@ function evalGenerationTaskDocument(
   )}\n`
 }
 
-async function listRegularFiles(root: string, current = root): Promise<string[]> {
-  const relativePaths: string[] = []
-  for (const entry of await readdir(current, { withFileTypes: true })) {
-    const absolutePath = path.join(current, entry.name)
-    if (entry.isSymbolicLink()) {
-      throw new Error("A controlled workspace input contains a symbolic link.")
-    }
-    if (entry.isDirectory()) {
-      relativePaths.push(...(await listRegularFiles(root, absolutePath)))
-      continue
-    }
-    if (!entry.isFile()) {
-      throw new Error("A controlled workspace input contains an unsupported entry.")
-    }
-    relativePaths.push(
-      path.relative(root, absolutePath).split(path.sep).join("/"),
-    )
-  }
-  return relativePaths.sort()
-}
-
 async function copyFiles(
   sourceRoot: string,
   destinationRoot: string,
@@ -126,36 +104,6 @@ async function copyFiles(
     ) {
       throw new Error(
         `A controlled workspace copy failed verification: ${relativePath}`,
-      )
-    }
-  }
-}
-
-async function verifyFiles(
-  root: string,
-  files: readonly {
-    readonly relativePath: string
-    readonly byteSize: number
-    readonly sha256: string
-  }[],
-): Promise<void> {
-  const actualPaths = await listRegularFiles(root)
-  const expectedPaths = files
-    .map((file) => file.relativePath)
-    .sort()
-  if (JSON.stringify(actualPaths) !== JSON.stringify(expectedPaths)) {
-    throw new Error("A controlled workspace input file set changed.")
-  }
-  for (const file of files) {
-    const content = await readFile(
-      path.join(root, ...file.relativePath.split("/")),
-    )
-    if (
-      content.byteLength !== file.byteSize ||
-      sha256(content) !== file.sha256
-    ) {
-      throw new Error(
-        `A controlled workspace input changed: ${file.relativePath}`,
       )
     }
   }
@@ -271,48 +219,6 @@ export class EvalWorkspacePreparer {
       configurationFingerprint: sha256(
         await readFile(this.claudeSettingsPath),
       ),
-    }
-  }
-
-  async verifyImmutableInputs(
-    generationId: string,
-    target: {
-      readonly snapshotId: string
-      readonly skillName: string
-      readonly maxEvalCount: number
-      readonly generationBrief: string | null
-    },
-  ): Promise<void> {
-    try {
-      const snapshotFiles = await this.database
-        .select({
-          relativePath: skillSnapshotFiles.relativePath,
-          byteSize: skillSnapshotFiles.byteSize,
-          sha256: skillSnapshotFiles.sha256,
-        })
-        .from(skillSnapshotFiles)
-        .where(eq(skillSnapshotFiles.snapshotId, target.snapshotId))
-        .orderBy(skillSnapshotFiles.relativePath)
-      const workspace = this.storage.getGenerationWorkspacePath(generationId)
-      await verifyFiles(
-        path.join(workspace, "target-skill", target.skillName),
-        snapshotFiles,
-      )
-      const expectedTask = evalGenerationTaskDocument(target, target)
-      const actualTask = await readFile(
-        path.join(workspace, "inputs", "task.json"),
-      )
-      if (sha256(actualTask) !== sha256(expectedTask)) {
-        throw new Error("The Evals generation task manifest changed.")
-      }
-    } catch (error) {
-      throw new DomainError({
-        code: "EVAL_WORKSPACE_INPUT_CHANGED",
-        message:
-          "A controlled Evals generation input changed during execution.",
-        kind: "validation",
-        cause: error,
-      })
     }
   }
 
