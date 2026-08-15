@@ -5,6 +5,7 @@ import { ErrorResponseSchema } from "../../core/http/error.contract.js"
 import type { EvalGenerationEvent } from "./eval-generation.domain.js"
 import {
   EvalGenerationDraftSchema,
+  EvalGenerationFailureSummarySchema,
   EvalGenerationEventsHeaderSchema,
   EvalGenerationListQuerySchema,
   EvalGenerationParamsSchema,
@@ -161,6 +162,26 @@ export const evalGenerationRoutes: FastifyPluginAsyncTypebox = async (
       reply
         .code(202)
         .send(await service.cancel(request.params.taskId)),
+  )
+
+  application.get(
+    "/api/eval-generations/:taskId/failure-summary",
+    {
+      schema: {
+        tags: ["evals"],
+        summary: "Read a safe summary of a failed Evals generation output",
+        params: EvalGenerationParamsSchema,
+        response: {
+          200: EvalGenerationFailureSummarySchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) =>
+      reply
+        .header("Cache-Control", "private, no-store")
+        .send(await service.getFailureSummary(request.params.taskId)),
   )
 
   application.get(

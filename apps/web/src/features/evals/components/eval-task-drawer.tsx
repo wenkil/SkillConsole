@@ -17,6 +17,7 @@ import {
   isActiveEvalGeneration,
   type EvalGenerationDraft,
   type EvalGenerationEvent,
+  type EvalGenerationFailureSummary,
   type EvalGenerationTask,
 } from "@/features/evals/model/evals"
 import { Button } from "@/shared/components/ui/button"
@@ -148,6 +149,7 @@ export function EvalTaskDrawer({
   tab,
   task,
   draft,
+  failureSummary,
   events,
   draftLoading,
   targetOptions,
@@ -174,6 +176,7 @@ export function EvalTaskDrawer({
   tab: DrawerTab
   task: EvalGenerationTask | null
   draft: EvalGenerationDraft | null
+  failureSummary: EvalGenerationFailureSummary | null
   events: readonly EvalGenerationEvent[]
   draftLoading: boolean
   targetOptions: readonly TargetOption[]
@@ -290,7 +293,12 @@ export function EvalTaskDrawer({
               role="tabpanel"
             >
               {tab === "process" ? (
-                <EvalGenerationProgress events={events} task={task} t={t} />
+                <EvalGenerationProgress
+                  events={events}
+                  failureSummary={failureSummary}
+                  task={task}
+                  t={t}
+                />
               ) : (
                 <EvalDraftReview
                   draft={draft}

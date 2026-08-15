@@ -72,7 +72,6 @@ class EvalsFakeRuntime implements AgentRuntimeSession {
     await writeFile(
       path.join(outputRoot, "evals.json"),
       JSON.stringify({
-        skill_name: "sample-skill",
         evals: [
           {
             id: 1,
@@ -381,8 +380,8 @@ test(
       )
       assert.equal(
         JSON.parse(await readFile(path.join(revisionRoot, "evals.json"), "utf8"))
-          .skill_name,
-        "sample-skill",
+          .evals.length,
+        1,
       )
       await access(path.join(revisionRoot, "files", "fixture.txt"))
       await assert.rejects(() =>

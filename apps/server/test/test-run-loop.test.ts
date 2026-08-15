@@ -228,7 +228,6 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
     await writeFile(
       path.join(outputRoot, "evals.json"),
       JSON.stringify({
-        skill_name: "sample-skill",
         evals: [1, 2, 3].map((id) => ({
           id,
           name: `summarize-fixture-${id}`,

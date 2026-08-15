@@ -2,7 +2,6 @@ import { createHash } from "node:crypto"
 import {
   lstat,
   readFile,
-  readdir,
   realpath,
   writeFile,
 } from "node:fs/promises"
@@ -15,11 +14,6 @@ import type {
 } from "../../infrastructure/database/index.js"
 import { assertEvalRelativePath, EvalStorage } from "./eval-storage.js"
 
-const maxRawEvalsBytes = 2 * 1024 * 1024
-const maxGeneratedFileBytes = 20 * 1024 * 1024
-const maxGeneratedTotalBytes = 100 * 1024 * 1024
-const maxGeneratedFiles = 200
-
 interface RawEvalCase {
   readonly id?: unknown
   readonly name?: unknown
@@ -31,7 +25,6 @@ interface RawEvalCase {
 }
 
 interface RawEvalDocument {
-  readonly skill_name?: unknown
   readonly evals?: unknown
 }
 
@@ -213,74 +206,12 @@ function getMediaType(relativePath: string): string {
   )
 }
 
-function containsSensitiveValue(
-  content: Buffer,
-  sensitiveValues: readonly string[],
-): boolean {
-  const contentText = content.toString("utf8")
-  return sensitiveValues.some((value) => {
-    if (value.length < 4) return false
-    const variants = new Set([
-      value,
-      value.replaceAll("\\", "/"),
-      value.replaceAll("/", "\\"),
-    ])
-    if (
-      [...variants].some((variant) =>
-        content.includes(Buffer.from(variant, "utf8")),
-      )
-    ) {
-      return true
-    }
-    return /^[a-zA-Z]:[\\/]/.test(value)
-      ? [...variants].some((variant) =>
-          contentText.toLowerCase().includes(variant.toLowerCase()),
-        )
-      : false
-  })
-}
-
-async function listOutputEntries(
-  root: string,
-  current = root,
-): Promise<string[]> {
-  const paths: string[] = []
-  for (const entry of await readdir(current, { withFileTypes: true })) {
-    const absolutePath = path.join(current, entry.name)
-    const relativePath = path
-      .relative(root, absolutePath)
-      .split(path.sep)
-      .join("/")
-    if (entry.isSymbolicLink()) {
-      throw validationError(
-        "EVAL_OUTPUT_LINK_FORBIDDEN",
-        "Generated Evals output cannot contain symbolic links.",
-        { path: relativePath },
-      )
-    }
-    if (entry.isDirectory()) {
-      paths.push(...(await listOutputEntries(root, absolutePath)))
-    } else if (entry.isFile()) {
-      paths.push(relativePath)
-    } else {
-      throw validationError(
-        "EVAL_OUTPUT_ENTRY_INVALID",
-        "Generated Evals output contains an unsupported entry.",
-        { path: relativePath },
-      )
-    }
-  }
-  return paths.sort()
-}
-
 export class EvalOutputValidator {
   constructor(private readonly storage: EvalStorage) {}
 
   async validate(input: {
     readonly generationId: string
     readonly skillName: string
-    readonly maxEvalCount: number
-    readonly sensitiveValues: readonly string[]
     readonly provenance: EvalOutputProvenance
   }): Promise<ValidatedEvalOutput> {
     const evalsPath = this.storage.getGenerationEvalsJsonPath(
@@ -290,13 +221,6 @@ export class EvalOutputValidator {
     try {
       const stat = await lstat(evalsPath)
       if (!stat.isFile() || stat.isSymbolicLink()) throw new Error()
-      if (stat.size > maxRawEvalsBytes) {
-        throw validationError(
-          "EVAL_OUTPUT_TOO_LARGE",
-          "The generated evals.json exceeds the size limit.",
-          { limit: maxRawEvalsBytes },
-        )
-      }
       rawEvals = await readFile(evalsPath)
     } catch (error) {
       if (error instanceof DomainError) throw error
@@ -305,18 +229,6 @@ export class EvalOutputValidator {
         "The generation task did not create a regular evals.json file.",
       )
     }
-    if (
-      containsSensitiveValue(rawEvals, [
-        ...input.sensitiveValues,
-        this.storage.getGenerationWorkspacePath(input.generationId),
-      ])
-    ) {
-      throw validationError(
-        "EVAL_OUTPUT_SENSITIVE_CONTENT",
-        "Generated Evals contain protected configuration or runtime paths.",
-      )
-    }
-
     let parsed: RawEvalDocument
     try {
       const decoded = new TextDecoder("utf-8", { fatal: true }).decode(
@@ -332,16 +244,12 @@ export class EvalOutputValidator {
     if (
       !parsed ||
       typeof parsed !== "object" ||
-      parsed.skill_name !== input.skillName ||
       !Array.isArray(parsed.evals) ||
-      parsed.evals.length < 1 ||
-      parsed.evals.length !== input.maxEvalCount ||
-      parsed.evals.length > 20
+      parsed.evals.length < 1
     ) {
       throw validationError(
-        "EVAL_OUTPUT_SCHEMA_INVALID",
-        "The generated Evals root structure or case count is invalid.",
-        { maxEvalCount: input.maxEvalCount },
+        "EVAL_OUTPUT_ROOT_INVALID",
+        "The generated Evals document does not contain any usable test cases.",
       )
     }
 
@@ -424,15 +332,7 @@ export class EvalOutputValidator {
       },
     )
 
-    if (referencedFiles.size > maxGeneratedFiles) {
-      throw validationError(
-        "EVAL_OUTPUT_TOO_MANY_FILES",
-        "Generated Evals reference too many input files.",
-        { limit: maxGeneratedFiles },
-      )
-    }
     const files: StoredEvalFile[] = []
-    let generatedBytes = 0
     const outputRoot =
       this.storage.getGenerationOutputPath(input.generationId)
     const realOutputRoot = await realpath(outputRoot)
@@ -471,34 +371,7 @@ export class EvalOutputValidator {
           { path: relativePath },
         )
       }
-      if (stat.size > maxGeneratedFileBytes) {
-        throw validationError(
-          "EVAL_OUTPUT_FILE_TOO_LARGE",
-          "A generated Evals input file exceeds the size limit.",
-          { path: relativePath, limit: maxGeneratedFileBytes },
-        )
-      }
       const content = await readFile(absolutePath)
-      if (
-        containsSensitiveValue(content, [
-          ...input.sensitiveValues,
-          this.storage.getGenerationWorkspacePath(input.generationId),
-        ])
-      ) {
-        throw validationError(
-          "EVAL_OUTPUT_SENSITIVE_CONTENT",
-          "A generated Evals input contains protected configuration or runtime paths.",
-          { path: relativePath },
-        )
-      }
-      generatedBytes += content.byteLength
-      if (generatedBytes > maxGeneratedTotalBytes) {
-        throw validationError(
-          "EVAL_OUTPUT_TOTAL_TOO_LARGE",
-          "Generated Evals input files exceed the total size limit.",
-          { limit: maxGeneratedTotalBytes },
-        )
-      }
       files.push({
         relativePath,
         sha256: sha256(content),
@@ -508,21 +381,6 @@ export class EvalOutputValidator {
           ? "binary"
           : "text",
       })
-    }
-
-    const actualOutputFiles = await listOutputEntries(outputRoot)
-    const expectedOutputFiles = [
-      "evals.json",
-      ...files.map((file) => file.relativePath),
-    ].sort()
-    if (
-      JSON.stringify(actualOutputFiles) !==
-      JSON.stringify(expectedOutputFiles)
-    ) {
-      throw validationError(
-        "EVAL_OUTPUT_UNDECLARED_FILE",
-        "Generated Evals output contains undeclared files.",
-      )
     }
 
     const rawEvalsSha256 = sha256(rawEvals)
@@ -549,7 +407,9 @@ export class EvalOutputValidator {
       manifestHash,
       cases,
       files,
-      totalBytes: rawEvals.byteLength + generatedBytes,
+      totalBytes:
+        rawEvals.byteLength +
+        files.reduce((total, file) => total + file.byteSize, 0),
     }
   }
 }

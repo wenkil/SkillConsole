@@ -1,6 +1,7 @@
 import type {
   EvalGenerationDraft,
   EvalGenerationEvent,
+  EvalGenerationFailureSummary,
   EvalGenerationTask,
   EvalGenerationTaskPage,
   EvalRevision,
@@ -55,6 +56,12 @@ export function getEvalGenerationDraft(
   taskId: string,
 ): Promise<EvalGenerationDraft> {
   return readJson(`${taskBaseUrl(taskId)}/draft`)
+}
+
+export function getEvalGenerationFailureSummary(
+  taskId: string,
+): Promise<EvalGenerationFailureSummary> {
+  return readJson(`${taskBaseUrl(taskId)}/failure-summary`)
 }
 
 export function startEvalGeneration(

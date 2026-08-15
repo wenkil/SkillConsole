@@ -77,7 +77,7 @@
     "eyebrow": "CONTROLLED AGENT SESSION",
     "title": "Building an Evals draft",
     "endedTitle": "This generation did not produce a reviewable draft",
-    "description": "Target Skill: {{skillName}}. Output must pass path, schema, hash, and sensitive-data gates.",
+    "description": "Target Skill: {{skillName}}. Output is checked for basic structure and declared input files.",
     "trace": "Generation events",
     "waiting": "Waiting for complete Agent events…",
     "agentThinking": "The Agent completed an analysis message",
@@ -90,6 +90,28 @@
     "noToolOutput": "The tool returned no output",
     "readPathUnavailable": "The complete path was unavailable",
     "messageLabel": "Message · Agent"
+  },
+  "error": {
+    "generic": "The generated result cannot be used as test cases yet. Adjust the task and try again.",
+    "outputMissing": "No generated test case file was found.",
+    "jsonInvalid": "The generated test case file is not readable JSON.",
+    "rootInvalid": "The generated result has no usable test case list.",
+    "caseInvalid": "At least one test case is incomplete or incorrectly formatted.",
+    "promptInvalid": "The test task includes internal execution instructions and cannot run as a real user task.",
+    "fileMissing": "A test case references an input file that does not exist.",
+    "fileInvalid": "A referenced input file path or file type is invalid.",
+    "startFailed": "The generation environment could not be prepared. Try again."
+  },
+  "failureSummary": {
+    "evalsJson": {
+      "MISSING": "No test case file was generated.",
+      "INVALID_JSON": "The test case file could not be parsed.",
+      "ROOT_INVALID": "The test case file has no valid case list.",
+      "VALID": "The test case file was read. Its generation summary is shown below."
+    },
+    "caseCount": "{{count}} test cases were identified.",
+    "incompleteCase": "Test case {{index}} is missing required content.",
+    "ignoredFiles": "These extra files will not be used by later tests: {{files}}."
   },
   "event": {
     "task": {

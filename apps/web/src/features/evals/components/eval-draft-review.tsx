@@ -16,6 +16,7 @@ import type {
   EvalCase,
   EvalGenerationDraft,
   EvalGenerationEvent,
+  EvalGenerationFailureSummary,
   EvalGenerationTask,
 } from "@/features/evals/model/evals"
 import { buildEvalTraceEntries } from "@/features/evals/model/eval-trace"
@@ -28,13 +29,52 @@ function eventSummary(event: EvalGenerationEvent, t: TFunction<"evals">) {
   return t(`event.${event.type}`, { defaultValue: event.type })
 }
 
+function failureMessage(
+  code: string,
+  t: TFunction<"evals">,
+  commonT: TFunction<"common">,
+) {
+  if (code.startsWith("CLAUDE_")) {
+    return commonT(`claudeErrors.${code}`, {
+      defaultValue: t("error.generic"),
+    })
+  }
+  const messages = {
+    EVAL_OUTPUT_MISSING: "error.outputMissing",
+    EVAL_OUTPUT_JSON_INVALID: "error.jsonInvalid",
+    EVAL_OUTPUT_ROOT_INVALID: "error.rootInvalid",
+    EVAL_OUTPUT_SCHEMA_INVALID: "error.caseInvalid",
+    EVAL_OUTPUT_ID_INVALID: "error.caseInvalid",
+    EVAL_OUTPUT_SCHEMA_AMBIGUOUS: "error.caseInvalid",
+    EVAL_PROMPT_CONTAINS_RUNNER_POLICY: "error.promptInvalid",
+    EVAL_OUTPUT_FILE_PATH_INVALID: "error.fileInvalid",
+    EVAL_OUTPUT_FILE_PATH_COLLISION: "error.fileInvalid",
+    EVAL_OUTPUT_FILE_MISSING: "error.fileMissing",
+    EVAL_OUTPUT_FILE_INVALID: "error.fileInvalid",
+    EVAL_OUTPUT_FILE_ESCAPE: "error.fileInvalid",
+    EVAL_GENERATION_START_FAILED: "error.startFailed",
+  } as const
+  const key =
+    messages[code as keyof typeof messages] ?? "error.generic"
+  return t(key)
+}
+
+const failureSummaryKeys = {
+  MISSING: "failureSummary.evalsJson.MISSING",
+  INVALID_JSON: "failureSummary.evalsJson.INVALID_JSON",
+  ROOT_INVALID: "failureSummary.evalsJson.ROOT_INVALID",
+  VALID: "failureSummary.evalsJson.VALID",
+} as const
+
 export function EvalGenerationProgress({
   task,
   events,
+  failureSummary = null,
   t,
 }: {
   task: EvalGenerationTask
   events: readonly EvalGenerationEvent[]
+  failureSummary?: EvalGenerationFailureSummary | null
   t: TFunction<"evals">
 }) {
   const { t: commonT } = useTranslation("common")
@@ -98,13 +138,32 @@ export function EvalGenerationProgress({
         <div className="mt-5 border border-destructive/60 bg-destructive/5 p-4">
           <div className="flex items-center gap-2 font-semibold text-destructive">
             <AlertTriangle className="size-4" />
-            {commonT(`claudeErrors.${task.error.code}`, {
-              defaultValue: task.error.message,
-            })}
+            {failureMessage(task.error.code, t, commonT)}
           </div>
-          <code className="mt-2 block font-mono text-[10px] text-muted-foreground">
-            {task.error.code}
-          </code>
+          {failureSummary ? (
+            <div className="mt-3 border-t border-destructive/25 pt-3 text-xs leading-5 text-muted-foreground">
+              <p>
+                {t(failureSummaryKeys[failureSummary.evalsJsonState])}
+              </p>
+              {failureSummary.evalCount !== null ? (
+                <p>
+                  {t("failureSummary.caseCount", {
+                    count: failureSummary.evalCount,
+                  })}
+                </p>
+              ) : null}
+              {failureSummary.incompleteCaseIndexes.map((index) => (
+                <p key={index}>{t("failureSummary.incompleteCase", { index })}</p>
+              ))}
+              {failureSummary.ignoredFiles.length > 0 ? (
+                <p>
+                  {t("failureSummary.ignoredFiles", {
+                    files: failureSummary.ignoredFiles.join("、"),
+                  })}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
 

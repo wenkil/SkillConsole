@@ -90,6 +90,13 @@ export interface EvalGenerationDraft {
   updatedAt: string
 }
 
+export interface EvalGenerationFailureSummary {
+  evalsJsonState: "MISSING" | "INVALID_JSON" | "ROOT_INVALID" | "VALID"
+  evalCount: number | null
+  incompleteCaseIndexes: number[]
+  ignoredFiles: string[]
+}
+
 export interface EvalRevision {
   id: string
   suiteId: string

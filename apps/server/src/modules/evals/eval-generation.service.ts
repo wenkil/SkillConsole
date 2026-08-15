@@ -9,12 +9,14 @@ import { EvalTargetService } from "../skill-workspaces/eval-target.service.js"
 import type {
   EvalGenerationDraftView,
   EvalGenerationEvent,
+  EvalGenerationFailureSummaryView,
   EvalGenerationTaskPage,
   EvalGenerationTaskView,
   PublishEvalRevisionResult,
   EvalRevisionView,
 } from "./eval-generation.domain.js"
 import { EvalGenerationRepository } from "./eval-generation.repository.js"
+import { EvalGenerationFailureSummaryReader } from "./eval-generation-failure-summary.js"
 import { EvalOutputValidator } from "./eval-output-validator.js"
 import { EvalPublisher } from "./eval-publisher.js"
 import {
@@ -196,7 +198,11 @@ export class EvalGenerationService {
           provenance.configurationFingerprint,
         systemPromptRole: "eval-generation",
         expectedSystemPromptFingerprint: systemPrompt.sha256,
-        prompt: buildEvalGenerationPrompt(),
+        prompt: buildEvalGenerationPrompt({
+          skillName: target.skillName,
+          maxEvalCount: input.maxEvalCount,
+          generationBrief: input.generationBrief,
+        }),
         ...evalGenerationRuntimePolicy,
         additionalRedactedValues: [
           workspace.targetSkillPath,
@@ -253,6 +259,20 @@ export class EvalGenerationService {
 
   async getDraft(taskId: string): Promise<EvalGenerationDraftView> {
     return this.repository.getDraft(taskId)
+  }
+
+  async getFailureSummary(
+    taskId: string,
+  ): Promise<EvalGenerationFailureSummaryView> {
+    const task = await this.repository.getRow(taskId)
+    if (task.status !== "FAILED") {
+      throw new DomainError({
+        code: "EVAL_FAILURE_SUMMARY_UNAVAILABLE",
+        message: "A failure summary is only available after a failed task.",
+        kind: "conflict",
+      })
+    }
+    return new EvalGenerationFailureSummaryReader(this.storage).read(taskId)
   }
 
   async discardDraft(taskId: string): Promise<EvalGenerationDraftView> {
@@ -413,10 +433,6 @@ export class EvalGenerationService {
       await this.publishNewEvents(taskId)
       const task = await this.repository.getRow(taskId)
       this.agentSessions.release(event.sessionId)
-      const sensitiveValues =
-        await this.agentSessions.getWorkspaceSensitiveValues(
-          this.storage.getGenerationWorkspaceLocator(taskId),
-        )
       try {
         await this.agentSessions.assertWorkspaceConfigurationFingerprint(
           this.storage.getGenerationWorkspaceLocator(taskId),
@@ -434,8 +450,6 @@ export class EvalGenerationService {
         const validated = await this.validator.validate({
           generationId: taskId,
           skillName: task.skillName,
-          maxEvalCount: task.maxEvalCount,
-          sensitiveValues,
           provenance: {
             taskId,
             targetSnapshotId: task.targetSnapshotId,

@@ -8,6 +8,8 @@ import test from "node:test"
 import type { Database } from "../src/infrastructure/database/index.js"
 import { AgentSessionWorkspaceStore } from "../src/modules/agent-sessions/session-workspace.js"
 import { EvalOutputValidator } from "../src/modules/evals/eval-output-validator.js"
+import { EvalGenerationFailureSummaryReader } from "../src/modules/evals/eval-generation-failure-summary.js"
+import { buildEvalGenerationPrompt } from "../src/modules/evals/eval-prompt.js"
 import { EvalStorage } from "../src/modules/evals/eval-storage.js"
 import { EvalWorkspacePreparer } from "../src/modules/evals/eval-workspace.js"
 
@@ -30,7 +32,19 @@ async function withTempRoot(
   }
 }
 
-test("validates and normalizes generated expectations", async () => {
+test("injects the selected generation options into the Agent prompt", () => {
+  const prompt = buildEvalGenerationPrompt({
+    skillName: "sample-skill",
+    maxEvalCount: 3,
+    generationBrief: "覆盖文件输入场景",
+  })
+
+  assert.match(prompt, /目标 Skill：\{sample-skill\}/)
+  assert.match(prompt, /目标用例数：\{3\}/)
+  assert.match(prompt, /补充要求：\{覆盖文件输入场景\}/)
+})
+
+test("accepts a valid Evals document without skill name or target-count matching", async () => {
   await withTempRoot(async (root) => {
     const generationId = randomUUID()
     const storage = new EvalStorage(root)
@@ -41,7 +55,6 @@ test("validates and normalizes generated expectations", async () => {
     await writeFile(
       storage.getGenerationEvalsJsonPath(generationId),
       JSON.stringify({
-        skill_name: "sample-skill",
         evals: [
           {
             id: 1,
@@ -64,29 +77,9 @@ test("validates and normalizes generated expectations", async () => {
       "utf8",
     )
 
-    await assert.rejects(
-      () =>
-        new EvalOutputValidator(storage).validate({
-          generationId,
-          skillName: "sample-skill",
-          maxEvalCount: 2,
-          sensitiveValues: [],
-          provenance,
-        }),
-      (error: unknown) =>
-        Boolean(
-          error &&
-            typeof error === "object" &&
-            "code" in error &&
-            error.code === "EVAL_OUTPUT_SCHEMA_INVALID",
-        ),
-    )
-
     const result = await new EvalOutputValidator(storage).validate({
       generationId,
       skillName: "sample-skill",
-      maxEvalCount: 1,
-      sensitiveValues: [],
       provenance,
     })
     assert.equal(result.sourceSchemaVariant, "expectations")
@@ -98,7 +91,7 @@ test("validates and normalizes generated expectations", async () => {
   })
 })
 
-test("rejects undeclared generated files", async () => {
+test("ignores generated files that are not referenced by an Eval", async () => {
   await withTempRoot(async (root) => {
     const generationId = randomUUID()
     const storage = new EvalStorage(root)
@@ -109,7 +102,6 @@ test("rejects undeclared generated files", async () => {
     await writeFile(
       storage.getGenerationEvalsJsonPath(generationId),
       JSON.stringify({
-        skill_name: "sample-skill",
         evals: [
           {
             id: 1,
@@ -129,23 +121,41 @@ test("rejects undeclared generated files", async () => {
       "utf8",
     )
 
-    await assert.rejects(
-      () =>
-        new EvalOutputValidator(storage).validate({
-          generationId,
-          skillName: "sample-skill",
-      maxEvalCount: 1,
-          sensitiveValues: [],
-          provenance,
-        }),
-      (error: unknown) =>
-        Boolean(
-          error &&
-            typeof error === "object" &&
-            "code" in error &&
-            error.code === "EVAL_OUTPUT_UNDECLARED_FILE",
-        ),
+    const result = await new EvalOutputValidator(storage).validate({
+      generationId,
+      skillName: "sample-skill",
+      provenance,
+    })
+    assert.equal(result.files.length, 0)
+  })
+})
+
+test("summarizes failed output without exposing file content", async () => {
+  await withTempRoot(async (root) => {
+    const generationId = randomUUID()
+    const storage = new EvalStorage(root)
+    await storage.initialize()
+    await mkdir(storage.getGenerationFilesPath(generationId), {
+      recursive: true,
+    })
+    await writeFile(
+      storage.getGenerationEvalsJsonPath(generationId),
+      JSON.stringify({ evals: [{ id: 1 }] }),
+      "utf8",
     )
+    await writeFile(
+      storage.getGenerationFilePath(generationId, "files/README.md"),
+      "do not expose this content",
+      "utf8",
+    )
+
+    const summary = await new EvalGenerationFailureSummaryReader(storage).read(
+      generationId,
+    )
+    assert.equal(summary.evalsJsonState, "VALID")
+    assert.equal(summary.evalCount, 1)
+    assert.deepEqual(summary.incompleteCaseIndexes, [1])
+    assert.deepEqual(summary.ignoredFiles, ["files/README.md"])
   })
 })
 
@@ -160,7 +170,6 @@ test("rejects case-insensitive generated file path collisions", async () => {
     await writeFile(
       storage.getGenerationEvalsJsonPath(generationId),
       JSON.stringify({
-        skill_name: "sample-skill",
         evals: [
           {
             id: 1,
@@ -180,8 +189,6 @@ test("rejects case-insensitive generated file path collisions", async () => {
         new EvalOutputValidator(storage).validate({
           generationId,
           skillName: "sample-skill",
-      maxEvalCount: 1,
-          sensitiveValues: [],
           provenance,
         }),
       (error: unknown) =>

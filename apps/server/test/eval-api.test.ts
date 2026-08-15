@@ -10,6 +10,7 @@ import Fastify from "fastify"
 import { registerErrorHandling } from "../src/core/http/error-handler.js"
 import type {
   EvalGenerationDraftView,
+  EvalGenerationFailureSummaryView,
   EvalGenerationTaskView,
   PublishEvalRevisionResult,
 } from "../src/modules/evals/eval-generation.domain.js"
@@ -180,8 +181,15 @@ test("Evals draft and publish routes preserve review state and replay status", a
       createdAt: now,
     },
   }
+  const failureSummary: EvalGenerationFailureSummaryView = {
+    evalsJsonState: "VALID",
+    evalCount: 1,
+    incompleteCaseIndexes: [1],
+    ignoredFiles: ["files/README.md"],
+  }
   const fakeService = {
     getDraft: async () => draft,
+    getFailureSummary: async () => failureSummary,
     discardDraft: async () => ({ ...draft, status: "DISCARDED" }),
     publish: async () => publishResult,
   } as unknown as EvalGenerationService
@@ -206,6 +214,13 @@ test("Evals draft and publish routes preserve review state and replay status", a
       draftResponse.headers["cache-control"],
       "private, no-store",
     )
+
+    const failureSummaryResponse = await application.inject({
+      method: "GET",
+      url: `/api/eval-generations/${task.id}/failure-summary`,
+    })
+    assert.equal(failureSummaryResponse.statusCode, 200)
+    assert.deepEqual(failureSummaryResponse.json(), failureSummary)
 
     const publishResponse = await application.inject({
       method: "POST",

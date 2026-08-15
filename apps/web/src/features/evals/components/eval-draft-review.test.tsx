@@ -49,4 +49,36 @@ describe("EvalGenerationProgress", () => {
     expect(screen.getByText("生成成功")).toBeInTheDocument()
     expect(container.querySelector("ol .animate-spin")).toBeNull()
   })
+
+  it("shows localized failure text without rendering the internal error code", () => {
+    const failedTask: EvalGenerationTask = {
+      ...succeededTask,
+      status: "FAILED",
+      error: {
+        code: "EVAL_OUTPUT_ROOT_INVALID",
+        message: "internal error message",
+        details: null,
+      },
+      draftId: null,
+      draftStatus: null,
+    }
+    render(
+      <I18nextProvider i18n={i18n}>
+        <EvalGenerationProgress
+          events={[]}
+          failureSummary={{
+            evalsJsonState: "ROOT_INVALID",
+            evalCount: null,
+            incompleteCaseIndexes: [],
+            ignoredFiles: [],
+          }}
+          t={i18n.getFixedT("zh-CN", "evals")}
+          task={failedTask}
+        />
+      </I18nextProvider>,
+    )
+
+    expect(screen.getByText("生成结果中没有可用的测试用例列表。")).toBeInTheDocument()
+    expect(screen.queryByText("EVAL_OUTPUT_ROOT_INVALID")).toBeNull()
+  })
 })

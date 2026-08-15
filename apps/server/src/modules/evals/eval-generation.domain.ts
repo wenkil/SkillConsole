@@ -77,6 +77,13 @@ export interface EvalGenerationDraftView {
   readonly updatedAt: string
 }
 
+export interface EvalGenerationFailureSummaryView {
+  readonly evalsJsonState: "MISSING" | "INVALID_JSON" | "ROOT_INVALID" | "VALID"
+  readonly evalCount: number | null
+  readonly incompleteCaseIndexes: number[]
+  readonly ignoredFiles: string[]
+}
+
 export interface EvalRevisionView {
   readonly id: string
   readonly suiteId: string
