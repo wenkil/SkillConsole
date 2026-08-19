@@ -57,12 +57,21 @@ export interface CreateAgentSessionInWorkspaceInput {
   readonly disallowedTools?: readonly string[]
   readonly canUseTool?: CanUseTool
   readonly skills?: readonly string[]
+  readonly runtimeSkillNames?: readonly string[]
+  readonly requiredSkills?: readonly string[]
   readonly environment?: Readonly<Record<string, string | undefined>>
   readonly protectedEnvironmentNames?: readonly string[]
   readonly additionalRedactedValues?: readonly string[]
   readonly onRuntimeDiagnostic?: (
     diagnostic: AgentRuntimeDiagnostic,
   ) => Promise<void>
+}
+
+export function resolveAgentRuntimePermissionMode(
+  roleOverride: AgentRuntimePermissionMode | undefined,
+  settingsDefault: AgentRuntimePermissionMode | undefined,
+): AgentRuntimePermissionMode | undefined {
+  return roleOverride ?? settingsDefault
 }
 
 export class AgentSessionService {
@@ -109,15 +118,19 @@ export class AgentSessionService {
 
     try {
       const systemPrompt = await this.systemPrompts.load("generic-agent")
-      const redactedValues = await this.workspaces.installSettings(
+      const installedSettings = await this.workspaces.installSettings(
         workspace.absolutePath,
       )
       const runtime = this.openRuntime({
         sessionId,
         cwd: workspace.absolutePath,
         sdkSessionId: null,
+        settingsPath: installedSettings.settingsPath,
         systemPrompt: systemPrompt.content,
-        redactedValues,
+        ...(installedSettings.defaultPermissionMode
+          ? { permissionMode: installedSettings.defaultPermissionMode }
+          : {}),
+        redactedValues: installedSettings.redactedValues,
       })
       await runtime.send({ turnId, prompt })
       return created.session
@@ -144,21 +157,24 @@ export class AgentSessionService {
       if (systemPrompt.sha256 !== input.expectedSystemPromptFingerprint) {
         throw new Error("Agent System Prompt changed during task preparation.")
       }
-      const settingsValues = await this.workspaces.installSettings(cwd)
+      const installedSettings = await this.workspaces.installSettings(cwd)
       await this.workspaces.assertSettingsFingerprint(
         cwd,
         input.expectedConfigurationFingerprint,
+      )
+      const permissionMode = resolveAgentRuntimePermissionMode(
+        input.permissionMode,
+        installedSettings.defaultPermissionMode,
       )
       return this.startSession({
         sessionId,
         prompt: input.prompt,
         workspaceLocator: input.workspaceLocator,
         cwd,
+        settingsPath: installedSettings.settingsPath,
         systemPrompt: systemPrompt.content,
         origin: input.origin,
-        ...(input.permissionMode
-          ? { permissionMode: input.permissionMode }
-          : {}),
+        ...(permissionMode ? { permissionMode } : {}),
         ...(input.tools ? { tools: input.tools } : {}),
         ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}),
         ...(input.disallowedTools
@@ -166,6 +182,12 @@ export class AgentSessionService {
           : {}),
         ...(input.canUseTool ? { canUseTool: input.canUseTool } : {}),
         ...(input.skills ? { skills: input.skills } : {}),
+        ...(input.runtimeSkillNames
+          ? { runtimeSkillNames: input.runtimeSkillNames }
+          : {}),
+        ...(input.requiredSkills
+          ? { requiredSkills: input.requiredSkills }
+          : {}),
         ...(input.environment ? { environment: input.environment } : {}),
         ...(input.protectedEnvironmentNames
           ? {
@@ -174,7 +196,7 @@ export class AgentSessionService {
             }
           : {}),
         redactedValues: [
-          ...settingsValues,
+          ...installedSettings.redactedValues,
           cwd,
           ...(input.additionalRedactedValues ?? []),
         ],
@@ -218,14 +240,18 @@ export class AgentSessionService {
       let runtime = currentRuntime
       if (!runtime) {
         const systemPrompt = await this.systemPrompts.load("generic-agent")
-        const redactedValues =
-          await this.workspaces.readRedactedValues(cwd)
+        const installedSettings =
+          await this.workspaces.readInstalledSettings(cwd)
         runtime = this.openRuntime({
           sessionId,
           cwd,
           sdkSessionId: started.context.sdkSessionId,
+          settingsPath: installedSettings.settingsPath,
           systemPrompt: systemPrompt.content,
-          redactedValues,
+          ...(installedSettings.defaultPermissionMode
+            ? { permissionMode: installedSettings.defaultPermissionMode }
+            : {}),
+          redactedValues: installedSettings.redactedValues,
         })
       }
       await runtime.send({ turnId, prompt })
@@ -359,12 +385,14 @@ export class AgentSessionService {
     readonly sessionId: string
     readonly cwd: string
     readonly sdkSessionId: string | null
+    readonly settingsPath: string
     readonly permissionMode?: AgentRuntimePermissionMode
     readonly tools?: readonly string[]
     readonly allowedTools?: readonly string[]
     readonly disallowedTools?: readonly string[]
     readonly canUseTool?: CanUseTool
     readonly skills?: readonly string[]
+    readonly requiredSkills?: readonly string[]
     readonly environment?: Readonly<Record<string, string | undefined>>
     readonly protectedEnvironmentNames?: readonly string[]
     readonly systemPrompt?: string
@@ -385,6 +413,7 @@ export class AgentSessionService {
       agentSessionId: input.sessionId,
       cwd: input.cwd,
       claudeConfigDir: logConfiguration.claudeConfigDir,
+      settingsPath: input.settingsPath,
       sessionStore: logConfiguration.sessionStore,
       redactedValues: input.redactedValues,
       onRawMessage: (message) =>
@@ -403,6 +432,9 @@ export class AgentSessionService {
         : {}),
       ...(input.canUseTool ? { canUseTool: input.canUseTool } : {}),
       ...(input.skills ? { skills: input.skills } : {}),
+      ...(input.requiredSkills
+        ? { requiredSkills: input.requiredSkills }
+        : {}),
       ...(input.environment ? { environment: input.environment } : {}),
       ...(input.protectedEnvironmentNames
         ? {
@@ -510,12 +542,15 @@ export class AgentSessionService {
     readonly prompt: string
     readonly workspaceLocator: string
     readonly cwd: string
+    readonly settingsPath: string
     readonly permissionMode?: AgentRuntimePermissionMode
     readonly tools?: readonly string[]
     readonly allowedTools?: readonly string[]
     readonly disallowedTools?: readonly string[]
     readonly canUseTool?: CanUseTool
     readonly skills?: readonly string[]
+    readonly runtimeSkillNames?: readonly string[]
+    readonly requiredSkills?: readonly string[]
     readonly environment?: Readonly<Record<string, string | undefined>>
     readonly protectedEnvironmentNames?: readonly string[]
     readonly systemPrompt?: string
@@ -536,10 +571,19 @@ export class AgentSessionService {
     this.publish(created.events)
 
     try {
+      const runtimeConfiguration = this.logs.getRuntimeConfiguration(
+        input.sessionId,
+      )
+      await this.workspaces.installRuntimeSkills(
+        input.cwd,
+        runtimeConfiguration.claudeConfigDir,
+        input.runtimeSkillNames ?? [],
+      )
       const runtime = this.openRuntime({
         sessionId: input.sessionId,
         cwd: input.cwd,
         sdkSessionId: null,
+        settingsPath: input.settingsPath,
         redactedValues: [...new Set(input.redactedValues)],
         ...(input.onRuntimeDiagnostic
           ? { onRuntimeDiagnostic: input.onRuntimeDiagnostic }
@@ -554,6 +598,9 @@ export class AgentSessionService {
           : {}),
         ...(input.canUseTool ? { canUseTool: input.canUseTool } : {}),
         ...(input.skills ? { skills: input.skills } : {}),
+        ...(input.requiredSkills
+          ? { requiredSkills: input.requiredSkills }
+          : {}),
         ...(input.environment ? { environment: input.environment } : {}),
         ...(input.protectedEnvironmentNames
           ? {

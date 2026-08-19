@@ -62,6 +62,7 @@ export const claudeErrorCodes = [
   "CLAUDE_NETWORK_ERROR",
   "CLAUDE_REQUEST_TIMEOUT",
   "CLAUDE_CONFIGURATION_INVALID",
+  "CLAUDE_REQUIRED_SKILL_UNAVAILABLE",
   "CLAUDE_PROCESS_FAILED",
   "CLAUDE_RUNTIME_INTERRUPTED",
   "CLAUDE_EXECUTION_FAILED",
@@ -214,6 +215,7 @@ export interface OpenAgentRuntimeSessionInput {
   readonly agentSessionId: string
   readonly cwd: string
   readonly claudeConfigDir: string
+  readonly settingsPath: string
   readonly sessionStore: SessionStore
   readonly resumeSessionId?: string
   readonly permissionMode?: AgentRuntimePermissionMode
@@ -222,6 +224,7 @@ export interface OpenAgentRuntimeSessionInput {
   readonly disallowedTools?: readonly string[]
   readonly canUseTool?: CanUseTool
   readonly skills?: readonly string[]
+  readonly requiredSkills?: readonly string[]
   readonly environment?: Readonly<Record<string, string | undefined>>
   readonly protectedEnvironmentNames?: readonly string[]
   readonly systemPrompt?: string

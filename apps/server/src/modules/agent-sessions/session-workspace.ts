@@ -3,13 +3,31 @@ import { createHash } from "node:crypto"
 import { constants } from "node:fs"
 import {
   chmod,
+  cp,
   copyFile,
   mkdir,
   readFile,
 } from "node:fs/promises"
 
+import type { PermissionMode } from "@anthropic-ai/claude-agent-sdk"
+
 const sensitiveSettingName =
   /(?:api[_-]?key|auth|authorization|credential|password|secret|token)/i
+
+const permissionModes = new Set<PermissionMode>([
+  "default",
+  "acceptEdits",
+  "bypassPermissions",
+  "plan",
+  "dontAsk",
+  "auto",
+])
+
+export interface InstalledAgentSessionSettings {
+  readonly settingsPath: string
+  readonly redactedValues: readonly string[]
+  readonly defaultPermissionMode?: PermissionMode
+}
 
 export class AgentSessionWorkspaceConfigurationError extends Error {
   constructor(options?: ErrorOptions) {
@@ -152,7 +170,7 @@ export class AgentSessionWorkspaceStore {
 
   async installSettings(
     absoluteWorkspacePath: string,
-  ): Promise<readonly string[]> {
+  ): Promise<InstalledAgentSessionSettings> {
     const destination = this.getWorkspaceSettingsPath(absoluteWorkspacePath)
 
     try {
@@ -163,7 +181,56 @@ export class AgentSessionWorkspaceStore {
         constants.COPYFILE_EXCL,
       )
       await chmod(destination, 0o600)
-      return await this.readRedactedValues(absoluteWorkspacePath)
+      return await this.readInstalledSettings(absoluteWorkspacePath)
+    } catch (error) {
+      throw new AgentSessionWorkspaceConfigurationError({ cause: error })
+    }
+  }
+
+  async readInstalledSettings(
+    absoluteWorkspacePath: string,
+  ): Promise<InstalledAgentSessionSettings> {
+    const settingsPath = this.getWorkspaceSettingsPath(absoluteWorkspacePath)
+    try {
+      const rawSettings = await readFile(settingsPath, "utf8")
+      const redactedValues = [rawSettings]
+      let defaultPermissionMode: PermissionMode | undefined
+
+      try {
+        const parsed = JSON.parse(rawSettings) as {
+          readonly permissions?: { readonly defaultMode?: unknown }
+        }
+        const configuredMode = parsed.permissions?.defaultMode
+        if (configuredMode !== undefined) {
+          if (
+            typeof configuredMode !== "string" ||
+            !permissionModes.has(configuredMode as PermissionMode)
+          ) {
+            throw new Error(
+              "Claude permissions.defaultMode is not a supported permission mode.",
+            )
+          }
+          defaultPermissionMode = configuredMode as PermissionMode
+        }
+        collectSensitiveSettingValues(parsed, redactedValues)
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message.includes("permissions.defaultMode")
+        ) {
+          throw error
+        }
+        // Claude Agent SDK owns validation for all settings other than the
+        // permission mode that SkillConsole must explicitly forward.
+      }
+
+      return {
+        settingsPath,
+        redactedValues: [
+          ...new Set(redactedValues.filter((value) => value.length > 0)),
+        ],
+        ...(defaultPermissionMode ? { defaultPermissionMode } : {}),
+      }
     } catch (error) {
       throw new AgentSessionWorkspaceConfigurationError({ cause: error })
     }
@@ -172,9 +239,40 @@ export class AgentSessionWorkspaceStore {
   async readRedactedValues(
     absoluteWorkspacePath: string,
   ): Promise<readonly string[]> {
-    return this.readSettingsRedactedValues(
-      this.getWorkspaceSettingsPath(absoluteWorkspacePath),
-    )
+    return (await this.readInstalledSettings(absoluteWorkspacePath)).redactedValues
+  }
+
+  async installRuntimeSkills(
+    absoluteWorkspacePath: string,
+    claudeConfigDir: string,
+    skillNames: readonly string[],
+  ): Promise<void> {
+    const sourceRoot = path.join(absoluteWorkspacePath, ".claude", "skills")
+    const destinationRoot = path.join(claudeConfigDir, "skills")
+
+    try {
+      for (const skillName of skillNames) {
+        if (!/^[a-z0-9][a-z0-9-]*$/u.test(skillName)) {
+          throw new Error("Agent runtime Skill name is invalid.")
+        }
+        const source = path.resolve(sourceRoot, skillName)
+        const destination = path.resolve(destinationRoot, skillName)
+        if (
+          path.relative(sourceRoot, source).startsWith(`..${path.sep}`) ||
+          path.relative(destinationRoot, destination).startsWith(`..${path.sep}`)
+        ) {
+          throw new Error("Agent runtime Skill path escaped its controlled root.")
+        }
+        await mkdir(destinationRoot, { recursive: true, mode: 0o700 })
+        await cp(source, destination, {
+          recursive: true,
+          force: false,
+          errorOnExist: true,
+        })
+      }
+    } catch (error) {
+      throw new AgentSessionWorkspaceConfigurationError({ cause: error })
+    }
   }
 
   async readSourceRedactedValues(): Promise<readonly string[]> {

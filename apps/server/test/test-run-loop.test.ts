@@ -117,7 +117,7 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
         sdkSessionId: this.sdkSessionId,
         model: "claude-fake-test-run",
         tools: ["Read", "Write", "Edit", "Skill", "Bash"],
-        skills: [],
+        skills: [...(this.input.requiredSkills ?? [])],
         mcpServers: [],
       })
 
@@ -258,6 +258,11 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
       ),
       /ANTHROPIC_API_KEY/,
     )
+    assert.equal(
+      this.input.settingsPath,
+      path.join(this.input.cwd, ".claude", "settings.json"),
+    )
+    assert.equal(this.input.permissionMode, "acceptEdits")
     const skillPath = path.join(
       this.input.cwd,
       ".claude",
@@ -274,6 +279,23 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
     } catch {
       hasInstalledSkill = false
     }
+    const runtimeSkillPath = path.join(
+      this.input.claudeConfigDir,
+      "skills",
+      "sample-skill",
+      "SKILL.md",
+    )
+    let hasRuntimeSkill = true
+    try {
+      await readFile(runtimeSkillPath, "utf8")
+    } catch {
+      hasRuntimeSkill = false
+    }
+    assert.equal(hasRuntimeSkill, hasInstalledSkill)
+    assert.deepEqual(
+      this.input.requiredSkills ?? [],
+      hasInstalledSkill ? ["sample-skill"] : [],
+    )
     const inputContent = await readFile(
       path.join(this.input.cwd, "inputs", "files", "fixture.txt"),
       "utf8",
@@ -646,7 +668,7 @@ test(
     const settingsPath = path.join(dataRoot, "settings.json")
     await writeFile(
       settingsPath,
-      '{"env":{"ANTHROPIC_API_KEY":"integration-secret"}}',
+      '{"env":{"ANTHROPIC_API_KEY":"integration-secret"},"permissions":{"defaultMode":"acceptEdits"}}',
       "utf8",
     )
     const databaseClient = createDatabaseClient(testDatabaseUrl, {

@@ -30,6 +30,7 @@ import type {
   OpenAgentRuntimeSessionInput,
   RuntimeTurnInput,
 } from "../src/modules/agent-sessions/agent-session.domain.js"
+import { resolveAgentRuntimePermissionMode } from "../src/modules/agent-sessions/agent-session.service.js"
 import {
   AgentSystemPromptStore,
   agentSystemPromptRoles,
@@ -40,9 +41,34 @@ import {
   classifyClaudeResult,
   classifySdkMessageFailure,
 } from "../src/modules/agent-sessions/runtime/claude-error-classifier.js"
+import { findMissingRequiredSkills } from "../src/modules/agent-sessions/runtime/claude-agent-sdk.adapter.js"
 import { mapSdkMessage } from "../src/modules/agent-sessions/runtime/sdk-message.mapper.js"
-import { AgentSessionWorkspaceStore } from "../src/modules/agent-sessions/session-workspace.js"
+import {
+  AgentSessionWorkspaceConfigurationError,
+  AgentSessionWorkspaceStore,
+} from "../src/modules/agent-sessions/session-workspace.js"
 import { AgentSessionJsonlWriter } from "../src/modules/agent-sessions/agent-session-jsonl-writer.js"
+
+test("identifies required Skills missing from SDK initialization", () => {
+  assert.deepEqual(
+    findMissingRequiredSkills(
+      ["software-development-workflow", "existing-skill"],
+      ["existing-skill", "built-in-skill"],
+    ),
+    ["software-development-workflow"],
+  )
+})
+
+test("keeps a role permission override ahead of the root settings default", () => {
+  assert.equal(
+    resolveAgentRuntimePermissionMode("dontAsk", "acceptEdits"),
+    "dontAsk",
+  )
+  assert.equal(
+    resolveAgentRuntimePermissionMode(undefined, "acceptEdits"),
+    "acceptEdits",
+  )
+})
 import { AgentSessionTranscriptStore } from "../src/modules/agent-sessions/agent-session-transcript-store.js"
 import { recordFakeNativeTurn } from "./fake-native-agent-log.js"
 
@@ -629,6 +655,9 @@ test("loads every fixed Agent System Prompt with a content-addressed version", a
       `${prompt.fileName}@sha256:${prompt.sha256}`,
     )
     assert.ok(prompt.content.trim().length > 0)
+    if (role === "test-run-execution") {
+      assert.match(prompt.content, /at most three failed tool attempts/u)
+    }
   }
 })
 
@@ -705,6 +734,7 @@ test("copies root Claude settings into an isolated session workspace once", asyn
         ANTHROPIC_API_KEY: "workspace-secret",
         ANTHROPIC_BASE_URL: "https://example.invalid",
       },
+      permissions: { defaultMode: "acceptEdits" },
     },
     null,
     2,
@@ -719,7 +749,7 @@ test("copies root Claude settings into an isolated session workspace once", asyn
     const workspace = await store.prepare(
       "01900000-0000-7000-8000-000000000001",
     )
-    const redactedValues = await store.installSettings(
+    const installedSettings = await store.installSettings(
       workspace.absolutePath,
     )
     const copiedSettingsPath = path.join(
@@ -736,14 +766,86 @@ test("copies root Claude settings into an isolated session workspace once", asyn
       await readFile(copiedSettingsPath, "utf8"),
       sourceSettings,
     )
-    assert.ok(redactedValues.includes(sourceSettings))
-    assert.ok(redactedValues.includes("workspace-secret"))
-    assert.ok(redactedValues.includes("https://example.invalid"))
+    assert.equal(installedSettings.settingsPath, copiedSettingsPath)
+    assert.equal(installedSettings.defaultPermissionMode, "acceptEdits")
+    assert.ok(installedSettings.redactedValues.includes(sourceSettings))
+    assert.ok(installedSettings.redactedValues.includes("workspace-secret"))
+    assert.ok(
+      installedSettings.redactedValues.includes("https://example.invalid"),
+    )
 
     await writeFile(sourceSettingsPath, '{"changed":true}', "utf8")
     assert.equal(
       await readFile(copiedSettingsPath, "utf8"),
       sourceSettings,
+    )
+  } finally {
+    await rm(dataRoot, { recursive: true, force: true })
+  }
+})
+
+test("installs frozen Skills into an isolated Claude config directory", async () => {
+  const dataRoot = await mkdtemp(
+    path.join(tmpdir(), "skillconsole-agent-runtime-skill-"),
+  )
+  const sourceSettingsPath = path.join(dataRoot, "root-settings.json")
+
+  try {
+    await writeFile(sourceSettingsPath, "{}", "utf8")
+    const store = new AgentSessionWorkspaceStore(dataRoot, sourceSettingsPath)
+    const workspace = await store.prepare(
+      "01900000-0000-7000-8000-000000000002",
+    )
+    const sourceSkill = path.join(
+      workspace.absolutePath,
+      ".claude",
+      "skills",
+      "sample-skill",
+    )
+    const claudeConfigDir = path.join(dataRoot, "claude-runtime", "session")
+    await mkdir(sourceSkill, { recursive: true })
+    await writeFile(
+      path.join(sourceSkill, "SKILL.md"),
+      "---\nname: sample-skill\n---\n",
+      "utf8",
+    )
+
+    await store.installRuntimeSkills(workspace.absolutePath, claudeConfigDir, [
+      "sample-skill",
+    ])
+
+    assert.equal(
+      await readFile(
+        path.join(claudeConfigDir, "skills", "sample-skill", "SKILL.md"),
+        "utf8",
+      ),
+      "---\nname: sample-skill\n---\n",
+    )
+  } finally {
+    await rm(dataRoot, { recursive: true, force: true })
+  }
+})
+
+test("rejects an unsupported root permission mode before starting the SDK", async () => {
+  const dataRoot = await mkdtemp(
+    path.join(tmpdir(), "skillconsole-agent-invalid-permission-"),
+  )
+  const sourceSettingsPath = path.join(dataRoot, "root-settings.json")
+
+  try {
+    await writeFile(
+      sourceSettingsPath,
+      '{"permissions":{"defaultMode":"unsupported"}}',
+      "utf8",
+    )
+    const store = new AgentSessionWorkspaceStore(dataRoot, sourceSettingsPath)
+    const workspace = await store.prepare(
+      "01900000-0000-7000-8000-000000000003",
+    )
+
+    await assert.rejects(
+      () => store.installSettings(workspace.absolutePath),
+      AgentSessionWorkspaceConfigurationError,
     )
   } finally {
     await rm(dataRoot, { recursive: true, force: true })
@@ -786,6 +888,7 @@ test(
     const claudeSettingsPath = path.join(dataRoot, "settings.json")
     const claudeSettings = JSON.stringify({
       env: { ANTHROPIC_API_KEY: "integration-secret" },
+      permissions: { defaultMode: "acceptEdits" },
     })
     await writeFile(claudeSettingsPath, claudeSettings, "utf8")
     const migrationClient = createDatabaseClient(testDatabaseUrl, {
@@ -846,6 +949,18 @@ test(
         false,
       )
       assert.equal(adapter.opens[0]?.cwd.endsWith("workspace"), true)
+      assert.equal(adapter.opens[0]?.permissionMode, "acceptEdits")
+      assert.equal(
+        adapter.opens[0]?.settingsPath,
+        path.join(
+          dataRoot,
+          "agent-sessions",
+          created.id,
+          "workspace",
+          ".claude",
+          "settings.json",
+        ),
+      )
       assert.ok(
         adapter.opens[0]?.redactedValues.includes(
           "integration-secret",

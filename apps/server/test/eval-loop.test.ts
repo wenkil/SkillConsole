@@ -316,6 +316,11 @@ test(
         ),
         true,
       )
+      assert.equal(agentRuntimeAdapter.opens[0]?.permissionMode, "dontAsk")
+      assert.equal(
+        agentRuntimeAdapter.opens[0]?.settingsPath,
+        path.join(agentRuntimeAdapter.opens[0]!.cwd, ".claude", "settings.json"),
+      )
       assert.equal(
         await readFile(
           path.join(

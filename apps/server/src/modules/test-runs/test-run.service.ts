@@ -52,8 +52,8 @@ import {
 } from "./test-run-scorer.js"
 import { TestRunStorage } from "./test-run-storage.js"
 
-export const testRunProtocolVersion = "skill-test-run-v3"
-const projectSettingsPermissionPolicyVersion = "project-settings-v1"
+export const testRunProtocolVersion = "skill-test-run-v4"
+const projectSettingsPermissionPolicyVersion = "root-settings-explicit-v2"
 const maxFinalOutputCharacters = 200_000
 const executionLimits = {
   timeoutMs: 1_800_000,
@@ -382,6 +382,7 @@ function usageFromEvent(
 }
 
 function toolUsesFromEvent(event: AgentSessionEvent): readonly {
+  readonly toolUseId: string
   readonly name: string
   readonly input: Readonly<Record<string, unknown>>
 }[] {
@@ -398,12 +399,15 @@ function toolUsesFromEvent(event: AgentSessionEvent): readonly {
       !("type" in item) ||
       item.type !== "tool_use" ||
       !("name" in item) ||
-      typeof item.name !== "string"
+      typeof item.name !== "string" ||
+      !("toolUseId" in item) ||
+      typeof item.toolUseId !== "string"
     ) {
       return []
     }
     return [
       {
+        toolUseId: item.toolUseId,
         name: item.name,
         input:
           "input" in item &&
@@ -424,6 +428,98 @@ function collectStringValues(value: unknown): readonly string[] {
     return Object.values(value).flatMap(collectStringValues)
   }
   return []
+}
+
+export const testRunToolFailureRetryLimit = 3
+
+export type ToolFailureCategory =
+  | "permission_denied"
+  | "path_not_found"
+  | "read_only"
+  | "invalid_arguments"
+  | "command_failed"
+  | "tool_error"
+
+export interface ObservedToolUse {
+  readonly toolUseId: string
+  readonly name: string
+  readonly input: Readonly<Record<string, unknown>>
+}
+
+export function classifyTestRunToolFailure(
+  content: unknown,
+): ToolFailureCategory {
+  const text = collectStringValues(content).join("\n")
+  if (
+    /permission|not permitted|not allowed|denied|requires? approval|haven't granted|policy block/i.test(
+      text,
+    )
+  ) {
+    return "permission_denied"
+  }
+  if (/read-only|\bEROFS\b/i.test(text)) return "read_only"
+  if (
+    /no such file|not found|does not exist|cannot find|\bENOENT\b/i.test(text)
+  ) {
+    return "path_not_found"
+  }
+  if (/invalid (?:argument|parameter|input)|malformed|schema/i.test(text)) {
+    return "invalid_arguments"
+  }
+  if (/exit code|command failed|non-zero|\bfailed with code\b/i.test(text)) {
+    return "command_failed"
+  }
+  return "tool_error"
+}
+
+function normalizedToolTarget(
+  input: Readonly<Record<string, unknown>>,
+): string | null {
+  for (const key of [
+    "file_path",
+    "path",
+    "notebook_path",
+    "directory",
+    "cwd",
+  ]) {
+    const value = input[key]
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim().replaceAll("\\", "/")
+    }
+  }
+  return null
+}
+
+export function buildTestRunToolFailureKey(
+  toolUse: ObservedToolUse,
+  category: ToolFailureCategory,
+): string {
+  if (category === "permission_denied" || category === "read_only") {
+    return category
+  }
+  const target = normalizedToolTarget(toolUse.input)
+  if (target) return `${category}:${target}`
+  return `${category}:${toolUse.name}`
+}
+
+export class TestRunToolFailureTracker {
+  private readonly failureCounts = new Map<string, number>()
+
+  record(toolUse: ObservedToolUse, content: unknown): {
+    readonly category: ToolFailureCategory
+    readonly count: number
+    readonly limitReached: boolean
+  } {
+    const category = classifyTestRunToolFailure(content)
+    const key = buildTestRunToolFailureKey(toolUse, category)
+    const count = (this.failureCounts.get(key) ?? 0) + 1
+    this.failureCounts.set(key, count)
+    return {
+      category,
+      count,
+      limitReached: count >= testRunToolFailureRetryLimit,
+    }
+  }
 }
 
 export function extractObservedBundledScriptPaths(
@@ -1112,6 +1208,12 @@ export class TestRunService {
         environment: caseRuntimeEnvironment.values,
         protectedEnvironmentNames:
           caseRuntimeEnvironment.protectedNames,
+        ...(installSkill
+          ? {
+              runtimeSkillNames: [selection.revision.skillName],
+              requiredSkills: [selection.revision.skillName],
+            }
+          : {}),
         additionalRedactedValues: [
           workspace.absolutePath,
           workspace.taskPath,
@@ -1533,6 +1635,8 @@ export class TestRunService {
     let finalOutput = ""
     let usage: StoredTestRunUsage | null = null
     const skillToolEvidence: number[] = []
+    const observedToolUses = new Map<string, ObservedToolUse>()
+    const toolFailureTracker = new TestRunToolFailureTracker()
     const bundledScripts = new Map<string, number[]>()
     const declaredBundledScripts = new Set(
       input.selection.skill.files
@@ -1624,6 +1728,7 @@ export class TestRunService {
       if (mapped) this.eventBus.publish([mapped])
       if (input.phase === "execution" && mapped) {
         for (const toolUse of toolUsesFromEvent(event)) {
+          observedToolUses.set(toolUse.toolUseId, toolUse)
           if (toolUse.name === "Skill") {
             skillToolEvidence.push(mapped.sequence)
           }
@@ -1635,6 +1740,46 @@ export class TestRunService {
             const evidence = bundledScripts.get(relativePath) ?? []
             evidence.push(mapped.sequence)
             bundledScripts.set(relativePath, evidence)
+          }
+        }
+        if (
+          event.type === "tool.completed" &&
+          event.payload.isError === true &&
+          typeof event.payload.toolUseId === "string"
+        ) {
+          const toolUse = observedToolUses.get(event.payload.toolUseId)
+          if (toolUse) {
+            const failure = toolFailureTracker.record(
+              toolUse,
+              event.payload.content,
+            )
+            if (failure.limitReached && !settled) {
+              settled = true
+              void this.options.agentSessions
+                .cancel(input.sessionId)
+                .catch((error) => {
+                  this.options.logger.error(
+                    {
+                      runId: input.runId,
+                      caseId: input.caseId,
+                      sessionId: input.sessionId,
+                      error,
+                    },
+                    "Test execution retry-limit cancellation failed",
+                  )
+                })
+              resolveResult?.({
+                status: "FAILED",
+                finalOutput,
+                usage,
+                observations: observation(),
+                error: {
+                  code: "TEST_RUN_TOOL_RETRY_LIMIT_EXCEEDED",
+                  message: `The test execution Agent reached the three-attempt limit for ${failure.category}.`,
+                },
+              })
+              return
+            }
           }
         }
       }
@@ -1682,16 +1827,25 @@ export class TestRunService {
         event.type === "turn.failed" ||
         event.type === "session.failed"
       ) {
+        const error = eventError(
+          event,
+          "CLAUDE_EXECUTION_FAILED",
+          "The Agent execution failed.",
+        )
         terminal = {
           status: "FAILED",
           finalOutput,
           usage,
           observations: observation(),
-          error: eventError(
-            event,
-            "CLAUDE_EXECUTION_FAILED",
-            "The Agent execution failed.",
-          ),
+          error:
+            input.phase === "execution" &&
+            error.code === "CLAUDE_REQUIRED_SKILL_UNAVAILABLE"
+              ? {
+                  code: "TEST_RUN_TARGET_SKILL_UNAVAILABLE",
+                  message:
+                    "The selected target Skill was unavailable when the test Agent initialized.",
+                }
+              : error,
         }
       }
       if (terminal) {

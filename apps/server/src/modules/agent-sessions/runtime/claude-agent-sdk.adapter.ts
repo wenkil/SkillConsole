@@ -146,6 +146,14 @@ function classifyRuntimeFailure(error: unknown): AgentRuntimeFailure {
   }
 }
 
+export function findMissingRequiredSkills(
+  requiredSkills: readonly string[],
+  availableSkills: readonly string[],
+): readonly string[] {
+  const available = new Set(availableSkills)
+  return requiredSkills.filter((skillName) => !available.has(skillName))
+}
+
 class ClaudeAgentSdkSession implements AgentRuntimeSession {
   private readonly inputQueue = new AsyncMessageQueue<SDKUserMessage>()
   private readonly abortController = new AbortController()
@@ -166,7 +174,8 @@ class ClaudeAgentSdkSession implements AgentRuntimeSession {
           ...(input.environment ?? process.env),
           CLAUDE_CONFIG_DIR: input.claudeConfigDir,
         },
-        settingSources: ["project"],
+        settings: input.settingsPath,
+        settingSources: ["user", "project"],
         ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
         persistSession: true,
         sessionStore: input.sessionStore,
@@ -234,11 +243,19 @@ class ClaudeAgentSdkSession implements AgentRuntimeSession {
       for await (const sdkMessage of this.query) {
         await this.input.onRawMessage(sdkMessage)
         await this.input.onDiagnostic?.(summarizeSdkMessage(sdkMessage))
+        const missingSkills =
+          sdkMessage.type === "system" && sdkMessage.subtype === "init"
+            ? findMissingRequiredSkills(
+                this.input.requiredSkills ?? [],
+                sdkMessage.skills ?? [],
+              )
+            : []
         this.failureHint =
           classifySdkMessageFailure(sdkMessage) ?? this.failureHint
         const runtimeEvents = mapSdkMessage(sdkMessage, {
           redactedValues: [
             this.input.cwd,
+            this.input.claudeConfigDir,
             ...this.input.redactedValues,
             process.env.ANTHROPIC_API_KEY,
             process.env.ANTHROPIC_AUTH_TOKEN,
@@ -257,6 +274,20 @@ class ClaudeAgentSdkSession implements AgentRuntimeSession {
             this.activeTurnId = null
             this.failureHint = null
           }
+        }
+        if (missingSkills.length > 0) {
+          const failure = {
+            ...createClaudeError("CLAUDE_REQUIRED_SKILL_UNAVAILABLE"),
+            terminal: true,
+          }
+          await this.input.onDiagnostic?.({
+            messageType: "runtime.error",
+            subtype: "required_skill_unavailable",
+            details: { missingSkills },
+          })
+          await this.input.onFatalError(failure)
+          this.close()
+          return
         }
       }
 

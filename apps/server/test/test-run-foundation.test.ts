@@ -28,6 +28,7 @@ import {
 } from "../src/modules/test-runs/test-run-runtime-environment.js"
 import {
   buildTestRunSemanticConfigurationFingerprint,
+  TestRunToolFailureTracker,
   extractObservedBundledScriptPaths,
   getTestRunCaseSideOrder,
 } from "../src/modules/test-runs/test-run.service.js"
@@ -48,6 +49,50 @@ test("version comparison alternates the paired serial order by Eval", () => {
     getTestRunCaseSideOrder("target_vs_no_skill", 1),
     ["TARGET", "BASELINE"],
   )
+})
+
+test("stops the third permission failure even when the Agent switches tools", () => {
+  const tracker = new TestRunToolFailureTracker()
+  const attempts = [
+    { toolUseId: "write-1", name: "Write", input: { file_path: "/output/a" } },
+    { toolUseId: "bash-1", name: "Bash", input: { command: "write a" } },
+    { toolUseId: "python-1", name: "Bash", input: { command: "python write.py" } },
+  ].map((toolUse) =>
+    tracker.record(
+      toolUse,
+      "Permission denied: this operation requires approval.",
+    ),
+  )
+
+  assert.deepEqual(
+    attempts.map((attempt) => ({
+      category: attempt.category,
+      count: attempt.count,
+      limitReached: attempt.limitReached,
+    })),
+    [
+      { category: "permission_denied", count: 1, limitReached: false },
+      { category: "permission_denied", count: 2, limitReached: false },
+      { category: "permission_denied", count: 3, limitReached: true },
+    ],
+  )
+})
+
+test("keeps path-not-found retry budgets separate by target", () => {
+  const tracker = new TestRunToolFailureTracker()
+  const first = tracker.record(
+    { toolUseId: "read-a", name: "Read", input: { file_path: "/input/a" } },
+    "ENOENT: no such file",
+  )
+  const second = tracker.record(
+    { toolUseId: "read-b", name: "Read", input: { file_path: "/input/b" } },
+    "ENOENT: no such file",
+  )
+
+  assert.equal(first.count, 1)
+  assert.equal(second.count, 1)
+  assert.equal(first.limitReached, false)
+  assert.equal(second.limitReached, false)
 })
 
 test("semantic configuration fingerprint ignores credentials but tracks model changes", () => {

@@ -72,6 +72,8 @@ const claudeErrorMessages = {
     "The Claude request timed out.",
   CLAUDE_CONFIGURATION_INVALID:
     "Claude configuration is invalid or unavailable.",
+  CLAUDE_REQUIRED_SKILL_UNAVAILABLE:
+    "A required Agent Skill was unavailable when the session initialized.",
   CLAUDE_PROCESS_FAILED:
     "The Claude Agent SDK process ended unexpectedly.",
   CLAUDE_RUNTIME_INTERRUPTED:
