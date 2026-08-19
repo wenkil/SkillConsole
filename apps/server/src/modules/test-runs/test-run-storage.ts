@@ -229,6 +229,7 @@ interface TestRunExecutionTaskInput {
 function executionTaskDocument(
   task: TestRunExecutionTaskInput,
   inputPaths: readonly string[],
+  outputDirectory: string,
 ): string {
   return `${JSON.stringify(
     {
@@ -237,7 +238,7 @@ function executionTaskDocument(
       side: task.side,
       skillName: task.skillName,
       inputPaths,
-      outputDirectory: "outputs",
+      outputDirectory,
     },
     null,
     2,
@@ -399,15 +400,21 @@ export class TestRunStorage {
         await copyFile(source, destination)
         await assertFileHash(destination, file.sha256)
         await chmod(destination, 0o444)
-        inputPaths.push(
-          path.posix.join("inputs", relativePath),
-        )
+        inputPaths.push(destination)
       }
       const taskPath = path.join(workspace, "inputs", "task.json")
-      await writeFile(taskPath, executionTaskDocument(task, inputPaths), {
-        encoding: "utf8",
-        flag: "wx",
-      })
+      await writeFile(
+        taskPath,
+        executionTaskDocument(
+          task,
+          inputPaths,
+          path.join(workspace, "outputs"),
+        ),
+        {
+          encoding: "utf8",
+          flag: "wx",
+        },
+      )
 
       return {
         locator: this.getWorkspaceLocator(runId, caseId),
@@ -541,9 +548,13 @@ export class TestRunStorage {
       expectedInputs.push(file)
     }
     const inputPaths = evalFiles.map((relativePath) =>
-      path.posix.join("inputs", relativePath),
+      path.join(workspace, "inputs", ...relativePath.split("/")),
     )
-    const taskDocument = executionTaskDocument(task, inputPaths)
+    const taskDocument = executionTaskDocument(
+      task,
+      inputPaths,
+      path.join(workspace, "outputs"),
+    )
     expectedInputs.push({
       relativePath: "task.json",
       sha256: sha256(taskDocument),
@@ -568,6 +579,7 @@ export class TestRunStorage {
       })[]
     },
   ): Promise<{
+    readonly absolutePath: string
     readonly taskPath: string
     readonly outputPath: string
   }> {
@@ -624,10 +636,7 @@ export class TestRunStorage {
           encoding: "utf8",
           flag: "wx",
         })
-        evidencePath = path
-          .relative(gradingRoot, evidenceFile)
-          .split(path.sep)
-          .join("/")
+        evidencePath = evidenceFile
       }
       artifactIndex.push({
         path: artifact.relativePath,
@@ -650,18 +659,18 @@ export class TestRunStorage {
       `${JSON.stringify(
         {
           schemaVersion: "test-run-grading-task.v1",
-          rubricPath: "inputs/rubric.md",
-          testCasePath: "inputs/test-case.json",
-          executorFinalOutputPath: "inputs/executor-final-output.txt",
-          artifactIndexPath: "inputs/artifacts/index.json",
-          outputPath: "outputs/grading.json",
+          rubricPath,
+          testCasePath,
+          executorFinalOutputPath: finalOutputPath,
+          artifactIndexPath,
+          outputPath,
         },
         null,
         2,
       )}\n`,
       { encoding: "utf8", flag: "wx" },
     )
-    return { taskPath, outputPath }
+    return { absolutePath: gradingRoot, taskPath, outputPath }
   }
 
   readGradingOutput(runId: string, caseId: string): Promise<string> {

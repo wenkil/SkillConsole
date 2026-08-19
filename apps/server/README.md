@@ -68,8 +68,10 @@ Route handlers translate HTTP requests into application operations. They must no
   permission overrides.
 - System Prompts: repository-root `agent-prompts/*.system.md`, selected by a
   fixed Session role and read again for each new Session.
-- Task payloads: workspace `inputs/task.json` plus its referenced files; the
-  initial user Prompt is only a short bootstrap instruction.
+- Task payloads: a workspace task manifest plus its referenced files. The
+  initial user Prompt carries the Server-resolved absolute task manifest path,
+  and every physical path intended for tool use in the manifest is absolute.
+  Logical artifact and Evals references remain relative by protocol.
 - Direct deployment override: `SKILLCONSOLE_CLAUDE_SETTINGS_PATH`.
 - System Prompt directory override: `SKILLCONSOLE_AGENT_PROMPTS_ROOT`.
 - Native log storage:

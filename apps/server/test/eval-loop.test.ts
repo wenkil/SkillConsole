@@ -312,7 +312,7 @@ test(
       assert.equal(terminal.error, null)
       assert.equal(
         agentRuntimeAdapter.opens[0]?.systemPrompt?.includes(
-          "inputs/task.json",
+          "exact absolute path",
         ),
         true,
       )
@@ -327,18 +327,35 @@ test(
         ),
         await readFile(settingsPath, "utf8"),
       )
+      const taskPath = path.join(
+        agentRuntimeAdapter.opens[0]!.cwd,
+        "inputs",
+        "task.json",
+      )
+      const task = JSON.parse(
+        await readFile(taskPath, "utf8"),
+      ) as Readonly<Record<string, unknown>>
+      assert.equal(task.schemaVersion, "eval-generation-task.v1")
+      assert.equal(task.targetSkillPath, path.join(
+        agentRuntimeAdapter.opens[0]!.cwd,
+        "target-skill",
+        "sample-skill",
+      ))
+      assert.equal(task.outputEvalsPath, path.join(
+        agentRuntimeAdapter.opens[0]!.cwd,
+        "output",
+        "evals.json",
+      ))
+      assert.equal(task.outputFilesPath, path.join(
+        agentRuntimeAdapter.opens[0]!.cwd,
+        "output",
+        "files",
+      ))
       assert.equal(
-        JSON.parse(
-          await readFile(
-            path.join(
-              agentRuntimeAdapter.opens[0]!.cwd,
-              "inputs",
-              "task.json",
-            ),
-            "utf8",
-          ),
-        ).schemaVersion,
-        "eval-generation-task.v1",
+        agentRuntimeAdapter.opens[0]!.prompt.includes(
+          JSON.stringify(taskPath),
+        ),
+        true,
       )
 
       const draftResponse = await fetch(

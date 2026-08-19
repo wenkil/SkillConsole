@@ -197,6 +197,7 @@ export class EvalGenerationService {
         systemPromptRole: "eval-generation",
         expectedSystemPromptFingerprint: systemPrompt.sha256,
         prompt: buildEvalGenerationPrompt({
+          taskPath: workspace.taskPath,
           skillName: target.skillName,
           maxEvalCount: input.maxEvalCount,
           generationBrief: input.generationBrief,

@@ -46,6 +46,11 @@ function evalGenerationTaskDocument(
     readonly maxEvalCount: number
     readonly generationBrief: string | null
   },
+  paths: {
+    readonly targetSkillPath: string
+    readonly outputEvalsPath: string
+    readonly outputFilesPath: string
+  },
 ): string {
   return `${JSON.stringify(
     {
@@ -55,9 +60,9 @@ function evalGenerationTaskDocument(
       generationBrief:
         taskInput.generationBrief?.trim() ||
         "无补充要求。根据 Skill 的主要能力与关键边界设计用例。",
-      targetSkillPath: path.posix.join("target-skill", target.skillName),
-      outputEvalsPath: "output/evals.json",
-      outputFilesPath: "output/files",
+      targetSkillPath: paths.targetSkillPath,
+      outputEvalsPath: paths.outputEvalsPath,
+      outputFilesPath: paths.outputFilesPath,
     },
     null,
     2,
@@ -154,6 +159,8 @@ export class EvalWorkspacePreparer {
     )
     const outputFilesPath =
       this.storage.getGenerationFilesPath(generationId)
+    const outputEvalsPath =
+      this.storage.getGenerationEvalsJsonPath(generationId)
     try {
       await mkdir(generationRoot)
       await Promise.all([
@@ -186,7 +193,11 @@ export class EvalWorkspacePreparer {
       await mkdir(path.dirname(taskPath), { recursive: true })
       await writeFile(
         taskPath,
-        evalGenerationTaskDocument(target, taskInput),
+        evalGenerationTaskDocument(target, taskInput, {
+          targetSkillPath,
+          outputEvalsPath,
+          outputFilesPath,
+        }),
         { encoding: "utf8", flag: "wx" },
       )
 
@@ -195,8 +206,7 @@ export class EvalWorkspacePreparer {
           this.storage.getGenerationWorkspaceLocator(generationId),
         absolutePath: workspacePath,
         targetSkillPath,
-        outputEvalsPath:
-          this.storage.getGenerationEvalsJsonPath(generationId),
+        outputEvalsPath,
         outputFilesPath,
         taskPath,
         configurationFingerprint,

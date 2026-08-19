@@ -673,13 +673,6 @@ export class TestReportAnalysisService {
         kind: "conflict",
       })
     }
-    const prompt =
-      "Read inputs/task.json, analyze the referenced frozen report, and write outputs/analysis.json."
-    await this.recordDiagnostic(analysisId, "analysis.prompt.prepared", {
-      characterCount: prompt.length,
-      sha256: createHash("sha256").update(prompt, "utf8").digest("hex"),
-      systemPromptVersion: systemPrompt.version,
-    })
     const settings = await readFile(this.options.claudeSettingsPath)
     const expectedConfigurationFingerprint = sha256(settings)
     if (
@@ -708,6 +701,16 @@ export class TestReportAnalysisService {
         selectedEvalRevisionCaseIds: revision.selectedEvalRevisionCaseIds,
       },
     )
+    const prompt = [
+      "Read the analysis task manifest from this exact absolute path:",
+      JSON.stringify(prepared.taskPath),
+      "Use this path exactly as provided. Do not replace it, resolve it to another directory, or guess an alternative path. Analyze the referenced frozen report and write the required JSON output to the exact outputPath declared in the manifest.",
+    ].join("\n")
+    await this.recordDiagnostic(analysisId, "analysis.prompt.prepared", {
+      characterCount: prompt.length,
+      sha256: createHash("sha256").update(prompt, "utf8").digest("hex"),
+      systemPromptVersion: systemPrompt.version,
+    })
     await this.recordDiagnostic(analysisId, "analysis.workspace.prepared", {
       systemPromptVersion: systemPrompt.version,
       capabilitySource: revision.runtimePolicy.capabilitySource,

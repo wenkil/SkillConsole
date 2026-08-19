@@ -7,7 +7,10 @@ import test from "node:test"
 
 import { AgentSessionWorkspaceStore } from "../src/modules/agent-sessions/session-workspace.js"
 import { mapSdkMessage } from "../src/modules/agent-sessions/runtime/sdk-message.mapper.js"
-import { buildExecutionPrompt } from "../src/modules/test-runs/test-run-prompt.js"
+import {
+  buildExecutionPrompt,
+  buildGraderPrompt,
+} from "../src/modules/test-runs/test-run-prompt.js"
 import {
   formatEvidenceWithLineNumbers,
   resolveEvidenceAnchors,
@@ -322,11 +325,18 @@ test("runtime redaction ignores short control values but still removes secrets",
 })
 
 test("test execution bootstrap delegates task detail to the workspace file", () => {
-  assert.equal(
-    buildExecutionPrompt(),
-    "Read inputs/task.json and execute the test Case described there.",
-  )
-  assert.doesNotMatch(buildExecutionPrompt(), /TARGET|BASELINE|fixture/)
+  const taskPath = "/workspace/test-runs/run/cases/case/workspace/inputs/task.json"
+  const prompt = buildExecutionPrompt({ taskPath })
+  assert.match(prompt, new RegExp(taskPath))
+  assert.match(prompt, /exact absolute path/)
+  assert.doesNotMatch(prompt, /TARGET|BASELINE|fixture/)
+})
+
+test("test grader bootstrap uses the exact absolute task path", () => {
+  const taskPath = "/workspace/test-runs/run/cases/case/grading/inputs/task.json"
+  const prompt = buildGraderPrompt({ taskPath })
+  assert.match(prompt, new RegExp(taskPath))
+  assert.match(prompt, /exact outputPath/)
 })
 
 test("test run scorer requires one independently evidenced result per assertion", () => {
@@ -566,9 +576,12 @@ test("Agent Session workspace resolver accepts only controlled test run locators
 })
 
 test("target and baseline use the same execution bootstrap prompt", () => {
-  assert.equal(buildExecutionPrompt(), buildExecutionPrompt())
-  assert.equal(buildExecutionPrompt().includes("TARGET"), false)
-  assert.equal(buildExecutionPrompt().includes("BASELINE"), false)
+  const taskPath = "/workspace/test-runs/run/cases/case/workspace/inputs/task.json"
+  const left = buildExecutionPrompt({ taskPath })
+  const right = buildExecutionPrompt({ taskPath })
+  assert.equal(left, right)
+  assert.equal(left.includes("TARGET"), false)
+  assert.equal(left.includes("BASELINE"), false)
 })
 
 test("test run Artifact safety gate removes outputs containing protected values", async () => {

@@ -32,12 +32,16 @@ async function withTempRoot(
 }
 
 test("injects the selected generation options into the Agent prompt", () => {
+  const taskPath = "/workspace/eval-generations/example/inputs/task.json"
   const prompt = buildEvalGenerationPrompt({
+    taskPath,
     skillName: "sample-skill",
     maxEvalCount: 3,
     generationBrief: "覆盖文件输入场景",
   })
 
+  assert.match(prompt, new RegExp(taskPath))
+  assert.doesNotMatch(prompt, /所有路径都是相对于/)
   assert.match(prompt, /目标 Skill：\{sample-skill\}/)
   assert.match(prompt, /目标用例数：\{3\}/)
   assert.match(prompt, /补充要求：\{覆盖文件输入场景\}/)

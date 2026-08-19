@@ -103,10 +103,10 @@ export class TestReportAnalysisWorkspace {
         `${JSON.stringify(
           {
             schemaVersion: "test-report-analysis-task.v1",
-            reportPath: "inputs/fact-report.json",
-            selectedCasesPath: "inputs/selected-cases.json",
-            contextPath: "inputs/analysis-context.json",
-            outputPath: "outputs/analysis.json",
+            reportPath,
+            selectedCasesPath,
+            contextPath,
+            outputPath,
           },
           null,
           2,

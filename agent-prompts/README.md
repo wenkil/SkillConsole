@@ -5,12 +5,14 @@
 | Session 角色 | System Prompt 文件 | 工作区任务入口 |
 | --- | --- | --- |
 | 通用 Agent | `generic-agent.system.md` | 用户消息 |
-| 测试用例生成 | `eval-generation.system.md` | `inputs/task.json` |
-| 测试任务执行 | `test-run-execution.system.md` | `inputs/task.json` |
-| 测试结果评分 | `test-run-grader.system.md` | `inputs/task.json` |
-| 测试报告分析 | `test-report-analyzer.system.md` | `inputs/task.json` |
+| 测试用例生成 | `eval-generation.system.md` | 启动 Prompt 注入的绝对 `taskPath` |
+| 测试任务执行 | `test-run-execution.system.md` | 启动 Prompt 注入的绝对 `taskPath` |
+| 测试结果评分 | `test-run-grader.system.md` | 启动 Prompt 注入的绝对 `taskPath` |
+| 测试报告分析 | `test-report-analyzer.system.md` | 启动 Prompt 注入的绝对 `taskPath` |
 
-任务上下文、事实报告、证据、Rubric 和输出路径均由服务写入 Session 工作区文件，不会拼接成大型启动 Prompt。每个 System Prompt 应明确要求 Agent 先读取 `inputs/task.json`，再读取其中声明的文件，并把结构化结果写到约定的输出路径。
+任务上下文、事实报告、证据、Rubric 和输出路径均由服务写入 Session 工作区文件，不会拼接成大型启动 Prompt。服务在启动 Prompt 中注入经过解析和边界校验的绝对 `taskPath`；任务清单中供工具实际读写的物理路径同样使用后端生成的绝对路径。每个 System Prompt 应明确要求 Agent 原样使用这些路径，不得替换、重新解析或猜测其他路径。
+
+Evals 的 `files` 和评分证据的 `reference` 等业务协议字段仍使用逻辑相对路径；它们不是直接传给文件工具的物理路径。
 
 所有角色使用同一份项目 `settings.json` 作为 Claude Agent SDK 的项目设置和能力来源。工具、Skill、MCP 和命令权限请统一在 `settings.json` 中配置；角色行为、读取顺序和可写范围要求写在对应的 System Prompt 中。
 

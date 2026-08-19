@@ -1104,7 +1104,7 @@ export class TestRunService {
           side: runCase.side,
           phase: "execution",
         },
-        prompt: buildExecutionPrompt(),
+        prompt: buildExecutionPrompt({ taskPath: workspace.taskPath }),
         workspaceLocator: workspace.locator,
         expectedConfigurationFingerprint: run.configurationFingerprint,
         systemPromptRole: "test-run-execution",
@@ -1113,6 +1113,7 @@ export class TestRunService {
         protectedEnvironmentNames:
           caseRuntimeEnvironment.protectedNames,
         additionalRedactedValues: [
+          workspace.absolutePath,
           workspace.taskPath,
           ...caseRuntimeEnvironment.sensitiveValues,
         ],
@@ -1403,7 +1404,7 @@ export class TestRunService {
         side: runCase.side,
         phase: "grading",
       },
-      prompt: buildGraderPrompt(),
+      prompt: buildGraderPrompt({ taskPath: gradingTask.taskPath }),
       workspaceLocator: gradingLocator,
       expectedConfigurationFingerprint: run.configurationFingerprint,
       systemPromptRole: "test-run-grader",
@@ -1412,6 +1413,7 @@ export class TestRunService {
       protectedEnvironmentNames:
         graderRuntimeEnvironment.protectedNames,
       additionalRedactedValues: [
+        gradingTask.absolutePath,
         gradingTask.taskPath,
         gradingTask.outputPath,
         ...graderRuntimeEnvironment.sensitiveValues,

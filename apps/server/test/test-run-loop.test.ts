@@ -100,6 +100,7 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
   private closed = false
   private turnId: string | null = null
   private readonly sdkSessionId = randomUUID()
+  private gradingOutputPath: string | null = null
 
   constructor(
     private readonly input: OpenAgentRuntimeSessionInput,
@@ -167,6 +168,7 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
       if (phase === "eval_generation") {
         responseText = await this.generateEvals()
       } else if (phase === "grading") {
+        assert.ok(this.gradingOutputPath)
         const grading = JSON.stringify({
           assertions: [
             {
@@ -186,7 +188,7 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
           ],
         })
         await writeFile(
-          path.join(this.input.cwd, "outputs", "grading.json"),
+          this.gradingOutputPath,
           `${grading}\n`,
           "utf8",
         )
@@ -288,7 +290,16 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
         path.join(this.input.cwd, "inputs", "task.json"),
         "utf8",
       ),
-    ) as { readonly userTask?: string }
+    ) as {
+      readonly userTask?: string
+      readonly inputPaths?: readonly string[]
+      readonly outputDirectory?: string
+    }
+    assert.equal(
+      task.inputPaths?.every((inputPath) => path.isAbsolute(inputPath)),
+      true,
+    )
+    assert.equal(path.isAbsolute(task.outputDirectory ?? ""), true)
     return {
       externalId: externalIdFromPrompt(task.userTask ?? ""),
       snapshotMarker: null,
@@ -299,16 +310,42 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
     readonly externalId: number | null
     readonly snapshotMarker: string | null
   }> {
-    const testCase = JSON.parse(
+    const task = JSON.parse(
       await readFile(
-        path.join(this.input.cwd, "inputs", "test-case.json"),
+        path.join(this.input.cwd, "inputs", "task.json"),
         "utf8",
       ),
+    ) as {
+      readonly rubricPath: string
+      readonly testCasePath: string
+      readonly executorFinalOutputPath: string
+      readonly artifactIndexPath: string
+      readonly outputPath: string
+    }
+    for (const physicalPath of [
+      task.rubricPath,
+      task.testCasePath,
+      task.executorFinalOutputPath,
+      task.artifactIndexPath,
+      task.outputPath,
+    ]) {
+      assert.equal(path.isAbsolute(physicalPath), true)
+    }
+    this.gradingOutputPath = task.outputPath
+    const testCase = JSON.parse(
+      await readFile(task.testCasePath, "utf8"),
     ) as { readonly userPrompt?: string }
-    const finalOutput = await readFile(
-      path.join(this.input.cwd, "inputs", "executor-final-output.txt"),
-      "utf8",
-    )
+    const finalOutput = await readFile(task.executorFinalOutputPath, "utf8")
+    const artifactIndex = JSON.parse(
+      await readFile(task.artifactIndexPath, "utf8"),
+    ) as {
+      readonly artifacts?: readonly { readonly evidencePath?: string | null }[]
+    }
+    for (const artifact of artifactIndex.artifacts ?? []) {
+      if (artifact.evidencePath) {
+        assert.equal(path.isAbsolute(artifact.evidencePath), true)
+      }
+    }
     return {
       externalId: externalIdFromPrompt(testCase.userPrompt ?? ""),
       snapshotMarker: snapshotMarkerFromPrompt(finalOutput),
@@ -1808,7 +1845,7 @@ test(
       assert.equal(
         graderOpens.every(
           (item) =>
-            item.systemPrompt?.includes("inputs/task.json") === true &&
+            item.systemPrompt?.includes("exact absolute path") === true &&
             item.environment?.DATABASE_URL === undefined,
         ),
         true,
@@ -1821,7 +1858,7 @@ test(
         executionOpens.every(
           (item) =>
             item.environment?.DATABASE_URL === undefined &&
-            item.systemPrompt?.includes("inputs/task.json") === true,
+            item.systemPrompt?.includes("exact absolute path") === true,
         ),
         true,
       )
