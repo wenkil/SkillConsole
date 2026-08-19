@@ -658,6 +658,14 @@ test("loads every fixed Agent System Prompt with a content-addressed version", a
     if (role === "test-run-execution") {
       assert.match(prompt.content, /at most three failed tool attempts/u)
     }
+    if (role === "test-run-execution-required-skill") {
+      assert.match(prompt.content, /MUST invoke the Skill tool/u)
+      assert.match(prompt.content, /\{\{SKILL_NAME\}\}/u)
+    }
+    if (role === "test-run-execution-no-skill") {
+      assert.match(prompt.content, /Do not invoke the Skill tool/u)
+      assert.match(prompt.content, /\{\{SKILL_NAME\}\}/u)
+    }
   }
 })
 

@@ -147,6 +147,10 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
         snapshotMarker,
       })
 
+      if (phase === "execution" && executionFacts?.hasInstalledSkill) {
+        await this.emitRequiredSkillInvocation(turn.turnId)
+      }
+
       if (phase === "execution" && (await this.adapter.maybeDeferExecution())) {
         return
       }
@@ -389,6 +393,30 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
       "utf8",
     )
     return `Created outputs/summary.txt with the controlled fixture summary | snapshot=${input.snapshotMarker}.`
+  }
+
+  private async emitRequiredSkillInvocation(turnId: string): Promise<void> {
+    const skillName = this.input.requiredSkills?.[0]
+    assert.ok(skillName)
+    const toolUseId = randomUUID()
+    await this.input.onEvent(turnId, {
+      type: "assistant_message",
+      messageId: randomUUID(),
+      content: [
+        {
+          type: "tool_use",
+          toolUseId,
+          name: "Skill",
+          input: { skill: skillName },
+        },
+      ],
+    })
+    await this.input.onEvent(turnId, {
+      type: "tool_completed",
+      toolUseId,
+      content: `Loaded ${skillName}.`,
+      isError: false,
+    })
   }
 
   private async emitResult(turnId: string, success: boolean): Promise<void> {

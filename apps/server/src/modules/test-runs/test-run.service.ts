@@ -32,7 +32,10 @@ import {
 } from "./test-run-grader-protocol.js"
 import {
   buildExecutionPrompt,
+  buildExecutionPromptProtocolVersion,
+  buildExecutionSkillPolicyFingerprint,
   buildGraderPrompt,
+  type TestRunExecutionSkillPolicy,
 } from "./test-run-prompt.js"
 import {
   TestRunRepository,
@@ -52,7 +55,7 @@ import {
 } from "./test-run-scorer.js"
 import { TestRunStorage } from "./test-run-storage.js"
 
-export const testRunProtocolVersion = "skill-test-run-v4"
+export const testRunProtocolVersion = "skill-test-run-v5"
 const projectSettingsPermissionPolicyVersion = "root-settings-explicit-v2"
 const maxFinalOutputCharacters = 200_000
 const executionLimits = {
@@ -124,6 +127,15 @@ function sha256(value: Buffer | string): string {
 
 function stableHash(value: unknown): string {
   return sha256(JSON.stringify(value))
+}
+
+function executionSkillPolicy(
+  installSkill: boolean,
+  skillName: string,
+): TestRunExecutionSkillPolicy {
+  return installSkill
+    ? { kind: "required", skillName }
+    : { kind: "forbidden", skillName }
 }
 
 function parseSemanticRuntimeConfiguration(
@@ -446,6 +458,47 @@ export interface ObservedToolUse {
   readonly input: Readonly<Record<string, unknown>>
 }
 
+export function extractInvokedSkillName(
+  input: Readonly<Record<string, unknown>>,
+): string | null {
+  for (const key of ["skill", "skillName", "name", "command"]) {
+    const value = input[key]
+    if (typeof value !== "string") continue
+    const normalized = value.trim().replace(/^\/+/, "").split(/\s+/u)[0]
+    if (normalized) return normalized
+  }
+  return null
+}
+
+export function validateExecutionSkillPolicy(input: {
+  readonly policy: TestRunExecutionSkillPolicy
+  readonly selectedSkillInvocationCount: number
+  readonly totalSkillInvocationCount: number
+  readonly invokedBeforeTaskWork: boolean
+}): { readonly code: string; readonly message: string } | null {
+  if (input.policy.kind === "forbidden") {
+    return input.totalSkillInvocationCount > 0
+      ? {
+          code: "TEST_RUN_SKILL_INVOCATION_FORBIDDEN",
+          message:
+            "The no-Skill test participant invoked the Skill tool.",
+        }
+      : null
+  }
+  if (input.selectedSkillInvocationCount === 0) {
+    return {
+      code: "TEST_RUN_REQUIRED_SKILL_NOT_INVOKED",
+      message: `The test execution Agent did not invoke the required Skill ${JSON.stringify(input.policy.skillName)}.`,
+    }
+  }
+  return input.invokedBeforeTaskWork
+    ? null
+    : {
+        code: "TEST_RUN_REQUIRED_SKILL_INVOKED_TOO_LATE",
+        message: `The test execution Agent began task work before invoking the required Skill ${JSON.stringify(input.policy.skillName)}.`,
+      }
+}
+
 export function classifyTestRunToolFailure(
   content: unknown,
 ): ToolFailureCategory {
@@ -645,17 +698,33 @@ export class TestRunService {
 
     const settings = await readFile(this.options.claudeSettingsPath)
     const configurationFingerprint = sha256(settings)
-    const [executionSystemPrompt, graderSystemPrompt] = await Promise.all([
+    const [
+      executionSystemPrompt,
+      requiredSkillConstraint,
+      noSkillConstraint,
+      graderSystemPrompt,
+    ] = await Promise.all([
       this.options.agentSessions.getSystemPrompt("test-run-execution"),
+      this.options.agentSessions.getSystemPrompt(
+        "test-run-execution-required-skill",
+      ),
+      this.options.agentSessions.getSystemPrompt(
+        "test-run-execution-no-skill",
+      ),
       this.options.agentSessions.getSystemPrompt("test-run-grader"),
     ])
+    const executionPromptVersion = buildExecutionPromptProtocolVersion({
+      systemPromptContent: executionSystemPrompt.content,
+      requiredSkillConstraintTemplate: requiredSkillConstraint.content,
+      noSkillConstraintTemplate: noSkillConstraint.content,
+    })
     const semantic = parseSemanticRuntimeConfiguration(settings)
     const executionPolicy =
       input.mode === "version_vs_version"
         ? ("paired_serial_alternating_v1" as const)
         : ("target_then_no_skill_serial_v1" as const)
     const promptVersions = {
-      executionPromptVersion: executionSystemPrompt.version,
+      executionPromptVersion,
       graderProtocolVersion: graderSystemPrompt.version,
     }
     const semanticConfigurationFingerprint =
@@ -679,7 +748,7 @@ export class TestRunService {
       environmentFingerprint,
       sdkVersion: claudeAgentSdkVersion,
       protocolVersion: testRunProtocolVersion,
-      executionPromptVersion: executionSystemPrompt.version,
+      executionPromptVersion,
       graderProtocolVersion: graderSystemPrompt.version,
       toolPermissionPolicyVersion: projectSettingsPermissionPolicyVersion,
     })
@@ -721,6 +790,12 @@ export class TestRunService {
             inputFingerprint,
             subjectKind,
             skillManifestHash,
+            executionSkillPolicyFingerprint:
+              buildExecutionSkillPolicyFingerprint(
+                subjectKind === "no_skill"
+                  ? noSkillConstraint.content
+                  : requiredSkillConstraint.content,
+              ),
           }),
           skillInvocationObserved:
             subjectKind === "no_skill"
@@ -750,7 +825,7 @@ export class TestRunService {
         evalManifestHash: targetSelection.revision.manifestHash,
         comparabilityFingerprint,
         runInputFingerprint,
-        executionPromptVersion: executionSystemPrompt.version,
+        executionPromptVersion,
         graderProtocolVersion: graderSystemPrompt.version,
         toolPermissionPolicyVersion: projectSettingsPermissionPolicyVersion,
       },
@@ -1181,9 +1256,25 @@ export class TestRunService {
         runtimeEnvironment,
         workspace.absolutePath,
       )
-      const executionSystemPrompt =
-        await this.options.agentSessions.getSystemPrompt("test-run-execution")
-      if (executionSystemPrompt.version !== run.executionPromptVersion) {
+      const [
+        executionSystemPrompt,
+        requiredSkillConstraint,
+        noSkillConstraint,
+      ] = await Promise.all([
+        this.options.agentSessions.getSystemPrompt("test-run-execution"),
+        this.options.agentSessions.getSystemPrompt(
+          "test-run-execution-required-skill",
+        ),
+        this.options.agentSessions.getSystemPrompt(
+          "test-run-execution-no-skill",
+        ),
+      ])
+      const executionPromptVersion = buildExecutionPromptProtocolVersion({
+        systemPromptContent: executionSystemPrompt.content,
+        requiredSkillConstraintTemplate: requiredSkillConstraint.content,
+        noSkillConstraintTemplate: noSkillConstraint.content,
+      })
+      if (executionPromptVersion !== run.executionPromptVersion) {
         throw new DomainError({
           code: "TEST_RUN_EXECUTION_PROMPT_CHANGED",
           message:
@@ -1200,7 +1291,16 @@ export class TestRunService {
           side: runCase.side,
           phase: "execution",
         },
-        prompt: buildExecutionPrompt({ taskPath: workspace.taskPath }),
+        prompt: buildExecutionPrompt({
+          taskPath: workspace.taskPath,
+          skillPolicy: executionSkillPolicy(
+            installSkill,
+            selection.revision.skillName,
+          ),
+          skillConstraintTemplate: installSkill
+            ? requiredSkillConstraint.content
+            : noSkillConstraint.content,
+        }),
         workspaceLocator: workspace.locator,
         expectedConfigurationFingerprint: run.configurationFingerprint,
         systemPromptRole: "test-run-execution",
@@ -1635,6 +1735,16 @@ export class TestRunService {
     let finalOutput = ""
     let usage: StoredTestRunUsage | null = null
     const skillToolEvidence: number[] = []
+    const selectedSkillToolEvidence: number[] = []
+    const skillPolicy = executionSkillPolicy(
+      !(
+        input.run.mode === "target_vs_no_skill" &&
+        input.runCase.side === "BASELINE"
+      ),
+      input.selection.revision.skillName,
+    )
+    let selectedSkillInvokedBeforeTaskWork = false
+    let taskWorkObservedBeforeSelectedSkill = false
     const observedToolUses = new Map<string, ObservedToolUse>()
     const toolFailureTracker = new TestRunToolFailureTracker()
     const bundledScripts = new Map<string, number[]>()
@@ -1645,11 +1755,9 @@ export class TestRunService {
     )
     const observation = (): ExecutionObservations => ({
       skillInvocationObserved:
-        input.phase === "grading" ||
-        (input.run.mode === "target_vs_no_skill" &&
-          input.runCase.side === "BASELINE")
+        input.phase === "grading" || skillPolicy.kind === "forbidden"
           ? "NOT_APPLICABLE"
-          : skillToolEvidence.length > 0
+          : selectedSkillToolEvidence.length > 0
             ? "OBSERVED"
             : "NOT_OBSERVED",
       skillToolCallCount: skillToolEvidence.length,
@@ -1731,6 +1839,26 @@ export class TestRunService {
           observedToolUses.set(toolUse.toolUseId, toolUse)
           if (toolUse.name === "Skill") {
             skillToolEvidence.push(mapped.sequence)
+            if (
+              extractInvokedSkillName(toolUse.input) ===
+              input.selection.revision.skillName
+            ) {
+              selectedSkillToolEvidence.push(mapped.sequence)
+              if (!taskWorkObservedBeforeSelectedSkill) {
+                selectedSkillInvokedBeforeTaskWork = true
+              }
+            } else if (
+              skillPolicy.kind === "required" &&
+              selectedSkillToolEvidence.length === 0
+            ) {
+              taskWorkObservedBeforeSelectedSkill = true
+            }
+          } else if (
+            skillPolicy.kind === "required" &&
+            selectedSkillToolEvidence.length === 0 &&
+            toolUse.name !== "Read"
+          ) {
+            taskWorkObservedBeforeSelectedSkill = true
           }
           for (const relativePath of extractObservedBundledScriptPaths(
             toolUse.input,
@@ -1792,13 +1920,32 @@ export class TestRunService {
 
       let terminal: MonitoredSessionResult | null = null
       if (event.type === "turn.completed") {
-        terminal = {
-          status: "COMPLETED",
-          finalOutput,
-          usage,
-          observations: observation(),
-          error: null,
-        }
+        const skillPolicyFailure =
+          input.phase === "execution"
+            ? validateExecutionSkillPolicy({
+                policy: skillPolicy,
+                selectedSkillInvocationCount:
+                  selectedSkillToolEvidence.length,
+                totalSkillInvocationCount: skillToolEvidence.length,
+                invokedBeforeTaskWork:
+                  selectedSkillInvokedBeforeTaskWork,
+              })
+            : null
+        terminal = skillPolicyFailure
+          ? {
+              status: "FAILED",
+              finalOutput,
+              usage,
+              observations: observation(),
+              error: skillPolicyFailure,
+            }
+          : {
+              status: "COMPLETED",
+              finalOutput,
+              usage,
+              observations: observation(),
+              error: null,
+            }
       } else if (event.type === "turn.canceled") {
         terminal = {
           status: "CANCELED",

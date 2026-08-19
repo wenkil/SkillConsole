@@ -6,6 +6,8 @@ export const agentSystemPromptRoles = [
   "generic-agent",
   "eval-generation",
   "test-run-execution",
+  "test-run-execution-required-skill",
+  "test-run-execution-no-skill",
   "test-run-grader",
   "test-report-analyzer",
 ] as const
@@ -17,6 +19,10 @@ const promptFileNames: Readonly<Record<AgentSystemPromptRole, string>> = {
   "generic-agent": "generic-agent.system.md",
   "eval-generation": "eval-generation.system.md",
   "test-run-execution": "test-run-execution.system.md",
+  "test-run-execution-required-skill":
+    "test-run-execution-required-skill.system.md",
+  "test-run-execution-no-skill":
+    "test-run-execution-no-skill.system.md",
   "test-run-grader": "test-run-grader.system.md",
   "test-report-analyzer": "test-report-analyzer.system.md",
 }

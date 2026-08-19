@@ -9,6 +9,8 @@ import { AgentSessionWorkspaceStore } from "../src/modules/agent-sessions/sessio
 import { mapSdkMessage } from "../src/modules/agent-sessions/runtime/sdk-message.mapper.js"
 import {
   buildExecutionPrompt,
+  buildExecutionPromptProtocolVersion,
+  buildExecutionSkillPolicyFingerprint,
   buildGraderPrompt,
 } from "../src/modules/test-runs/test-run-prompt.js"
 import {
@@ -28,9 +30,11 @@ import {
 } from "../src/modules/test-runs/test-run-runtime-environment.js"
 import {
   buildTestRunSemanticConfigurationFingerprint,
+  extractInvokedSkillName,
   TestRunToolFailureTracker,
   extractObservedBundledScriptPaths,
   getTestRunCaseSideOrder,
+  validateExecutionSkillPolicy,
 } from "../src/modules/test-runs/test-run.service.js"
 import { TestRunStorage } from "../src/modules/test-runs/test-run-storage.js"
 
@@ -371,10 +375,17 @@ test("runtime redaction ignores short control values but still removes secrets",
 
 test("test execution bootstrap delegates task detail to the workspace file", () => {
   const taskPath = "/workspace/test-runs/run/cases/case/workspace/inputs/task.json"
-  const prompt = buildExecutionPrompt({ taskPath })
+  const prompt = buildExecutionPrompt({
+    taskPath,
+    skillPolicy: { kind: "required", skillName: "sample-skill" },
+    skillConstraintTemplate:
+      "Execution Skill policy: REQUIRED. MUST invoke the Skill tool for {{SKILL_NAME}}.",
+  })
   assert.match(prompt, new RegExp(taskPath))
   assert.match(prompt, /exact absolute path/)
-  assert.doesNotMatch(prompt, /TARGET|BASELINE|fixture/)
+  assert.match(prompt, /Execution Skill policy: REQUIRED/)
+  assert.match(prompt, /"sample-skill"/)
+  assert.doesNotMatch(prompt, /fixture/)
 })
 
 test("test grader bootstrap uses the exact absolute task path", () => {
@@ -620,13 +631,87 @@ test("Agent Session workspace resolver accepts only controlled test run locators
   )
 })
 
-test("target and baseline use the same execution bootstrap prompt", () => {
+test("required-Skill and no-Skill participants receive distinct constraints", () => {
   const taskPath = "/workspace/test-runs/run/cases/case/workspace/inputs/task.json"
-  const left = buildExecutionPrompt({ taskPath })
-  const right = buildExecutionPrompt({ taskPath })
-  assert.equal(left, right)
-  assert.equal(left.includes("TARGET"), false)
-  assert.equal(left.includes("BASELINE"), false)
+  const required = buildExecutionPrompt({
+    taskPath,
+    skillPolicy: { kind: "required", skillName: "sample-skill" },
+    skillConstraintTemplate:
+      "Execution Skill policy: REQUIRED. MUST invoke the Skill tool for {{SKILL_NAME}}.",
+  })
+  const forbidden = buildExecutionPrompt({
+    taskPath,
+    skillPolicy: { kind: "forbidden", skillName: "sample-skill" },
+    skillConstraintTemplate:
+      "Execution Skill policy: FORBIDDEN. Do not invoke the Skill tool for {{SKILL_NAME}}.",
+  })
+  assert.notEqual(required, forbidden)
+  assert.match(required, /MUST invoke the Skill tool/)
+  assert.match(forbidden, /Do not invoke the Skill tool/)
+  assert.notEqual(
+    buildExecutionSkillPolicyFingerprint("required"),
+    buildExecutionSkillPolicyFingerprint("forbidden"),
+  )
+  assert.match(
+    buildExecutionPromptProtocolVersion({
+      systemPromptContent: "common prompt",
+      requiredSkillConstraintTemplate: "required",
+      noSkillConstraintTemplate: "forbidden",
+    }),
+    /^test-run-execution\.composed@sha256:[0-9a-f]{64}$/u,
+  )
+})
+
+test("execution Skill policy validates exact activation and no-Skill isolation", () => {
+  assert.equal(
+    extractInvokedSkillName({ skill: "/sample-skill arguments" }),
+    "sample-skill",
+  )
+  assert.equal(
+    validateExecutionSkillPolicy({
+      policy: { kind: "required", skillName: "sample-skill" },
+      selectedSkillInvocationCount: 1,
+      totalSkillInvocationCount: 1,
+      invokedBeforeTaskWork: true,
+    }),
+    null,
+  )
+  assert.equal(
+    validateExecutionSkillPolicy({
+      policy: { kind: "forbidden", skillName: "sample-skill" },
+      selectedSkillInvocationCount: 0,
+      totalSkillInvocationCount: 0,
+      invokedBeforeTaskWork: false,
+    }),
+    null,
+  )
+  assert.equal(
+    validateExecutionSkillPolicy({
+      policy: { kind: "required", skillName: "sample-skill" },
+      selectedSkillInvocationCount: 0,
+      totalSkillInvocationCount: 1,
+      invokedBeforeTaskWork: false,
+    })?.code,
+    "TEST_RUN_REQUIRED_SKILL_NOT_INVOKED",
+  )
+  assert.equal(
+    validateExecutionSkillPolicy({
+      policy: { kind: "required", skillName: "sample-skill" },
+      selectedSkillInvocationCount: 1,
+      totalSkillInvocationCount: 1,
+      invokedBeforeTaskWork: false,
+    })?.code,
+    "TEST_RUN_REQUIRED_SKILL_INVOKED_TOO_LATE",
+  )
+  assert.equal(
+    validateExecutionSkillPolicy({
+      policy: { kind: "forbidden", skillName: "sample-skill" },
+      selectedSkillInvocationCount: 0,
+      totalSkillInvocationCount: 1,
+      invokedBeforeTaskWork: false,
+    })?.code,
+    "TEST_RUN_SKILL_INVOCATION_FORBIDDEN",
+  )
 })
 
 test("test run Artifact safety gate removes outputs containing protected values", async () => {
