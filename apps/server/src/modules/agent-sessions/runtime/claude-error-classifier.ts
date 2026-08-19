@@ -227,7 +227,17 @@ export function classifyClaudeErrorText(
   ) {
     return createClaudeError("CLAUDE_PROMPT_TOO_LONG")
   }
-  if (matches("model not found", "unknown model", "model_not_found")) {
+  if (
+    matches(
+      "model not found",
+      "unknown model",
+      "model_not_found",
+      "model is not supported",
+      "unsupported model",
+    ) ||
+    (normalized.includes("model") &&
+      normalized.includes("is not supported"))
+  ) {
     return createClaudeError("CLAUDE_MODEL_NOT_FOUND")
   }
   if (matches("permission denied", "not permitted", "tool use denied")) {
@@ -235,6 +245,17 @@ export function classifyClaudeErrorText(
   }
   if (matches("timed out", "timeout", "etimedout")) {
     return createClaudeError("CLAUDE_REQUEST_TIMEOUT")
+  }
+  if (
+    matches(
+      "connection closed mid-response",
+      "response above may be incomplete",
+      "stream was interrupted",
+      "stream interrupted",
+      "aborted streaming",
+    )
+  ) {
+    return createClaudeError("CLAUDE_STREAM_ABORTED")
   }
   if (
     matches(
@@ -274,7 +295,7 @@ export function classifyClaudeErrorText(
   ) {
     return createClaudeError("CLAUDE_CONFIGURATION_INVALID")
   }
-  if (matches("server error", "internal server error")) {
+  if (matches("server error", "server_error", "internal server error")) {
     return createClaudeError("CLAUDE_SERVER_ERROR")
   }
   return null
@@ -319,24 +340,30 @@ export function classifyClaudeResult(
   }
 
   const terminalError = classifyTerminalReason(message.terminal_reason)
-  if (terminalError) return terminalError
+  if (terminalError && message.terminal_reason !== "api_error") {
+    return terminalError
+  }
 
   const stopError = classifyStopReason(message.stop_reason)
   if (stopError) return stopError
 
   if (message.subtype === "success") {
-    const statusError = classifyHttpStatus(message.api_error_status)
-    if (statusError) return createClaudeError(statusError)
-
     const resultError = classifyClaudeErrorText(message.result)
     if (resultError && (message.is_error || hasNoUsage(message))) {
       return resultError
     }
 
-    if (!message.is_error) {
-      return priorFailure && hasNoUsage(message) ? priorFailure : null
+    const statusError = classifyHttpStatus(message.api_error_status)
+    if (statusError) return createClaudeError(statusError)
+
+    if (priorFailure && (message.is_error || hasNoUsage(message))) {
+      return priorFailure
     }
-    if (priorFailure) return priorFailure
+    if (terminalError) return terminalError
+
+    if (!message.is_error) {
+      return null
+    }
     if (message.permission_denials.length > 0) {
       return createClaudeError("CLAUDE_PERMISSION_DENIED")
     }
@@ -356,6 +383,7 @@ export function classifySdkMessageFailure(
   message: SDKMessage,
 ): AgentSessionError | null {
   if (message.type === "assistant" && message.error) {
+    if (message.parent_tool_use_id) return null
     return classifyClaudeAssistantError(message.error)
   }
   if (message.type === "auth_status") {

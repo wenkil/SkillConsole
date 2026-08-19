@@ -36,7 +36,9 @@ import {
 } from "../src/modules/agent-sessions/agent-system-prompt.js"
 import {
   classifyClaudeAssistantError,
+  classifyClaudeErrorText,
   classifyClaudeResult,
+  classifySdkMessageFailure,
 } from "../src/modules/agent-sessions/runtime/claude-error-classifier.js"
 import { mapSdkMessage } from "../src/modules/agent-sessions/runtime/sdk-message.mapper.js"
 import { AgentSessionWorkspaceStore } from "../src/modules/agent-sessions/session-workspace.js"
@@ -470,6 +472,19 @@ test("classifies every Claude SDK assistant error and terminal reason", () => {
 })
 
 test("maps structured output and disguised successful errors to failed turns", () => {
+  assert.equal(
+    classifyClaudeErrorText(
+      "API Error: 400 model `claude-opus-5` is not supported.",
+    )?.code,
+    "CLAUDE_MODEL_NOT_FOUND",
+  )
+  assert.equal(
+    classifyClaudeErrorText(
+      "API Error: Connection closed mid-response. The response above may be incomplete.",
+    )?.code,
+    "CLAUDE_STREAM_ABORTED",
+  )
+
   const subtypeCases = {
     error_max_structured_output_retries:
       "CLAUDE_STRUCTURED_OUTPUT_FAILED",
@@ -545,6 +560,41 @@ test("maps structured output and disguised successful errors to failed turns", (
     classifyClaudeAssistantError("billing_error"),
   )
   assert.equal(hintedFailure?.code, "CLAUDE_BILLING_ERROR")
+
+  const recoveredAfterRetry = classifyClaudeResult(
+    {
+      type: "result",
+      subtype: "success",
+      duration_ms: 1,
+      duration_api_ms: 1,
+      is_error: false,
+      num_turns: 1,
+      result: "done",
+      stop_reason: "end_turn",
+      total_cost_usd: 0,
+      usage: {
+        input_tokens: 10,
+        output_tokens: 10,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+      },
+      permission_denials: [],
+    } as never,
+    classifyClaudeAssistantError("server_error"),
+  )
+  assert.equal(recoveredAfterRetry, null)
+
+  assert.equal(
+    classifySdkMessageFailure({
+      type: "assistant",
+      message: {} as never,
+      parent_tool_use_id: "toolu_parent",
+      session_id: "session",
+      uuid: "message",
+      error: "server_error",
+    } as never),
+    null,
+  )
 
   const legitimateAnswer = classifyClaudeResult({
     type: "result",

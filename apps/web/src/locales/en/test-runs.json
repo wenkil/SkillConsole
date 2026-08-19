@@ -125,6 +125,7 @@
     "cases": "Evals cases",
     "userTask": "User task",
     "noCase": "No execution record exists for this side yet.",
+    "executionFailureRunContinues": "This execution unit failed while the test run continues with the remaining units.",
     "logs": "Normalized run events",
     "allCases": "All cases and sides",
     "allSides": "All version sides",

@@ -125,6 +125,7 @@
     "cases": "Evals 用例",
     "userTask": "真实用户任务",
     "noCase": "此侧尚无执行记录。",
+    "executionFailureRunContinues": "当前执行单元失败，测试任务仍在继续其他单元。",
     "logs": "归一化运行事件",
     "allCases": "全部用例与两侧",
     "allSides": "全部版本侧",

@@ -48,7 +48,7 @@ test("version comparison alternates the paired serial order by Eval", () => {
 })
 
 test("semantic configuration fingerprint ignores credentials but tracks model changes", () => {
-  const settings = (apiKey: string, model: string) =>
+  const settings = (apiKey: string, model: string, subagentModel = model) =>
     Buffer.from(
       JSON.stringify({
         model: "claude-top-level",
@@ -56,6 +56,7 @@ test("semantic configuration fingerprint ignores credentials but tracks model ch
           ANTHROPIC_API_KEY: apiKey,
           ANTHROPIC_BASE_URL: "https://api.example.test",
           ANTHROPIC_MODEL: model,
+          CLAUDE_CODE_SUBAGENT_MODEL: subagentModel,
         },
       }),
       "utf8",
@@ -77,9 +78,14 @@ test("semantic configuration fingerprint ignores credentials but tracks model ch
     settings("secret-two", "claude-test-next"),
     promptVersions,
   )
+  const subagentModelChanged = buildTestRunSemanticConfigurationFingerprint(
+    settings("secret-two", "claude-test", "claude-subagent-next"),
+    promptVersions,
+  )
 
   assert.equal(first, credentialOnly)
   assert.notEqual(first, modelChanged)
+  assert.notEqual(first, subagentModelChanged)
 })
 
 test("test run log payloads redact host absolute paths recursively", () => {
@@ -100,7 +106,7 @@ test("test run log payloads redact host absolute paths recursively", () => {
         "Error: fail at run (file:///nix/store/abcd/main.js:1:2)",
     }),
     {
-      command: "python [REDACTED_PATH] [REDACTED_PATH]",
+      command: "python /usr/bin/tool.py [REDACTED_PATH]",
       nested: [
         "[REDACTED_PATH]",
         "[REDACTED_PATH]",
@@ -113,6 +119,10 @@ test("test run log payloads redact host absolute paths recursively", () => {
       ],
       stack: "[REDACTED_STACK]",
     },
+  )
+  assert.equal(
+    containsPublicRuntimeLeakText("GET /api/users and /v1/orders/:id"),
+    false,
   )
   assert.equal(
     containsPublicRuntimeLeakText(
@@ -147,9 +157,22 @@ test("Artifact safety detects UTF-16 paths and sensitive values without rejectin
 
   assert.equal(
     containsPublicRuntimeLeakContent(Buffer.from(absolutePath, "utf16le")),
+    false,
+  )
+  assert.equal(containsPublicRuntimeLeakContent(utf16be(absolutePath)), false)
+  assert.equal(
+    containsPublicRuntimeLeakContent(
+      Buffer.from(absolutePath, "utf16le"),
+      [absolutePath],
+    ),
     true,
   )
-  assert.equal(containsPublicRuntimeLeakContent(utf16be(absolutePath)), true)
+  assert.equal(
+    containsPublicRuntimeLeakContent(
+      Buffer.from("Document GET /api/users and /v1/orders/:id", "utf8"),
+    ),
+    false,
+  )
   assert.equal(
     containsPublicRuntimeLeakContent(
       Buffer.from(sensitiveValue, "utf16le"),
@@ -203,6 +226,7 @@ test("test run runtime environment excludes unrelated Server secrets", () => {
         env: {
           ANTHROPIC_AUTH_TOKEN: "test-anthropic-token",
           ANTHROPIC_BASE_URL: "https://api.example.test",
+          CLAUDE_CODE_SUBAGENT_MODEL: "qwen3.7-plus",
           INTERNAL_DATABASE_TOKEN: "must-not-reach-runtime",
         },
       }),
@@ -229,6 +253,10 @@ test("test run runtime environment excludes unrelated Server secrets", () => {
     "https://api.example.test",
   )
   assert.equal(frozen.values.ANTHROPIC_MODEL, "claude-top-level")
+  assert.equal(
+    frozen.values.CLAUDE_CODE_SUBAGENT_MODEL,
+    "qwen3.7-plus",
+  )
   assert.deepEqual(frozen.sensitiveValues, [
     "test-anthropic-token",
     "https://api.example.test",
@@ -236,6 +264,7 @@ test("test run runtime environment excludes unrelated Server secrets", () => {
   assert.deepEqual(frozen.protectedNames, [
     "ANTHROPIC_AUTH_TOKEN",
     "ANTHROPIC_BASE_URL",
+    "CLAUDE_CODE_SUBAGENT_MODEL",
     "INTERNAL_DATABASE_TOKEN",
   ])
   assert.equal(
@@ -627,7 +656,7 @@ test("test run Artifact safety gate removes outputs containing protected values"
           ],
           [],
         ),
-      /runtime paths/i,
+      /runtime information/i,
     )
     await assert.rejects(() =>
       readFile(path.join(outputRoot, "runtime-path.txt")),
@@ -635,7 +664,7 @@ test("test run Artifact safety gate removes outputs containing protected values"
 
     const binaryLeakContent = Buffer.concat([
       Buffer.from([0]),
-      Buffer.from("file:///C:/Users/tester/secret.txt", "utf8"),
+      Buffer.from("file:///workspace/private/secret.txt", "utf8"),
     ])
     await writeFile(
       path.join(outputRoot, "binary-leak.bin"),
@@ -659,7 +688,7 @@ test("test run Artifact safety gate removes outputs containing protected values"
           ],
           [],
         ),
-      /runtime paths/i,
+      /runtime information/i,
     )
     await assert.rejects(() =>
       readFile(path.join(outputRoot, "binary-leak.bin")),

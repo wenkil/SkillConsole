@@ -106,11 +106,13 @@ function BenchmarkCard({
 function CaseSidePanel({
   title,
   runCase,
+  runActive,
   empty,
   labels,
 }: {
   title: string
   runCase: TestRunCase | null
+  runActive: boolean
   empty: string
   labels: {
     readonly finalOutput: string
@@ -125,6 +127,7 @@ function CaseSidePanel({
     readonly usageCost: string
     readonly usageDuration: string
     readonly usageTurns: string
+    readonly executionFailureRunContinues: string
   }
 }) {
   if (!runCase) {
@@ -145,8 +148,18 @@ function CaseSidePanel({
       <div className="grid gap-4 p-4">
         {runCase.executionError || runCase.assessmentError ? (
           <div className="border border-destructive/45 bg-destructive/5 p-3 text-[11px] leading-5">
-            {runCase.executionError?.message ??
-              runCase.assessmentError?.message}
+            <span className="block font-mono text-[9px] font-bold text-destructive">
+              {(runCase.executionError ?? runCase.assessmentError)?.code}
+            </span>
+            <span className="mt-1 block">
+              {runCase.executionError?.message ??
+                runCase.assessmentError?.message}
+            </span>
+            {runCase.executionError && runActive ? (
+              <span className="mt-2 block border-t border-destructive/25 pt-2">
+                {labels.executionFailureRunContinues}
+              </span>
+            ) : null}
           </div>
         ) : null}
         <div>
@@ -646,6 +659,7 @@ export function TestRunDetailView({
                 <CaseSidePanel
                   empty={t("detail.noCase")}
                   key={panel.key}
+                  runActive={isActiveTestRun(run.status)}
                   labels={{
                     finalOutput: t("detail.finalOutput"),
                     assertions: t("detail.assertions"),
@@ -682,6 +696,9 @@ export function TestRunDetailView({
                         (panel.runCase?.usage?.numTurns ?? 0) +
                         (panel.runCase?.gradingUsage?.numTurns ?? 0),
                     }),
+                    executionFailureRunContinues: t(
+                      "detail.executionFailureRunContinues",
+                    ),
                   }}
                   runCase={panel.runCase}
                   title={panel.label}

@@ -1,11 +1,17 @@
 const quotedAbsolutePathPattern =
-  /(["'])(?:(?:[A-Za-z]:[\\/])|(?:\\\\[^\\/\r\n]+[\\/][^\\/\r\n]+(?:[\\/])?)|\/)[^"'\r\n]*\1/giu
+  /(["'])(?:(?:[A-Za-z]:[\\/])|(?:\\\\[^\\/\r\n]+[\\/][^\\/\r\n]+(?:[\\/])?))[^"'\r\n]*\1/giu
 const quotedFileUrlPattern =
   /(["'])file:(?:\/{2,3}|\\\\)[^"'\r\n]*\1/giu
 const unquotedFileUrlPattern =
   /\bfile:(?:\/{2,3}|\\\\)[^\s"'<>|,;})\]]*/giu
 const unquotedAbsolutePathPattern =
-  /(^|[\s("'=])(?:(?:[A-Za-z]:[\\/][^\s"'<>|,;})\]]*)|(?:\\\\[^\\/\s"'<>|]+[\\/][^\\/\s"'<>|]+(?:[\\/][^\s"'<>|,;})\]]*)?)|(?:\/[^\s"'<>|,;})\]]*))(?=$|[\s"'<>|,;})\]])/giu
+  /(^|[\s("'=])(?:(?:[A-Za-z]:[\\/][^\s"'<>|,;})\]]*)|(?:\\\\[^\\/\s"'<>|]+[\\/][^\\/\s"'<>|]+(?:[\\/][^\s"'<>|,;})\]]*)?))(?=$|[\s"'<>|,;})\]])/giu
+const quotedProtectedUnixPathPattern =
+  /(["'])\/(?:workspace|tmp|var\/tmp|nix\/store)(?:\/[^"'\r\n]*)?\1/giu
+const unquotedProtectedUnixPathPattern =
+  /(^|[\s("'=])\/(?:workspace|tmp|var\/tmp|nix\/store)(?:\/[^\s"'<>|,;})\]]*)?(?=$|[\s"'<>|,;})\]])/giu
+const protectedFileUrlPattern =
+  /\bfile:\/{2,3}(?:workspace|tmp|var\/tmp|nix\/store)(?:\/[^\s"'<>|,;})\]]*)?/giu
 const publicInternalReferencePattern = /\bnode:internal\/[^\s)"']+/giu
 const publicStackReferencePattern =
   /\bat\s+(?:async\s+)?(?:[\w.$<>]+\s*\(\[REDACTED_PATH\]\)|\[REDACTED_PATH\])/giu
@@ -62,15 +68,29 @@ function redactAbsolutePaths(value: string): string {
       unquotedAbsolutePathPattern,
       (_match, boundary: string) => `${boundary}[REDACTED_PATH]`,
     )
+    .replace(
+      quotedProtectedUnixPathPattern,
+      (_match, quote: string) => `${quote}[REDACTED_PATH]${quote}`,
+    )
+    .replace(
+      unquotedProtectedUnixPathPattern,
+      (_match, boundary: string) => `${boundary}[REDACTED_PATH]`,
+    )
 }
 
 export function containsPublicRuntimeLeakText(value: string): boolean {
   return (
     redactAbsolutePaths(value) !== value ||
-    /\bnode:internal\//iu.test(value) ||
-    /\bat\s+(?:async\s+)?(?:[\w.$<>]+\s*\((?:(?:[A-Za-z]:[\\/])|(?:\\\\)|\/)|(?:(?:[A-Za-z]:[\\/])|(?:\\\\)|\/))/iu.test(
-      value,
-    )
+    /\bnode:internal\//iu.test(value)
+  )
+}
+
+function containsProtectedRuntimeLeakText(value: string): boolean {
+  return (
+    value.search(protectedFileUrlPattern) !== -1 ||
+    value.search(quotedProtectedUnixPathPattern) !== -1 ||
+    value.search(unquotedProtectedUnixPathPattern) !== -1 ||
+    /\bnode:internal\//iu.test(value)
   )
 }
 
@@ -80,7 +100,7 @@ export function containsPublicRuntimeLeakContent(
 ): boolean {
   const decodedValues = decodeContentVariants(value)
   return (
-    decodedValues.some(containsPublicRuntimeLeakText) ||
+    decodedValues.some(containsProtectedRuntimeLeakText) ||
     containsSensitiveValue(decodedValues, sensitiveValues)
   )
 }

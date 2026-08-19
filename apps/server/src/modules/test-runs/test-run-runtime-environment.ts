@@ -6,6 +6,7 @@ const transportSettingNames = new Set([
   "ANTHROPIC_AUTH_TOKEN",
   "ANTHROPIC_BASE_URL",
   "ANTHROPIC_MODEL",
+  "CLAUDE_CODE_SUBAGENT_MODEL",
   "CLAUDE_CODE_OAUTH_TOKEN",
 ])
 

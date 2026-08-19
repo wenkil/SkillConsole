@@ -707,9 +707,12 @@ export class TestRunStorage {
         )
         await rm(outputRoot, { recursive: true, force: true })
         await mkdir(outputRoot, { recursive: true })
-        throw new Error(
-          "A test run Artifact contains protected configuration or runtime paths.",
-        )
+        throw new DomainError({
+          code: "TEST_RUN_ARTIFACT_UNSAFE",
+          message: `The Artifact ${artifact.relativePath} contains protected configuration or runtime information.`,
+          kind: "conflict",
+          details: { relativePath: artifact.relativePath },
+        })
       }
     }
   }

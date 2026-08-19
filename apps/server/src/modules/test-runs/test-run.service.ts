@@ -30,7 +30,6 @@ import {
   resolveEvidenceAnchors,
   TestRunGraderProtocolError,
 } from "./test-run-grader-protocol.js"
-import { createTestRunExecutionPermissionPolicy } from "./test-run-execution-permission.js"
 import {
   buildExecutionPrompt,
   buildGraderPrompt,
@@ -110,6 +109,7 @@ interface ExecutionObservations {
 
 interface SemanticRuntimeConfiguration {
   readonly model: string
+  readonly subagentModel: string
   readonly apiEndpointHash: string | null
 }
 
@@ -144,12 +144,21 @@ function parseSemanticRuntimeConfiguration(
       typeof parsed.env?.ANTHROPIC_BASE_URL === "string"
         ? parsed.env.ANTHROPIC_BASE_URL.trim()
         : ""
+    const configuredSubagentModel =
+      typeof parsed.env?.CLAUDE_CODE_SUBAGENT_MODEL === "string"
+        ? parsed.env.CLAUDE_CODE_SUBAGENT_MODEL.trim()
+        : ""
     return {
       model: configuredModel || "sdk_default",
+      subagentModel: configuredSubagentModel || "sdk_default",
       apiEndpointHash: endpoint ? sha256(endpoint) : null,
     }
   } catch {
-    return { model: "sdk_default", apiEndpointHash: null }
+    return {
+      model: "sdk_default",
+      subagentModel: "sdk_default",
+      apiEndpointHash: null,
+    }
   }
 }
 
@@ -1058,6 +1067,7 @@ export class TestRunService {
     await this.publishNewEvents(runId)
 
     let executionSessionId: string | null = null
+    let completedExecutionResult: MonitoredSessionResult | null = null
     try {
       const workspace = await this.options.storage.prepareCase(
         runId,
@@ -1102,9 +1112,6 @@ export class TestRunService {
         environment: caseRuntimeEnvironment.values,
         protectedEnvironmentNames:
           caseRuntimeEnvironment.protectedNames,
-        canUseTool: createTestRunExecutionPermissionPolicy(
-          workspace.absolutePath,
-        ),
         additionalRedactedValues: [
           workspace.taskPath,
           ...caseRuntimeEnvironment.sensitiveValues,
@@ -1139,6 +1146,7 @@ export class TestRunService {
         selection,
         timeoutMs: executionLimits.timeoutMs,
       })
+      completedExecutionResult = result
       await this.options.agentSessions.annotateFinalOutputProtocol(
         session.id,
         "NOT_APPLICABLE",
@@ -1285,6 +1293,12 @@ export class TestRunService {
             runState.status === "CANCELING"
               ? "The test run was canceled."
               : setupFailure.message,
+          ...(completedExecutionResult
+            ? {
+                usage: completedExecutionResult.usage,
+                observations: completedExecutionResult.observations,
+              }
+            : {}),
         })
         this.options.logger.warn?.(
           {
@@ -1296,7 +1310,7 @@ export class TestRunService {
                 ? "TEST_RUN_CANCELED"
                 : setupFailure.code,
           },
-          "Skill test Case stopped before Agent execution",
+          "Skill test Case execution failed",
         )
         await this.publishNewEvents(runId)
       } else if (
