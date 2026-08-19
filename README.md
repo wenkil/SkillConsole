@@ -122,21 +122,37 @@ Install Docker Desktop, or Docker Engine with Docker Compose.
 
 ### 1. Configure Claude
 
-Before starting SkillConsole, edit `settings.json` in the repository root:
+Copy the committed template to the local configuration file:
+
+```powershell
+Copy-Item settings.json.temp settings.json
+```
+
+Then edit `settings.json` and replace every placeholder required by your model
+service. The template includes the main model, the default subagent model, and
+the root tool-permission policy used by Agent Sessions.
 
 ```json
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "env": {
-    "ANTHROPIC_API_KEY": "replace-with-your-api-key",
-    "ANTHROPIC_BASE_URL": "https://api.anthropic.com"
+    "ANTHROPIC_AUTH_TOKEN": "replace-with-your-auth-token",
+    "ANTHROPIC_BASE_URL": "https://your-anthropic-compatible-endpoint.example.com",
+    "ANTHROPIC_MODEL": "replace-with-your-main-model",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "replace-with-your-subagent-model"
   }
 }
 ```
 
 Use the fields documented in
 [Anthropic's official settings reference](https://code.claude.com/docs/en/settings).
-The file is ignored by Git. Changes apply to newly created Agent Sessions.
+`settings.json.temp` contains placeholders and can be committed. `settings.json`
+is ignored by Git and must never contain credentials intended for publication.
+Changes apply to newly created Agent Sessions.
+
+The committed template grants broad local file and command permissions,
+including `Bash(*)`. Review and narrow its `permissions` section before running
+SkillConsole with untrusted Skills or test inputs.
 
 All Agent roles use this same project `settings.json` as their SDK settings and
 capability source. Their editable System Prompts are centralized in

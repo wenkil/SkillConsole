@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "replace-with-your-auth-token",
+    "ANTHROPIC_BASE_URL": "https://your-anthropic-compatible-endpoint.example.com",
+    "ANTHROPIC_MODEL": "replace-with-your-main-model",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "replace-with-your-subagent-model"
+  },
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "TodoWrite",
+      "Skill",
+      "Skill(*)",
+      "Bash(*)",
+      "Glob(//tmp/**)",
+      "Grep(//tmp/**)",
+      "Read(//tmp/**)",
+      "Write(//tmp/**)",
+      "Edit(//tmp/**)",
+      "Agent",
+      "SendMessage"
+    ],
+    "deny": [
+      "TeamCreate",
+      "RemoteTrigger",
+      "CronCreate",
+      "CronDelete",
+      "CronList",
+      "EnterWorktree",
+      "ExitWorktree",
+      "WebSearch",
+      "WebFetch",
+      "NotebookEdit",
+      "AskUserQuestion",
+      "EnterPlanMode",
+      "ExitPlanMode",
+      "Bash(rm *)",
+      "Bash(rm)",
+      "Bash(rmdir *)",
+      "Bash(rmdir)",
+      "Bash(chmod *)",
+      "Bash(chown *)",
+      "Bash(su *)",
+      "Bash(sudo *)"
+    ]
+  }
+}

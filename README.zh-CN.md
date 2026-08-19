@@ -122,19 +122,31 @@ SkillConsole 使用 **Claude Agent SDK** 执行 Agent Session。运行时配置�
 
 ### 1. 配置 Claude
 
-启动前，编辑项目根目录的 `settings.json`：
+先将仓库中的配置模板复制为本地配置：
+
+```powershell
+Copy-Item settings.json.temp settings.json
+```
+
+然后编辑 `settings.json`，按照所使用的模型服务替换必要占位值。模板包含主模型、默认子 Agent 模型，以及 Agent Session 使用的根工具权限策略。
 
 ```json
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "env": {
-    "ANTHROPIC_API_KEY": "replace-with-your-api-key",
-    "ANTHROPIC_BASE_URL": "https://api.anthropic.com"
+    "ANTHROPIC_AUTH_TOKEN": "replace-with-your-auth-token",
+    "ANTHROPIC_BASE_URL": "https://your-anthropic-compatible-endpoint.example.com",
+    "ANTHROPIC_MODEL": "replace-with-your-main-model",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "replace-with-your-subagent-model"
   }
 }
 ```
 
-配置项沿用 [Anthropic 官方 Settings](https://code.claude.com/docs/en/settings)。`settings.json` 已被 Git 忽略，修改后新建 Agent Session 即可生效。
+配置项沿用 [Anthropic 官方 Settings](https://code.claude.com/docs/en/settings)。`settings.json.temp` 只包含占位值，可以提交；`settings.json` 已被 Git 忽略，不应写入准备公开的凭证。修改后新建 Agent Session 即可生效。
+
+模板默认开放较宽的本地文件与命令权限，包括 `Bash(*)`。使用不可信 Skill 或测试输入前，应检查并收紧其中的 `permissions`。
+
+所有 Agent 角色使用同一份项目根 `settings.json` 作为 SDK 配置和能力来源。可编辑的 System Prompt 集中在 [`agent-prompts`](./agent-prompts/README.md)；任务报告、证据、Rubric 和输出路径通过各 Session Workspace 内的文件传递。
 
 ### 2. 启动服务
 
