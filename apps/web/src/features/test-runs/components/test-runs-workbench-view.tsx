@@ -179,8 +179,7 @@ export function TestRunsWorkbenchView({
                       "mode",
                       "selection",
                       "progress",
-                      "target",
-                      "baseline",
+                      "comparison",
                       "usage",
                       "duration",
                       "createdAt",
@@ -198,7 +197,16 @@ export function TestRunsWorkbenchView({
                 </tr>
               </thead>
               <tbody>
-                {controller.runs.map((run) => (
+                {controller.runs.map((run) => {
+                  const firstSubject =
+                    run.baseline.kind === "no_skill"
+                      ? t("list.noSkillBaseline")
+                      : `${run.baseline.skillVersionName} · R${run.baseline.skillVersionNumber}`
+                  const secondSubject =
+                    run.mode === "target_vs_no_skill"
+                      ? t("list.withSkill")
+                      : `${run.target.skillVersionName ?? "—"} · R${run.target.skillVersionNumber ?? "—"}`
+                  return (
                   <tr
                     className="border-b border-border-subtle hover:bg-paper-muted/45"
                     key={run.id}
@@ -231,15 +239,10 @@ export function TestRunsWorkbenchView({
                           : (run.target.skillVersionName ?? "—")}
                       </strong>
                       <span className="ui-meta mt-1 block">
-                        {t("list.confirmedVersion")}: {run.target.skillVersionName
-                          ? `${run.target.skillVersionName} · #${run.target.skillVersionNumber}`
-                          : "—"}
+                        {t("list.firstSubject")}: {firstSubject}
                       </span>
                       <span className="ui-meta mt-1 block">
-                        BASELINE:{" "}
-                        {run.baseline.kind === "no_skill"
-                          ? t("list.noSkillBaseline")
-                          : `${run.baseline.skillVersionName} · #${run.baseline.skillVersionNumber}`}
+                        {t("list.secondSubject")}: {secondSubject}
                       </span>
                       <span className="ui-meta mt-1 block">
                         EVALS R{run.target.evalRevisionNumber} ·{" "}
@@ -252,41 +255,43 @@ export function TestRunsWorkbenchView({
                       {run.progress.completedCases} / {run.progress.totalCases}
                     </td>
                     <td className="px-4 py-3.5 font-mono text-xs">
-                      <strong className="block">
-                        {formatRate(
-                          run.benchmark
-                            ? getPassRate(run.benchmark.target)
-                            : null,
-                        )}
-                      </strong>
-                      {run.benchmark ? (
-                        <span className="ui-meta mt-1 block">
-                          {t("list.coverage", {
-                            value: formatRate(
-                              getCoverageRate(run.benchmark.target),
-                            ),
-                          })}
-                          {!isBenchmarkComparable(run.benchmark)
-                            ? ` · ${t("list.notComparable")}`
-                            : ""}
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3.5 font-mono text-xs">
-                      <strong className="block">
-                        {formatRate(
-                          run.benchmark
-                            ? getPassRate(run.benchmark.baseline)
-                            : null,
-                        )}
-                      </strong>
-                      {run.benchmark ? (
-                        <span className="ui-meta mt-1 block">
-                          {t("list.coverage", {
-                            value: formatRate(
-                              getCoverageRate(run.benchmark.baseline),
-                            ),
-                          })}
+                      <dl className="grid min-w-48 gap-3">
+                        {[
+                          {
+                            label: firstSubject,
+                            benchmark: run.benchmark?.baseline ?? null,
+                          },
+                          {
+                            label: secondSubject,
+                            benchmark: run.benchmark?.target ?? null,
+                          },
+                        ].map((subject) => (
+                          <div key={subject.label}>
+                            <dt className="truncate text-[11px] text-muted-foreground">
+                              {subject.label}
+                            </dt>
+                            <dd className="mt-0.5 font-bold">
+                              {formatRate(
+                                subject.benchmark
+                                  ? getPassRate(subject.benchmark)
+                                  : null,
+                              )}
+                              {subject.benchmark ? (
+                                <span className="ml-2 font-sans text-[11px] font-normal text-muted-foreground">
+                                  {t("list.coverage", {
+                                    value: formatRate(
+                                      getCoverageRate(subject.benchmark),
+                                    ),
+                                  })}
+                                </span>
+                              ) : null}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                      {run.benchmark && !isBenchmarkComparable(run.benchmark) ? (
+                        <span className="ui-meta mt-2 block">
+                          {t("list.notComparable")}
                         </span>
                       ) : null}
                     </td>
@@ -362,7 +367,8 @@ export function TestRunsWorkbenchView({
                       </div>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

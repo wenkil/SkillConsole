@@ -22,6 +22,7 @@ import type {
   TestReportStatus,
   TestReportType,
 } from "@/features/test-reports/model/test-report"
+import { replaceTechnicalSubjectLabel } from "@/features/test-reports/model/report-subject-label"
 import type { SkillWorkspace } from "@/features/workbench-home/model/workbench"
 import { MetricStrip } from "@/shared/components/layout/metric-strip"
 import { WorkbenchPageHeader } from "@/shared/components/layout/workbench-page-header"
@@ -368,14 +369,29 @@ export function TestReportsWorkbenchView({
               </tr>
             </thead>
             <tbody>
-              {controller.reports.map((report) => (
+              {controller.reports.map((report) => {
+                const firstSubject =
+                  report.reportType === "skill_effect"
+                    ? t("skillScore.metrics.withoutSkill")
+                    : replaceTechnicalSubjectLabel(
+                        report.baselineLabel,
+                        t("skillScore.metrics.firstVersion"),
+                      )
+                const secondSubject =
+                  report.reportType === "skill_effect"
+                    ? t("skillScore.metrics.withSkill")
+                    : replaceTechnicalSubjectLabel(
+                        report.targetLabel,
+                        t("skillScore.metrics.secondVersion"),
+                      )
+                return (
                 <tr
                   className="border-b border-border-subtle hover:bg-paper-muted/45"
                   key={report.id}
                 >
                   <td className="px-4 py-3.5">
                     <strong className="block max-w-60 text-xs">
-                      {report.baselineLabel} → {report.targetLabel}
+                      {firstSubject} → {secondSubject}
                     </strong>
                     <span className="ui-meta mt-1 block">
                       {report.id.slice(0, 8)}
@@ -391,8 +407,8 @@ export function TestReportsWorkbenchView({
                     </span>
                   </td>
                   <td className="px-4 py-3.5 text-[13px] leading-5">
-                    <span className="block">← {report.baselineLabel}</span>
-                    <span className="mt-1 block">→ {report.targetLabel}</span>
+                    <span className="block">← {firstSubject}</span>
+                    <span className="mt-1 block">→ {secondSubject}</span>
                     <span className="ui-meta mt-1 block">
                       {report.comparabilityStatus
                         ? t(`comparability.${report.comparabilityStatus}`)
@@ -463,7 +479,8 @@ export function TestReportsWorkbenchView({
                     </Button>
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>

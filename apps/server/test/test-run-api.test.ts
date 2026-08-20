@@ -185,7 +185,7 @@ test("Skill score report APIs expose the independent report lifecycle", async ()
   const runId = randomUUID()
   const reportId = randomUUID()
   const now = new Date().toISOString()
-  const report = {
+  const reportSummary = {
     id: reportId,
     runId,
     workspaceId,
@@ -195,6 +195,55 @@ test("Skill score report APIs expose the independent report lifecycle", async ()
     createdAt: now,
     startedAt: now,
     completedAt: now,
+  }
+  const report = {
+    ...reportSummary,
+    metrics: {
+      schemaVersion: "skill-score-metrics.v1" as const,
+      status: "COMPLETE" as const,
+      subjects: [
+        {
+          id: "first" as const,
+          kind: "without_skill" as const,
+          displayName: "Without current Skill",
+          versionName: null,
+          versionNumber: null,
+          usage: {
+            inputTokens: 10,
+            outputTokens: 20,
+            cacheCreationInputTokens: 30,
+            cacheReadInputTokens: 40,
+            totalCostUsd: 0.1,
+            durationMs: 100,
+            durationApiMs: 80,
+            numTurns: 2,
+          },
+        },
+        {
+          id: "second" as const,
+          kind: "with_skill" as const,
+          displayName: "With current Skill",
+          versionName: null,
+          versionNumber: null,
+          usage: {
+            inputTokens: 12,
+            outputTokens: 22,
+            cacheCreationInputTokens: 32,
+            cacheReadInputTokens: 42,
+            totalCostUsd: 0.2,
+            durationMs: 120,
+            durationApiMs: 90,
+            numTurns: 3,
+          },
+        },
+      ],
+      difference: {
+        modelTokens: 4,
+        totalCostUsd: 0.1,
+        durationMs: 20,
+        numTurns: 1,
+      },
+    },
   }
   let capturedList: unknown
   const fakeService = {
@@ -206,7 +255,7 @@ test("Skill score report APIs expose the independent report lifecycle", async ()
     ) => {
       capturedList = { requestedWorkspaceId, page, pageSize, status }
       return {
-        items: [report],
+        items: [reportSummary],
         pagination: { page, pageSize, total: 1, pageCount: 1 },
       }
     },
@@ -264,6 +313,11 @@ test("Skill score report APIs expose the independent report lifecycle", async ()
     })
     assert.equal(detailResponse.statusCode, 200)
     assert.equal(detailResponse.json<{ status: string }>().status, "AVAILABLE")
+    assert.equal(
+      detailResponse.json<{ metrics: { schemaVersion: string } }>().metrics
+        .schemaVersion,
+      "skill-score-metrics.v1",
+    )
 
     const eventResponse = await application.inject({
       method: "GET",

@@ -417,13 +417,79 @@ const TestRunSkillScoreReportSchema = Type.Object(
   { additionalProperties: false },
 )
 
-export const SkillScoreReportSchema = Type.Intersect([
+export const SkillScoreReportSummarySchema = Type.Intersect([
   TestRunSkillScoreReportSchema,
   Type.Object(
     {
       runId: Type.String({ format: "uuid" }),
       workspaceId: Type.String({ format: "uuid" }),
     },
+    { additionalProperties: false },
+  ),
+])
+
+const SkillScoreMetricUsageSchema = Type.Object(
+  {
+    inputTokens: Type.Integer({ minimum: 0 }),
+    outputTokens: Type.Integer({ minimum: 0 }),
+    cacheCreationInputTokens: Type.Integer({ minimum: 0 }),
+    cacheReadInputTokens: Type.Integer({ minimum: 0 }),
+    totalCostUsd: Type.Number({ minimum: 0 }),
+    durationMs: Type.Integer({ minimum: 0 }),
+    durationApiMs: Type.Integer({ minimum: 0 }),
+    numTurns: Type.Integer({ minimum: 0 }),
+  },
+  { additionalProperties: false },
+)
+
+const SkillScoreMetricSubjectSchema = Type.Object(
+  {
+    id: Type.Union([Type.Literal("first"), Type.Literal("second")]),
+    kind: Type.Union([
+      Type.Literal("without_skill"),
+      Type.Literal("with_skill"),
+      Type.Literal("skill_version"),
+    ]),
+    displayName: Type.String({ minLength: 1 }),
+    versionName: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
+    versionNumber: Type.Union([
+      Type.Integer({ minimum: 1 }),
+      Type.Null(),
+    ]),
+    usage: Type.Union([SkillScoreMetricUsageSchema, Type.Null()]),
+  },
+  { additionalProperties: false },
+)
+
+const SkillScoreMetricsSchema = Type.Object(
+  {
+    schemaVersion: Type.Literal("skill-score-metrics.v1"),
+    status: Type.Union([
+      Type.Literal("COMPLETE"),
+      Type.Literal("PARTIAL"),
+      Type.Literal("UNAVAILABLE"),
+    ]),
+    subjects: Type.Tuple([
+      SkillScoreMetricSubjectSchema,
+      SkillScoreMetricSubjectSchema,
+    ]),
+    difference: Type.Object(
+      {
+        modelTokens: Type.Union([Type.Number(), Type.Null()]),
+        totalCostUsd: Type.Union([Type.Number(), Type.Null()]),
+        durationMs: Type.Union([Type.Number(), Type.Null()]),
+        numTurns: Type.Union([Type.Number(), Type.Null()]),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  { additionalProperties: false },
+)
+
+export const SkillScoreReportSchema = Type.Intersect([
+  SkillScoreReportSummarySchema,
+  Type.Object(
+    { metrics: SkillScoreMetricsSchema },
     { additionalProperties: false },
   ),
 ])
@@ -441,7 +507,7 @@ export const SkillScoreReportEventSchema = Type.Object(
 
 export const SkillScoreReportPageSchema = Type.Object(
   {
-    items: Type.Array(SkillScoreReportSchema),
+    items: Type.Array(SkillScoreReportSummarySchema),
     pagination: Type.Object(
       {
         page: Type.Integer({ minimum: 1 }),

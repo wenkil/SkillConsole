@@ -78,22 +78,18 @@ export function buildAssertionPrompt(input: {
 
 export function buildSkillScorePrompt(input: {
   readonly runId: string
-  readonly cases: readonly {
-    readonly externalId: number
-    readonly name: string
-    readonly prompt: string
-    readonly target: {
+  readonly subjects: readonly {
+    readonly id: "first" | "second"
+    readonly displayName: string
+    readonly cases: readonly {
+      readonly externalId: number
+      readonly name: string
+      readonly prompt: string
       readonly executionFinalResponse: string | null
       readonly assertionAgentRawResponse: string | null
       readonly assertionAgentJson: unknown | null
       readonly assertionJsonParseError: string | null
-    } | null
-    readonly baseline: {
-      readonly executionFinalResponse: string | null
-      readonly assertionAgentRawResponse: string | null
-      readonly assertionAgentJson: unknown | null
-      readonly assertionJsonParseError: string | null
-    } | null
+    }[]
   }[]
 }): string {
   return `Analyze this complete Skill test Run and return one HTML document in your final response. The HTML is shown directly to the user as the Skill comparison report.\n\n<skill_test_run>\n${JSON.stringify(input, null, 2)}\n</skill_test_run>`

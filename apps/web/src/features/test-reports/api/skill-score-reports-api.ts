@@ -6,7 +6,7 @@ export type SkillScoreReportStatus =
   | "AVAILABLE"
   | "FAILED"
 
-export interface SkillScoreReport {
+export interface SkillScoreReportSummary {
   id: string
   runId: string
   workspaceId: string
@@ -16,6 +16,47 @@ export interface SkillScoreReport {
   createdAt: string
   startedAt: string | null
   completedAt: string | null
+}
+
+export type SkillScoreMetricSubjectKind =
+  | "without_skill"
+  | "with_skill"
+  | "skill_version"
+
+export interface SkillScoreMetricUsage {
+  inputTokens: number
+  outputTokens: number
+  cacheCreationInputTokens: number
+  cacheReadInputTokens: number
+  totalCostUsd: number
+  durationMs: number
+  durationApiMs: number
+  numTurns: number
+}
+
+export interface SkillScoreMetricSubject {
+  id: "first" | "second"
+  kind: SkillScoreMetricSubjectKind
+  displayName: string
+  versionName: string | null
+  versionNumber: number | null
+  usage: SkillScoreMetricUsage | null
+}
+
+export interface SkillScoreMetrics {
+  schemaVersion: "skill-score-metrics.v1"
+  status: "COMPLETE" | "PARTIAL" | "UNAVAILABLE"
+  subjects: [SkillScoreMetricSubject, SkillScoreMetricSubject]
+  difference: {
+    modelTokens: number | null
+    totalCostUsd: number | null
+    durationMs: number | null
+    numTurns: number | null
+  }
+}
+
+export interface SkillScoreReport extends SkillScoreReportSummary {
+  metrics: SkillScoreMetrics
 }
 
 export interface SkillScoreReportEvent {
@@ -49,7 +90,7 @@ export function listSkillScoreReports(
   workspaceId: string,
   page: number,
   status: SkillScoreReportStatus | "",
-): Promise<Page<SkillScoreReport>> {
+): Promise<Page<SkillScoreReportSummary>> {
   const query = new URLSearchParams({ page: String(page), pageSize: "20" })
   if (status) query.set("status", status)
   return readJson(

@@ -29,6 +29,7 @@ import {
   isTestReportAnalysisAvailable,
   isTestReportDocumentReady,
 } from "@/features/test-reports/model/test-report"
+import { replaceTechnicalSubjectLabel } from "@/features/test-reports/model/report-subject-label"
 import type { SkillWorkspace } from "@/features/workbench-home/model/workbench"
 import { Button } from "@/shared/components/ui/button"
 
@@ -101,6 +102,20 @@ export function TestReportDetailView({
         true,
       )
     : null
+  const firstSubject =
+    report.reportType === "skill_effect"
+      ? t("skillScore.metrics.withoutSkill")
+      : replaceTechnicalSubjectLabel(
+          report.baselineLabel,
+          t("skillScore.metrics.firstVersion"),
+        )
+  const secondSubject =
+    report.reportType === "skill_effect"
+      ? t("skillScore.metrics.withSkill")
+      : replaceTechnicalSubjectLabel(
+          report.targetLabel,
+          t("skillScore.metrics.secondVersion"),
+        )
 
   return (
     <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
@@ -116,8 +131,7 @@ export function TestReportDetailView({
             </Link>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <h1 className="truncate text-2xl font-[790] tracking-[-0.03em]">
-                {report.report?.title ??
-                  `${report.baselineLabel} → ${report.targetLabel}`}
+                {firstSubject} → {secondSubject}
               </h1>
               <TestReportStatusBadge status={report.status} />
               <span className="border border-border-default px-2 py-1 font-mono text-xs font-bold">

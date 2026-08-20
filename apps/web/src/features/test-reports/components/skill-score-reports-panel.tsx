@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { AlertTriangle, ArrowLeft, ArrowRight, FileText, LoaderCircle } from "lucide-react"
-import { useMemo, useState } from "react"
+import { lazy, Suspense, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useSearchParams } from "react-router-dom"
 
@@ -12,12 +12,31 @@ import {
 } from "@/features/test-reports/api/skill-score-reports-api"
 import { Button } from "@/shared/components/ui/button"
 
+const SkillScoreMetricsComparison = lazy(() =>
+  import("@/features/test-reports/components/skill-score-metrics").then(
+    (module) => ({ default: module.SkillScoreMetricsComparison }),
+  ),
+)
+
 function formatTime(value: string | null, locale: string): string {
   return value
     ? new Intl.DateTimeFormat(locale, {
         year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
       }).format(new Date(value))
     : "—"
+}
+
+const eventTranslationKeys: Record<
+  string,
+  | "skillScore.eventsByType.created"
+  | "skillScore.eventsByType.started"
+  | "skillScore.eventsByType.completed"
+  | "skillScore.eventsByType.failed"
+> = {
+  "skill-score-report.created": "skillScore.eventsByType.created",
+  "skill-score-report.analysis.started": "skillScore.eventsByType.started",
+  "skill-score-report.analysis.completed": "skillScore.eventsByType.completed",
+  "skill-score-report.analysis.failed": "skillScore.eventsByType.failed",
 }
 
 export function SkillScoreReportsPanel({
@@ -49,7 +68,9 @@ export function SkillScoreReportsPanel({
   const events = useInfiniteQuery({
     queryKey: ["skill-score-reports", selectedId, "events"],
     queryFn: ({ pageParam }) => listSkillScoreReportEvents(selectedId!, pageParam),
-    enabled: selectedId !== null,
+    enabled:
+      selectedId !== null &&
+      (detail.data?.status ?? selectedFromList?.status) !== "AVAILABLE",
     initialPageParam: undefined as number | undefined,
     getNextPageParam: (last) => last.pagination.hasMore ? last.pagination.nextBeforeSequence ?? undefined : undefined,
     refetchInterval: () => {
@@ -121,11 +142,24 @@ export function SkillScoreReportsPanel({
         <FileText className="size-6 shrink-0 text-muted-foreground" aria-hidden="true" />
       </header>
       <div className="min-h-0 flex-1 overflow-auto bg-paper-muted/20 p-5">
-        {detail.isPending ? <div className="text-sm text-muted-foreground"><LoaderCircle className="mr-2 inline size-4 animate-spin" />{t("states.loadingDetail")}</div> : report ? <>
-          {report.error ? <p className="flex gap-2 border border-destructive/50 bg-paper-raised p-4 text-sm text-destructive"><AlertTriangle className="size-4 shrink-0" />{report.error.code}: {report.error.message}</p> : null}
-          {report.status === "AVAILABLE" && report.documentUrl ? <iframe className="mt-4 h-[34rem] w-full border border-foreground bg-white" sandbox="" src={report.documentUrl} title={t("skillScore.iframeTitle")} /> : null}
-          <section aria-live={report.status === "PENDING" || report.status === "RUNNING" ? "polite" : undefined} className="mt-4 border border-rule-soft bg-paper-raised p-4"><h3 className="font-mono text-xs font-bold uppercase">{t("skillScore.progress")}</h3>{eventRows.map((event) => <article className="border-b border-border-subtle py-3 font-mono text-xs" key={event.sequence}><span className="text-muted-foreground">#{event.sequence} · {formatTime(event.occurredAt, locale)}</span><strong className="ml-3">{event.type}</strong>{Object.keys(event.payload).length ? <pre className="mt-2 whitespace-pre-wrap break-all text-[10px] text-muted-foreground">{JSON.stringify(event.payload, null, 2)}</pre> : null}</article>)}{events.hasNextPage ? <Button className="mt-3 rounded-none" onClick={() => events.fetchNextPage()} size="sm" type="button" variant="outline">{t("skillScore.loadEarlier")}</Button> : null}</section>
-        </> : <div className="text-sm text-destructive">{t("skillScore.loadError")}</div>}
+        {detail.isPending ? <div className="text-sm text-muted-foreground"><LoaderCircle className="mr-2 inline size-4 animate-spin" />{t("states.loadingDetail")}</div> : null}
+        {detail.isError ? <div className="text-sm text-destructive">{t("skillScore.loadError")}</div> : null}
+        {detail.data ? <div className="mx-auto max-w-[96rem]">
+          <Suspense fallback={<div className="border border-border-strong bg-paper-raised p-5 text-sm text-muted-foreground"><LoaderCircle className="mr-2 inline size-4 animate-spin" />{t("states.loadingDetail")}</div>}>
+            <SkillScoreMetricsComparison locale={locale} metrics={detail.data.metrics} />
+          </Suspense>
+          {detail.data.error ? <p className="mt-5 flex gap-2 border border-destructive/50 bg-paper-raised p-4 text-sm text-destructive"><AlertTriangle className="size-4 shrink-0" />{detail.data.error.code}: {detail.data.error.message}</p> : null}
+          <section aria-labelledby="skill-score-analysis-title" className="mt-5">
+            <div className="border border-border-strong bg-paper-raised px-5 py-4">
+              <h3 className="text-base font-bold" id="skill-score-analysis-title">{t("skillScore.analysis")}</h3>
+              {detail.data.status !== "AVAILABLE" ? <p className="mt-1 text-sm text-muted-foreground">{t("skillScore.analysisPending")}</p> : null}
+            </div>
+            {detail.data.status === "AVAILABLE" && detail.data.documentUrl ? <iframe className="h-[48rem] w-full border-x border-b border-foreground bg-white" sandbox="" src={detail.data.documentUrl} title={t("skillScore.iframeTitle")} /> : <section aria-live={detail.data.status === "PENDING" || detail.data.status === "RUNNING" ? "polite" : undefined} className="border-x border-b border-rule-soft bg-paper-raised p-4"><h4 className="font-mono text-xs font-bold uppercase">{t("skillScore.progress")}</h4>{eventRows.map((event) => {
+              const eventKey = eventTranslationKeys[event.type]
+              return <article className="border-b border-border-subtle py-3 text-xs" key={event.sequence}><span className="font-mono text-muted-foreground">#{event.sequence} · {formatTime(event.occurredAt, locale)}</span><strong className="ml-3">{eventKey ? t(eventKey) : event.type}</strong>{Object.keys(event.payload).length ? <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-[10px] text-muted-foreground">{JSON.stringify(event.payload, null, 2)}</pre> : null}</article>
+            })}{events.hasNextPage ? <Button className="mt-3 rounded-none" onClick={() => events.fetchNextPage()} size="sm" type="button" variant="outline">{t("skillScore.loadEarlier")}</Button> : null}</section>}
+          </section>
+        </div> : null}
       </div>
     </section>
   )

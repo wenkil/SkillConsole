@@ -32,6 +32,41 @@ import type { SkillWorkspace } from "@/features/workbench-home/model/workbench"
 import { Button } from "@/shared/components/ui/button"
 import { cn } from "@/shared/lib/utils"
 
+function replaceInternalSubjectTerms(
+  value: string,
+  firstSubject: string,
+  secondSubject: string,
+): string {
+  return value
+    .replace(/baseline/gi, () => firstSubject)
+    .replace(/target/gi, () => secondSubject)
+    .replace(/candidate/gi, () => secondSubject)
+}
+
+function formatLogPayload(
+  value: unknown,
+  firstSubject: string,
+  secondSubject: string,
+): unknown {
+  if (typeof value === "string") {
+    return replaceInternalSubjectTerms(value, firstSubject, secondSubject)
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) =>
+      formatLogPayload(item, firstSubject, secondSubject),
+    )
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        replaceInternalSubjectTerms(key, firstSubject, secondSubject),
+        formatLogPayload(item, firstSubject, secondSubject),
+      ]),
+    )
+  }
+  return value
+}
+
 function formatRate(side: TestRunBenchmarkSide): string {
   const rate = getPassRate(side)
   return rate === null ? "—" : `${Math.round(rate * 100)}%`
@@ -429,35 +464,20 @@ export function TestRunDetailView({
         revision: run.baseline.skillVersionNumber,
       })
     : t("detail.baseline")
-  const sidePanels = versionComparison
-    ? [
-        {
-          key: "baseline",
-          runCase: baseline,
-          benchmark: run.benchmark?.baseline ?? null,
-          label: baselineLabel,
-        },
-        {
-          key: "target",
-          runCase: target,
-          benchmark: run.benchmark?.target ?? null,
-          label: targetLabel,
-        },
-      ]
-    : [
-        {
-          key: "target",
-          runCase: target,
-          benchmark: run.benchmark?.target ?? null,
-          label: targetLabel,
-        },
-        {
-          key: "baseline",
-          runCase: baseline,
-          benchmark: run.benchmark?.baseline ?? null,
-          label: baselineLabel,
-        },
-      ]
+  const sidePanels = [
+    {
+      key: "first",
+      runCase: baseline,
+      benchmark: run.benchmark?.baseline ?? null,
+      label: baselineLabel,
+    },
+    {
+      key: "second",
+      runCase: target,
+      benchmark: run.benchmark?.target ?? null,
+      label: targetLabel,
+    },
+  ]
 
   return (
     <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
@@ -505,17 +525,16 @@ export function TestRunDetailView({
               RUN {run.id}
             </p>
             <p className="ui-meta mt-1">
-              {t("detail.confirmedVersion")}: {run.target.skillVersionName
-                ? `${run.target.skillVersionName} · #${run.target.skillVersionNumber}`
-                : "—"}
+              {t("list.firstSubject")}: {baselineLabel}
             </p>
             <p className="ui-meta mt-1">
-              BASELINE:{" "}
-              {run.baseline.kind === "no_skill"
-                ? "No-Skill"
-                : `${run.baseline.skillVersionName} · #${run.baseline.skillVersionNumber}`}
+              {t("list.secondSubject")}: {targetLabel}
               {" · "}
-              {run.executionPolicy}
+              {t(
+                versionComparison
+                  ? "detail.executionPolicyVersionComparison"
+                  : "detail.executionPolicySkillEffect",
+              )}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -671,13 +690,13 @@ export function TestRunDetailView({
                   {(target ?? baseline)?.prompt}
                 </p>
                 <div className="ui-meta mt-3">
-                  INPUT {(target ?? baseline)?.inputFingerprint}
+                  {t("detail.inputFingerprint")} {(target ?? baseline)?.inputFingerprint}
                 </div>
                 <div className="ui-meta mt-1">
-                  TARGET {target?.participantExecutionFingerprint ?? "-"}
+                  {t("detail.firstFingerprint")} {baseline?.participantExecutionFingerprint ?? "-"}
                 </div>
                 <div className="ui-meta mt-1">
-                  BASELINE {baseline?.participantExecutionFingerprint ?? "-"}
+                  {t("detail.secondFingerprint")} {target?.participantExecutionFingerprint ?? "-"}
                 </div>
               </section>
             ) : null}
@@ -861,7 +880,15 @@ export function TestRunDetailView({
                     <strong className="text-white">{event.type}</strong>
                     {Object.keys(event.payload).length > 0 ? (
                       <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-all text-[9px] leading-4 text-white/60">
-                        {JSON.stringify(event.payload, null, 2)}
+                        {JSON.stringify(
+                          formatLogPayload(
+                            event.payload,
+                            t("list.firstSubject"),
+                            t("list.secondSubject"),
+                          ),
+                          null,
+                          2,
+                        )}
                       </pre>
                     ) : null}
                   </div>
@@ -941,7 +968,13 @@ export function TestRunDetailView({
           <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-[8px] text-muted-foreground">
             {Object.entries(run.traceability).map(([key, value]) => (
               <div className="grid grid-cols-[10rem_minmax(0,1fr)]" key={key}>
-                <span>{key}</span>
+                <span>
+                  {replaceInternalSubjectTerms(
+                    key,
+                    t("list.firstSubject"),
+                    t("list.secondSubject"),
+                  )}
+                </span>
                 <code className="truncate" title={value ?? undefined}>
                   {value ?? "—"}
                 </code>

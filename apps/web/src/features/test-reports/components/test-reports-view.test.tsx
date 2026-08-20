@@ -176,7 +176,7 @@ describe("test report views", () => {
     expect(
       screen.getByRole("heading", { name: "测试报告" }),
     ).toBeInTheDocument()
-    expect(screen.getByText("Baseline R1 → Candidate R2")).toBeInTheDocument()
+    expect(screen.getByText("版本一 R1 → 版本二 R2")).toBeInTheDocument()
     expect(screen.getAllByText("部分报告").length).toBeGreaterThan(0)
     await user.selectOptions(
       screen.getByRole("combobox", { name: "报告类型" }),

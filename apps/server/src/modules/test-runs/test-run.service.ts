@@ -22,8 +22,8 @@ import type {
   TestRunLogQuery,
   TestRunPage,
   SkillScoreReportEventPage,
+  SkillScoreReportDetailView,
   SkillScoreReportPage,
-  SkillScoreReportView,
   TestRunRuntimeCapabilitySnapshot,
   TestRunView,
 } from "./test-run.domain.js"
@@ -789,7 +789,7 @@ export class TestRunService {
     })
   }
 
-  getSkillScoreReport(reportId: string): Promise<SkillScoreReportView> {
+  getSkillScoreReport(reportId: string): Promise<SkillScoreReportDetailView> {
     return this.options.repository.getSkillScoreReport(reportId)
   }
 
@@ -1697,22 +1697,8 @@ export class TestRunService {
             externalId,
             name: source?.name ?? `Case ${externalId}`,
             prompt: source?.prompt ?? "",
-            target: target
-              ? {
-                  executionFinalResponse: target.finalOutput,
-                  assertionAgentRawResponse: target.assertionAgentRawResponse,
-                  assertionAgentJson: target.assertionAgentJson ?? null,
-                  assertionJsonParseError: target.assertionJsonParseError,
-                }
-              : null,
-            baseline: baseline
-              ? {
-                  executionFinalResponse: baseline.finalOutput,
-                  assertionAgentRawResponse: baseline.assertionAgentRawResponse,
-                  assertionAgentJson: baseline.assertionAgentJson ?? null,
-                  assertionJsonParseError: baseline.assertionJsonParseError,
-                }
-              : null,
+            first: baseline,
+            second: target,
           }
         },
       )
@@ -1724,6 +1710,27 @@ export class TestRunService {
         })
         return
       }
+      const metricSubjects = (
+        await this.options.repository.getSkillScoreMetrics(runId, cases)
+      ).subjects
+      const subjects = metricSubjects.map((subject) => ({
+        id: subject.id,
+        displayName: subject.displayName,
+        cases: scoreCases.map((runCase) => {
+          const result = runCase[subject.id]
+          return {
+            externalId: runCase.externalId,
+            name: runCase.name,
+            prompt: runCase.prompt,
+            executionFinalResponse: result?.finalOutput ?? null,
+            assertionAgentRawResponse:
+              result?.assertionAgentRawResponse ?? null,
+            assertionAgentJson: result?.assertionAgentJson ?? null,
+            assertionJsonParseError:
+              result?.assertionJsonParseError ?? null,
+          }
+        }),
+      }))
       const scoreWorkspace = await this.options.storage.prepareSkillScoreWorkspace(
         runId,
       )
@@ -1738,7 +1745,7 @@ export class TestRunService {
           reportId,
           phase: "skill-score",
         },
-        prompt: buildSkillScorePrompt({ runId, cases: scoreCases }),
+        prompt: buildSkillScorePrompt({ runId, subjects }),
         workspaceLocator: scoreWorkspace.locator,
         expectedConfigurationFingerprint: run.configurationFingerprint,
         systemPromptRole: "test-run-skill-score",

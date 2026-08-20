@@ -60,6 +60,8 @@ import type {
   TestRunPage,
   SkillScoreReportEvent,
   SkillScoreReportEventPage,
+  SkillScoreReportDetailView,
+  SkillScoreMetricsV1,
   SkillScoreReportPage,
   SkillScoreReportView,
   TestRunSkillScoreReportView,
@@ -67,6 +69,7 @@ import type {
   TestRunView,
 } from "./test-run.domain.js"
 import { sanitizeTestRunPublicValue } from "./test-run-public-safety.js"
+import { buildSkillScoreMetrics } from "./test-run-score-metrics.js"
 
 const activeStatuses: readonly TestRunStatus[] = [
   "PREPARING",
@@ -1871,7 +1874,9 @@ export class TestRunRepository {
     }
   }
 
-  async getSkillScoreReport(reportId: string): Promise<SkillScoreReportView> {
+  async getSkillScoreReport(
+    reportId: string,
+  ): Promise<SkillScoreReportDetailView> {
     const [row] = await this.database
       .select({ report: skillTestRunScoreReports, workspaceId: skillTestRuns.workspaceId })
       .from(skillTestRunScoreReports)
@@ -1879,14 +1884,48 @@ export class TestRunRepository {
       .where(eq(skillTestRunScoreReports.id, reportId))
       .limit(1)
     if (!row) throw skillScoreReportNotFound(reportId)
-    return mapScoreReport(row.report, row.workspaceId)
+    return {
+      ...mapScoreReport(row.report, row.workspaceId),
+      metrics: await this.getSkillScoreMetrics(row.report.runId),
+    }
+  }
+
+  async getSkillScoreMetrics(
+    runId: string,
+    existingCases?: readonly SkillTestRunCaseRow[],
+  ): Promise<SkillScoreMetricsV1> {
+    const [runRecord, cases] = await Promise.all([
+      this.getRunRecord(runId),
+      existingCases
+        ? Promise.resolve(existingCases)
+        : this.database
+            .select({
+              side: skillTestRunCases.side,
+              usage: skillTestRunCases.usage,
+              gradingUsage: skillTestRunCases.gradingUsage,
+            })
+            .from(skillTestRunCases)
+            .where(eq(skillTestRunCases.runId, runId)),
+    ])
+    const run = mapRun(runRecord)
+    return buildSkillScoreMetrics({
+      mode: run.mode,
+      target: run.target,
+      baseline: run.baseline,
+      cases,
+    })
   }
 
   async listSkillScoreReportEvents(
     reportId: string,
     input: { readonly beforeSequence?: number; readonly limit: number },
   ): Promise<SkillScoreReportEventPage> {
-    await this.getSkillScoreReport(reportId)
+    const [report] = await this.database
+      .select({ id: skillTestRunScoreReports.id })
+      .from(skillTestRunScoreReports)
+      .where(eq(skillTestRunScoreReports.id, reportId))
+      .limit(1)
+    if (!report) throw skillScoreReportNotFound(reportId)
     const where = input.beforeSequence
       ? and(
           eq(skillTestRunScoreReportEvents.reportId, reportId),

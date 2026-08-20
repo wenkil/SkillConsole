@@ -215,6 +215,50 @@ export interface SkillScoreReportView extends TestRunSkillScoreReportView {
   readonly workspaceId: string
 }
 
+export type SkillScoreMetricSubjectKind =
+  | "without_skill"
+  | "with_skill"
+  | "skill_version"
+
+export interface SkillScoreMetricUsage {
+  readonly inputTokens: number
+  readonly outputTokens: number
+  readonly cacheCreationInputTokens: number
+  readonly cacheReadInputTokens: number
+  readonly totalCostUsd: number
+  readonly durationMs: number
+  readonly durationApiMs: number
+  readonly numTurns: number
+}
+
+export interface SkillScoreMetricSubject {
+  readonly id: "first" | "second"
+  readonly kind: SkillScoreMetricSubjectKind
+  readonly displayName: string
+  readonly versionName: string | null
+  readonly versionNumber: number | null
+  readonly usage: SkillScoreMetricUsage | null
+}
+
+export interface SkillScoreMetricsV1 {
+  readonly schemaVersion: "skill-score-metrics.v1"
+  readonly status: "COMPLETE" | "PARTIAL" | "UNAVAILABLE"
+  readonly subjects: [
+    SkillScoreMetricSubject,
+    SkillScoreMetricSubject,
+  ]
+  readonly difference: {
+    readonly modelTokens: number | null
+    readonly totalCostUsd: number | null
+    readonly durationMs: number | null
+    readonly numTurns: number | null
+  }
+}
+
+export interface SkillScoreReportDetailView extends SkillScoreReportView {
+  readonly metrics: SkillScoreMetricsV1
+}
+
 export interface SkillScoreReportEvent {
   readonly sequence: number
   readonly type: string

@@ -20,6 +20,12 @@ vi.mock("@/features/test-reports/api/skill-score-reports-api", () => ({
   listSkillScoreReportEvents: mocks.listEvents,
 }))
 
+vi.mock("react-chartjs-2", () => ({
+  Bar: () => <div data-testid="bar-chart" />,
+  Doughnut: () => <div data-testid="doughnut-chart" />,
+  Line: () => <div data-testid="line-chart" />,
+}))
+
 const report = {
   id: "01900000-0000-7000-8000-000000000010",
   runId: "01900000-0000-7000-8000-000000000011",
@@ -30,6 +36,52 @@ const report = {
   createdAt: "2026-08-20T12:20:00.000Z",
   startedAt: "2026-08-20T12:20:01.000Z",
   completedAt: "2026-08-20T12:20:02.000Z",
+  metrics: {
+    schemaVersion: "skill-score-metrics.v1" as const,
+    status: "COMPLETE" as const,
+    subjects: [
+      {
+        id: "first" as const,
+        kind: "without_skill" as const,
+        displayName: "Without current Skill",
+        versionName: null,
+        versionNumber: null,
+        usage: {
+          inputTokens: 100,
+          outputTokens: 40,
+          cacheCreationInputTokens: 20,
+          cacheReadInputTokens: 10,
+          totalCostUsd: 0.12,
+          durationMs: 4_000,
+          durationApiMs: 3_000,
+          numTurns: 2,
+        },
+      },
+      {
+        id: "second" as const,
+        kind: "with_skill" as const,
+        displayName: "With current Skill",
+        versionName: null,
+        versionNumber: null,
+        usage: {
+          inputTokens: 120,
+          outputTokens: 50,
+          cacheCreationInputTokens: 30,
+          cacheReadInputTokens: 15,
+          totalCostUsd: 0.15,
+          durationMs: 5_000,
+          durationApiMs: 4_000,
+          numTurns: 3,
+        },
+      },
+    ],
+    difference: {
+      modelTokens: 30,
+      totalCostUsd: 0.03,
+      durationMs: 1_000,
+      numTurns: 1,
+    },
+  },
 }
 
 function PanelRoute() {
@@ -43,14 +95,14 @@ function PanelRoute() {
   )
 }
 
-function wrapper() {
+function wrapper(initialEntry = "/reports?tab=ai-score") {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   return render(
     <I18nextProvider i18n={i18n}>
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/reports?tab=ai-score"]}>
+        <MemoryRouter initialEntries={[initialEntry]}>
           <PanelRoute />
         </MemoryRouter>
       </QueryClientProvider>
@@ -91,7 +143,15 @@ describe("SkillScoreReportsPanel", () => {
       "src",
       report.documentUrl,
     )
-    expect(screen.getByRole("heading", { name: "生成进度" })).toBeInTheDocument()
+    expect(
+      await screen.findByRole("heading", { name: "运行开销对比" }),
+    ).toBeInTheDocument()
+    expect(screen.getAllByTestId("bar-chart")).toHaveLength(2)
+    expect(screen.getByTestId("doughnut-chart")).toBeInTheDocument()
+    expect(screen.getByTestId("line-chart")).toBeInTheDocument()
+    expect(
+      screen.queryByRole("heading", { name: "生成进度" }),
+    ).not.toBeInTheDocument()
 
     await user.click(screen.getByRole("button", { name: "返回 AI 评分报告" }))
 
@@ -100,6 +160,43 @@ describe("SkillScoreReportsPanel", () => {
         name: `查看详情: ${report.runId}`,
       }),
     ).toBeInTheDocument()
+    expect(screen.queryByTitle("AI 评分报告")).not.toBeInTheDocument()
+  })
+
+  it("shows logs below metrics until the AI analysis is available", async () => {
+    const pendingReport = {
+      ...report,
+      status: "RUNNING" as const,
+      documentUrl: null,
+      completedAt: null,
+    }
+    mocks.list.mockResolvedValue({
+      items: [pendingReport],
+      pagination: { page: 1, pageCount: 1 },
+    })
+    mocks.get.mockResolvedValue(pendingReport)
+    mocks.listEvents.mockResolvedValue({
+      items: [
+        {
+          sequence: 1,
+          type: "skill-score-report.analysis.started",
+          reportId: report.id,
+          occurredAt: report.startedAt,
+          payload: { runId: report.runId },
+        },
+      ],
+      pagination: { hasMore: false, nextBeforeSequence: null },
+    })
+
+    wrapper(`/reports?tab=ai-score&reportId=${report.id}`)
+
+    expect(
+      await screen.findByRole("heading", { name: "运行开销对比" }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("heading", { name: "生成进度" }),
+    ).toBeInTheDocument()
+    expect(await screen.findByText("AI 分析已开始")).toBeInTheDocument()
     expect(screen.queryByTitle("AI 评分报告")).not.toBeInTheDocument()
   })
 })

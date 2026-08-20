@@ -351,23 +351,28 @@ test("assertion prompt contains the complete Case context without a result schem
 test("Skill score prompt carries raw assertion responses without interpreting them", () => {
   const prompt = buildSkillScorePrompt({
     runId: "run-1",
-    cases: [
+    subjects: [
       {
-        externalId: 1,
-        name: "Fixture",
-        prompt: "Summarize the fixture.",
-        target: {
-          executionFinalResponse: "target output",
-          assertionAgentRawResponse: "this is not JSON",
-          assertionAgentJson: null,
-          assertionJsonParseError: "Unexpected token 'h'",
-        },
-        baseline: null,
+        id: "first",
+        displayName: "Version one",
+        cases: [
+          {
+            externalId: 1,
+            name: "Fixture",
+            prompt: "Summarize the fixture.",
+            executionFinalResponse: "first output",
+            assertionAgentRawResponse: "this is not JSON",
+            assertionAgentJson: null,
+            assertionJsonParseError: "Unexpected token 'h'",
+          },
+        ],
       },
     ],
   })
   assert.match(prompt, /this is not JSON/)
   assert.match(prompt, /Unexpected token 'h'/)
+  assert.match(prompt, /Version one/)
+  assert.doesNotMatch(prompt, /target|baseline/i)
   assert.match(prompt, /return one HTML document in your final response/)
 })
 
