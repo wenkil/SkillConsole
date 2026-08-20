@@ -1,13 +1,7 @@
 {
   "header": {
-    "eyebrow": "DETERMINISTIC TEST EVIDENCE · 确定性报告",
-    "title": "测试报告",
-    "description": "汇总「{{name}}」所有终态测试任务。页面以不可变 Revision 的静态 HTML 展示，Markdown 可下载，原始日志与 Artifact 仍保留在测试任务中。"
-  },
-  "tabs": {
-    "label": "报告分组",
-    "deterministic": "确定性测试报告",
-    "aiScore": "AI 评分报告"
+    "title": "AI 分析报告",
+    "description": "查看「{{name}}」测试任务生成的 AI 分析报告。选择一条记录可查看 Token、费用、耗时和交互轮次对比，以及完整分析结果。"
   },
   "skillScore": {
     "filters": { "status": "报告状态", "all": "全部报告状态" },
@@ -45,7 +39,7 @@
       "version": "{{name}} · R{{revision}}",
       "firstToSecond": "差值按对象二减对象一计算",
       "tokenTitle": "Token 构成",
-      "tokenDescription": "模型输入、输出与缓存读写分别比较。",
+      "tokenDescription": "模型输入、输出与缓存读写分别比较。鼠标移入任一分类区域即可查看精确值。",
       "inputTokens": "输入",
       "outputTokens": "输出",
       "cacheCreationTokens": "缓存写入",

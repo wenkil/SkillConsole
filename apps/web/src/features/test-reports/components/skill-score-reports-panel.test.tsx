@@ -21,9 +21,17 @@ vi.mock("@/features/test-reports/api/skill-score-reports-api", () => ({
 }))
 
 vi.mock("react-chartjs-2", () => ({
-  Bar: () => <div data-testid="bar-chart" />,
-  Doughnut: () => <div data-testid="doughnut-chart" />,
-  Line: () => <div data-testid="line-chart" />,
+  Bar: ({
+    options,
+  }: {
+    options?: { interaction?: { intersect?: boolean; mode?: string } }
+  }) => (
+    <div
+      data-interaction-intersect={String(options?.interaction?.intersect)}
+      data-interaction-mode={options?.interaction?.mode}
+      data-testid="bar-chart"
+    />
+  ),
 }))
 
 const report = {
@@ -95,7 +103,7 @@ function PanelRoute() {
   )
 }
 
-function wrapper(initialEntry = "/reports?tab=ai-score") {
+function wrapper(initialEntry = "/reports") {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -146,9 +154,12 @@ describe("SkillScoreReportsPanel", () => {
     expect(
       await screen.findByRole("heading", { name: "运行开销对比" }),
     ).toBeInTheDocument()
-    expect(screen.getAllByTestId("bar-chart")).toHaveLength(2)
-    expect(screen.getByTestId("doughnut-chart")).toBeInTheDocument()
-    expect(screen.getByTestId("line-chart")).toBeInTheDocument()
+    const charts = screen.getAllByTestId("bar-chart")
+    expect(charts).toHaveLength(4)
+    charts.forEach((chart) => {
+      expect(chart).toHaveAttribute("data-interaction-mode", "index")
+      expect(chart).toHaveAttribute("data-interaction-intersect", "false")
+    })
     expect(
       screen.queryByRole("heading", { name: "生成进度" }),
     ).not.toBeInTheDocument()
@@ -188,7 +199,7 @@ describe("SkillScoreReportsPanel", () => {
       pagination: { hasMore: false, nextBeforeSequence: null },
     })
 
-    wrapper(`/reports?tab=ai-score&reportId=${report.id}`)
+    wrapper(`/reports?reportId=${report.id}`)
 
     expect(
       await screen.findByRole("heading", { name: "运行开销对比" }),

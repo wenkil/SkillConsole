@@ -6,13 +6,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { TestReportDetailView } from "@/features/test-reports/components/test-report-detail-view"
 import { TestReportsWorkbenchView } from "@/features/test-reports/components/test-reports-workbench-view"
-import { defaultTestReportListFilters } from "@/features/test-reports/model/test-report"
 import type { SkillWorkspace } from "@/features/workbench-home/model/workbench"
 import { i18n } from "@/shared/i18n/i18n"
 
 const mocks = vi.hoisted(() => ({
-  updateFilters: vi.fn(),
-  resetFilters: vi.fn(),
   retry: vi.fn(),
   regenerate: vi.fn(),
   analyzerController: vi.fn(),
@@ -25,6 +22,13 @@ const mocks = vi.hoisted(() => ({
   retryAnalysisLogs: vi.fn(),
   loadEarlierAnalysisLogs: vi.fn(),
 }))
+
+vi.mock(
+  "@/features/test-reports/components/skill-score-reports-panel",
+  () => ({
+    SkillScoreReportsPanel: () => <section>AI 分析报告列表</section>,
+  }),
+)
 
 const analysisCases = [
   {
@@ -77,28 +81,6 @@ const workspace = {
 vi.mock(
   "@/features/test-reports/hooks/use-test-reports-controller",
   () => ({
-    useTestReportsListController: () => ({
-      filters: defaultTestReportListFilters,
-      reports: [report],
-      pagination: { page: 1, pageSize: 20, total: 1, pageCount: 1 },
-      summary: {
-        total: 1,
-        available: 0,
-        partial: 1,
-        generationFailed: 0,
-        withNegativeTransitions: 1,
-        executionCostUsd: 0.04,
-        gradingCostUsd: 0.01,
-      },
-      loading: false,
-      refreshing: false,
-      error: false,
-      actions: {
-        updateFilters: mocks.updateFilters,
-        resetFilters: mocks.resetFilters,
-        retry: mocks.retry,
-      },
-    }),
     useTestReportDetailController: () => ({
       report: {
         ...report,
@@ -169,32 +151,14 @@ beforeEach(async () => {
 })
 
 describe("test report views", () => {
-  it("lists every terminal report with filters and a static HTML action", async () => {
-    const user = userEvent.setup()
+  it("shows only the AI analysis report list on the report workbench", () => {
     wrapper(<TestReportsWorkbenchView locale="zh-CN" workspace={workspace} />)
 
     expect(
-      screen.getByRole("heading", { name: "测试报告" }),
+      screen.getByRole("heading", { name: "AI 分析报告" }),
     ).toBeInTheDocument()
-    expect(screen.getByText("版本一 R1 → 版本二 R2")).toBeInTheDocument()
-    expect(screen.getAllByText("部分报告").length).toBeGreaterThan(0)
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: "报告类型" }),
-      "version_comparison",
-    )
-    expect(mocks.updateFilters).toHaveBeenCalledWith({
-      reportType: "version_comparison",
-    })
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: "AI 分析状态" }),
-      "NOT_REQUESTED",
-    )
-    expect(mocks.updateFilters).toHaveBeenCalledWith({
-      analysisStatus: "NOT_REQUESTED",
-    })
-    expect(
-      screen.getByRole("button", { name: /查看 HTML/ }),
-    ).toBeInTheDocument()
+    expect(screen.getByText("AI 分析报告列表")).toBeInTheDocument()
+    expect(screen.queryByText("确定性测试报告")).not.toBeInTheDocument()
   })
 
   it("shows the selected Revision in a sandboxed HTML frame with only HTML and Markdown downloads", () => {

@@ -1,13 +1,7 @@
 {
   "header": {
-    "eyebrow": "DETERMINISTIC TEST EVIDENCE",
-    "title": "Test reports",
-    "description": "Review every terminal test Run for “{{name}}”. Each immutable Revision is shown as static HTML, Markdown is downloadable, and raw logs and Artifacts remain in the original Run."
-  },
-  "tabs": {
-    "label": "Report group",
-    "deterministic": "Deterministic test reports",
-    "aiScore": "AI score reports"
+    "title": "AI analysis reports",
+    "description": "Review AI analysis reports generated from test Runs for “{{name}}”. Select a report to compare tokens, cost, duration, and interaction turns, then read the complete analysis."
   },
   "skillScore": {
     "filters": { "status": "Report status", "all": "All report statuses" },
@@ -45,7 +39,7 @@
       "version": "{{name}} · R{{revision}}",
       "firstToSecond": "Differences are calculated as second subject minus first subject",
       "tokenTitle": "Token composition",
-      "tokenDescription": "Model input, output, and cache activity are compared separately.",
+      "tokenDescription": "Model input, output, and cache activity are compared separately. Hover anywhere in a category to see exact values.",
       "inputTokens": "Input",
       "outputTokens": "Output",
       "cacheCreationTokens": "Cache write",

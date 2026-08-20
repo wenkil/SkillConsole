@@ -87,13 +87,13 @@ export function SkillScoreReportsPanel({
   const report = detail.data ?? selectedFromList ?? null
   const openDetail = (reportId: string) => {
     const next = new URLSearchParams(searchParams)
-    next.set("tab", "ai-score")
+    next.delete("tab")
     next.set("reportId", reportId)
     setSearchParams(next)
   }
   const returnToList = () => {
     const next = new URLSearchParams(searchParams)
-    next.set("tab", "ai-score")
+    next.delete("tab")
     next.delete("reportId")
     setSearchParams(next)
   }

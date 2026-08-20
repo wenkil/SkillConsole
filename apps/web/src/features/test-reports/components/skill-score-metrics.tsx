@@ -1,20 +1,15 @@
 import {
-  ArcElement,
   BarController,
   BarElement,
   CategoryScale,
   Chart as ChartJS,
-  DoughnutController,
   Legend,
   LinearScale,
-  LineController,
-  LineElement,
-  PointElement,
   Tooltip,
   type ChartData,
   type ChartOptions,
 } from "chart.js"
-import { Bar, Doughnut, Line } from "react-chartjs-2"
+import { Bar } from "react-chartjs-2"
 import { useTranslation } from "react-i18next"
 
 import type {
@@ -23,22 +18,77 @@ import type {
 } from "@/features/test-reports/api/skill-score-reports-api"
 
 ChartJS.register(
-  ArcElement,
   BarController,
   BarElement,
   CategoryScale,
-  DoughnutController,
   Legend,
   LinearScale,
-  LineController,
-  LineElement,
-  PointElement,
   Tooltip,
 )
 
 const subjectColors = ["#16847f", "#ef4b35"] as const
+const subjectBorderColors = ["#0f615d", "#a93425"] as const
 const gridColor = "rgba(164, 156, 141, 0.35)"
 const textColor = "#39434b"
+
+function createBarOptions({
+  axisFormatter,
+  missingLabel,
+  tooltipFormatter,
+  precision,
+}: {
+  axisFormatter: (value: number) => string
+  missingLabel: string
+  tooltipFormatter: (value: number) => string
+  precision: number
+}): ChartOptions<"bar"> {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 260 },
+    interaction: {
+      axis: "x",
+      intersect: false,
+      mode: "index",
+    },
+    plugins: {
+      legend: {
+        position: "bottom",
+        labels: { boxWidth: 10, boxHeight: 10, color: textColor },
+      },
+      tooltip: {
+        enabled: true,
+        callbacks: {
+          label: (context) => {
+            const label = context.dataset.label
+              ? `${context.dataset.label}: `
+              : ""
+            return `${label}${
+              context.parsed.y === null
+                ? missingLabel
+                : tooltipFormatter(context.parsed.y)
+            }`
+          },
+        },
+      },
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: { color: textColor },
+      },
+      y: {
+        beginAtZero: true,
+        grid: { color: gridColor },
+        ticks: {
+          color: textColor,
+          precision,
+          callback: (value) => axisFormatter(Number(value)),
+        },
+      },
+    },
+  }
+}
 
 function signed(value: number, formatter: (input: number) => string): string {
   if (value === 0) return formatter(0)
@@ -130,30 +180,45 @@ export function SkillScoreMetricsComparison({
       ? t("skillScore.metrics.missing")
       : formatter(value)
 
-  const commonOptions: ChartOptions<"bar"> = {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: { duration: 260 },
-    plugins: {
-      legend: {
-        position: "bottom",
-        labels: { boxWidth: 10, boxHeight: 10, color: textColor },
-      },
-      tooltip: { enabled: true },
-    },
-    scales: {
-      x: {
-        beginAtZero: true,
-        grid: { color: gridColor },
-        ticks: { color: textColor, precision: 0 },
-      },
-      y: {
-        beginAtZero: true,
-        grid: { color: gridColor },
-        ticks: { color: textColor, precision: 0 },
-      },
-    },
-  }
+  const tokenOptions = createBarOptions({
+    axisFormatter: (value) => number.format(value),
+    missingLabel: t("skillScore.metrics.missing"),
+    tooltipFormatter: (value) =>
+      t("skillScore.metrics.tokens", { value: number.format(value) }),
+    precision: 0,
+  })
+  const costOptions = createBarOptions({
+    axisFormatter: (value) => `$${cost.format(value)}`,
+    missingLabel: t("skillScore.metrics.missing"),
+    tooltipFormatter: (value) =>
+      t("skillScore.metrics.cost", { value: cost.format(value) }),
+    precision: 4,
+  })
+  const durationOptions = createBarOptions({
+    axisFormatter: (value) => `${seconds.format(value)}s`,
+    missingLabel: t("skillScore.metrics.missing"),
+    tooltipFormatter: (value) =>
+      t("skillScore.metrics.duration", { value: seconds.format(value) }),
+    precision: 1,
+  })
+  const turnsOptions = createBarOptions({
+    axisFormatter: (value) => number.format(value),
+    missingLabel: t("skillScore.metrics.missing"),
+    tooltipFormatter: (value) =>
+      t("skillScore.metrics.turns", { value: number.format(value) }),
+    precision: 0,
+  })
+  const subjectDataset = (
+    index: number,
+    data: (number | null)[],
+  ) => ({
+    label: subjectLabels[index] ?? subjects[index]?.displayName ?? "",
+    data,
+    backgroundColor: subjectColors[index] ?? subjectColors[0],
+    borderColor: subjectBorderColors[index] ?? subjectBorderColors[0],
+    borderWidth: 1,
+    maxBarThickness: 56,
+  })
   const tokenData: ChartData<"bar", (number | null)[]> = {
     labels: [
       t("skillScore.metrics.inputTokens"),
@@ -161,59 +226,39 @@ export function SkillScoreMetricsComparison({
       t("skillScore.metrics.cacheCreationTokens"),
       t("skillScore.metrics.cacheReadTokens"),
     ],
-    datasets: subjects.map((subject, index) => ({
-      label: subjectLabels[index] ?? subject.displayName,
-      data: subject.usage
-        ? [
-            subject.usage.inputTokens,
-            subject.usage.outputTokens,
-            subject.usage.cacheCreationInputTokens,
-            subject.usage.cacheReadInputTokens,
-          ]
-        : [null, null, null, null],
-      backgroundColor: subjectColors[index] ?? subjectColors[0],
-    })),
+    datasets: subjects.map((subject, index) =>
+      subjectDataset(
+        index,
+        subject.usage
+          ? [
+              subject.usage.inputTokens,
+              subject.usage.outputTokens,
+              subject.usage.cacheCreationInputTokens,
+              subject.usage.cacheReadInputTokens,
+            ]
+          : [null, null, null, null],
+      ),
+    ),
   }
-  const costData: ChartData<"doughnut", (number | null)[]> = {
-    labels: subjectLabels,
-    datasets: [
-      {
-        data: subjects.map((subject) => subject.usage?.totalCostUsd ?? null),
-        backgroundColor: subjectColors,
-        borderColor: "#fffaf0",
-        borderWidth: 2,
-      },
-    ],
+  const costData: ChartData<"bar", (number | null)[]> = {
+    labels: [t("skillScore.metrics.costTitle")],
+    datasets: subjects.map((subject, index) =>
+      subjectDataset(index, [subject.usage?.totalCostUsd ?? null]),
+    ),
   }
   const durationData: ChartData<"bar", (number | null)[]> = {
-    labels: subjectLabels,
-    datasets: [
-      {
-        label: t("skillScore.metrics.durationTitle"),
-        data: subjects.map((subject) =>
-          subject.usage ? subject.usage.durationMs / 1_000 : null,
-        ),
-        backgroundColor: subjectColors,
-      },
-    ],
+    labels: [t("skillScore.metrics.durationTitle")],
+    datasets: subjects.map((subject, index) =>
+      subjectDataset(index, [
+        subject.usage ? subject.usage.durationMs / 1_000 : null,
+      ]),
+    ),
   }
-  const turnsData: ChartData<"line", (number | null)[]> = {
-    labels: subjectLabels,
-    datasets: [
-      {
-        label: t("skillScore.metrics.turnsTitle"),
-        data: subjects.map((subject) => subject.usage?.numTurns ?? null),
-        borderColor: "#101820",
-        backgroundColor: subjectColors,
-        pointBackgroundColor: subjectColors,
-        pointBorderColor: "#101820",
-        pointBorderWidth: 1,
-        pointRadius: 6,
-        pointHoverRadius: 7,
-        borderWidth: 1.5,
-        tension: 0,
-      },
-    ],
+  const turnsData: ChartData<"bar", (number | null)[]> = {
+    labels: [t("skillScore.metrics.turnsTitle")],
+    datasets: subjects.map((subject, index) =>
+      subjectDataset(index, [subject.usage?.numTurns ?? null]),
+    ),
   }
   const exactValues = <T extends number>(
     selector: (subject: SkillScoreMetricSubject) => T | undefined,
@@ -253,7 +298,7 @@ export function SkillScoreMetricsComparison({
             </p>
           </figcaption>
           <div className="mt-4 h-64">
-            <Bar data={tokenData} options={commonOptions} />
+            <Bar data={tokenData} options={tokenOptions} />
           </div>
           <MetricValues
             difference={metrics.difference.modelTokens}
@@ -281,22 +326,8 @@ export function SkillScoreMetricsComparison({
               {t("skillScore.metrics.costDescription")}
             </p>
           </figcaption>
-          <div className="mx-auto mt-4 h-64 max-w-md">
-            <Doughnut
-              data={costData}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: "58%",
-                animation: { duration: 260 },
-                plugins: {
-                  legend: {
-                    position: "bottom",
-                    labels: { boxWidth: 10, boxHeight: 10, color: textColor },
-                  },
-                },
-              }}
-            />
+          <div className="mt-4 h-64">
+            <Bar data={costData} options={costOptions} />
           </div>
           <MetricValues
             difference={metrics.difference.totalCostUsd}
@@ -320,10 +351,7 @@ export function SkillScoreMetricsComparison({
             </p>
           </figcaption>
           <div className="mt-4 h-64">
-            <Bar
-              data={durationData}
-              options={{ ...commonOptions, indexAxis: "y" }}
-            />
+            <Bar data={durationData} options={durationOptions} />
           </div>
           <MetricValues
             difference={metrics.difference.durationMs}
@@ -351,23 +379,7 @@ export function SkillScoreMetricsComparison({
             </p>
           </figcaption>
           <div className="mt-4 h-64">
-            <Line
-              data={turnsData}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: { duration: 260 },
-                plugins: { legend: { display: false } },
-                scales: {
-                  x: { grid: { display: false }, ticks: { color: textColor } },
-                  y: {
-                    beginAtZero: true,
-                    grid: { color: gridColor },
-                    ticks: { color: textColor, precision: 0 },
-                  },
-                },
-              }}
-            />
+            <Bar data={turnsData} options={turnsOptions} />
           </div>
           <MetricValues
             difference={metrics.difference.numTurns}
