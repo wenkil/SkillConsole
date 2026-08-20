@@ -12,9 +12,8 @@ This directory centrally stores all System Prompts used by SkillConsole Agent Se
 | Test Run Assertion | `test-run-assertion.system.md` | Absolute `taskPath` injected via startup prompt |
 | Test Run Skill Score | `test-run-skill-score.system.md` | Absolute `taskPath` injected via startup prompt |
 | Test Run Grading | `test-run-grader.system.md` | Absolute `taskPath` injected via startup prompt |
-| Test Report Analysis | `test-report-analyzer.system.md` | Absolute `taskPath` injected via startup prompt |
 
-Task context, factual reports, evidence, rubrics, and output paths are written by the service into Session workspace files instead of being concatenated into a large startup prompt. The service injects a validated, boundary-checked absolute `taskPath` into the startup prompt; the physical paths in the task manifest used by tools for actual read/write operations are also backend-generated absolute paths. Each System Prompt must explicitly require Agents to use these paths as-is, without replacing, re-parsing, or guessing alternative paths.
+Task context, test evidence, rubrics, and output paths are written by the service into Session workspace files instead of being concatenated into a large startup prompt. The service injects a validated, boundary-checked absolute `taskPath` into the startup prompt; the physical paths in the task manifest used by tools for actual read/write operations are also backend-generated absolute paths. Each System Prompt must explicitly require Agents to use these paths as-is, without replacing, re-parsing, or guessing alternative paths.
 
 Business protocol fields such as `files` in Evals and `reference` in grading evidence still use logical relative paths; they are not physical paths passed directly to file tools.
 

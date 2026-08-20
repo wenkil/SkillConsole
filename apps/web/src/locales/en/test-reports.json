@@ -4,8 +4,24 @@
     "description": "Review AI analysis reports generated from test Runs for “{{name}}”. Select a report to compare tokens, cost, duration, and interaction turns, then read the complete analysis."
   },
   "skillScore": {
-    "filters": { "status": "Report status", "all": "All report statuses" },
-    "status": { "PENDING": "Pending", "RUNNING": "Running", "AVAILABLE": "Available", "FAILED": "Failed" },
+    "filters": {
+      "status": "Report status",
+      "all": "All report statuses"
+    },
+    "status": {
+      "PENDING": "Pending",
+      "RUNNING": "Running",
+      "AVAILABLE": "Available",
+      "FAILED": "Failed"
+    },
+    "states": {
+      "loading": "Loading AI score reports",
+      "loadingDetail": "Loading report details"
+    },
+    "pagination": {
+      "previous": "Previous page",
+      "next": "Next page"
+    },
     "events": "Report status events",
     "progress": "Generation progress",
     "analysis": "AI analysis",
@@ -45,7 +61,7 @@
       "cacheCreationTokens": "Cache write",
       "cacheReadTokens": "Cache read",
       "modelTokens": "Model tokens",
-      "costTitle": "Cost share",
+      "costTitle": "Cost comparison",
       "costDescription": "Cost uses SDK-reported values and is not recalculated from tokens.",
       "durationTitle": "Active duration",
       "durationDescription": "Combined execution and assertion Agent activity, not page wait time.",
@@ -58,185 +74,5 @@
       "turns": "{{value}} turns",
       "missing": "Missing data"
     }
-  },
-  "summary": {
-    "total": "Reports",
-    "available": "Complete",
-    "partial": "Partial",
-    "negative": "With regressions",
-    "failed": "Generation failed",
-    "cost": "Total cost"
-  },
-  "status": {
-    "GENERATION_PENDING": "Generating",
-    "AVAILABLE": "Available",
-    "PARTIAL": "Partial",
-    "GENERATION_FAILED": "Generation failed",
-    "UNAVAILABLE": "Unavailable"
-  },
-  "runStatus": {
-    "COMPLETED": "Run completed",
-    "FAILED": "Run failed",
-    "CANCELED": "Run canceled",
-    "INTERRUPTED": "Run interrupted"
-  },
-  "type": {
-    "skill_effect": "Skill effect report",
-    "version_comparison": "Version comparison report"
-  },
-  "comparability": {
-    "COMPARABLE": "Comparable",
-    "COMPARABLE_WITH_LIMITATIONS": "Comparable with limitations",
-    "NOT_COMPARABLE": "Not comparable",
-    "UNKNOWN_LEGACY": "Unknown for legacy Run"
-  },
-  "filters": {
-    "reportType": "Report type",
-    "allTypes": "All report types",
-    "reportStatus": "Report status",
-    "allReportStatuses": "All report statuses",
-    "runStatus": "Run status",
-    "allRunStatuses": "All terminal statuses",
-    "comparability": "Comparability",
-    "allComparability": "All comparability states",
-    "analysisStatus": "AI analysis status",
-    "allAnalysisStatuses": "All analysis statuses",
-    "changes": "Changes",
-    "allChanges": "All changes",
-    "hasNegative": "Has regression or degradation",
-    "noNegative": "No regression or degradation",
-    "more": "More filters",
-    "less": "Hide filters",
-    "sort": "Sort",
-    "sortOptions": {
-      "completedAt": "Completion time",
-      "issueCount": "Issue count",
-      "passRate": "Pass rate",
-      "cost": "Cost",
-      "duration": "Duration"
-    },
-    "clear": "Clear filters"
-  },
-  "list": {
-    "columns": {
-      "report": "Report",
-      "type": "Type",
-      "status": "Report / Run status",
-      "subjects": "First version → Second version",
-      "outcome": "Correctness",
-      "changes": "Changes / issues",
-      "analysis": "AI analysis",
-      "usage": "Cost / duration",
-      "evals": "Evals",
-      "completedAt": "Completed",
-      "actions": "Actions"
-    },
-    "coverage": "Coverage {{value}}",
-    "issues": "{{count}} issues",
-    "view": "View HTML",
-    "total": "{{count}} reports",
-    "previous": "Previous page",
-    "next": "Next page",
-    "page": "Page {{page}} / {{pageCount}}"
-  },
-  "empty": {
-    "title": "No terminal test reports yet",
-    "description": "A report is generated automatically when a test Run completes, fails, is canceled, or is interrupted.",
-    "filteredTitle": "No reports match these filters",
-    "filteredDescription": "Clear some filters or inspect the report status from Test runs."
-  },
-  "detail": {
-    "back": "Back to test reports",
-    "openRun": "Open original Run",
-    "downloadHtml": "Download HTML",
-    "downloadMarkdown": "Download Markdown",
-    "documentTitle": "Static test report",
-    "metadata": {
-      "reportId": "Report ID",
-      "runId": "Source Run",
-      "revision": "Report revision"
-    },
-    "tabs": {
-      "label": "Report content",
-      "facts": "Fact report",
-      "analysis": "AI analysis"
-    },
-    "staticNotice": "The report body is script-free static HTML. JSON remains an internal fact protocol and is not offered as a user export.",
-    "regenerate": "Regenerate report",
-    "unavailable": {
-      "GENERATION_PENDING": { "title": "Generating the static report", "description": "This page refreshes automatically. The original Run and completed evidence are unchanged." },
-      "GENERATION_FAILED": { "title": "Report generation failed", "description": "Retrying is safe and does not modify the Run or its source evidence." },
-      "UNAVAILABLE": { "title": "The current historical facts cannot produce a report", "description": "Open the original Run to inspect any logs, Cases, and Artifacts that remain available." },
-      "AVAILABLE": { "title": "The static document is not ready", "description": "The report status and Revision are inconsistent. Retry loading the report." },
-      "PARTIAL": { "title": "The static document is not ready", "description": "The report status and Revision are inconsistent. Retry loading the report." }
-    }
-  },
-  "analysis": {
-    "title": "Report Analyzer",
-    "disclaimer": "The Analyzer uses the capabilities from project settings.json and reads the frozen report, selected Cases, and context files prepared in its workspace.",
-    "generatedNotice": "AI analysis is a model-generated interpretation layer. It does not replace the deterministic fact report or declare a winner, release decision, or root cause.",
-    "modelGenerated": "Model generated",
-    "status": {
-      "NOT_REQUESTED": "Not generated",
-      "PENDING": "Queued",
-      "RUNNING": "Analyzing",
-      "AVAILABLE": "Available",
-      "FAILED": "Failed"
-    },
-    "revision": {
-      "label": "Analysis history",
-      "option": "Analysis R{{revision}} · {{status}}",
-      "title": "AI analysis R{{revision}}"
-    },
-    "selection": {
-      "title": "Select Cases to analyze",
-      "description": "Cases with issues are selected by default; when there are no issues, every Case is selected. Each request creates an independent Analysis Revision.",
-      "count": "{{selected}} / {{total}} selected",
-      "default": "Restore default",
-      "all": "Select all",
-      "clear": "Clear",
-      "issues": "{{count}} deterministic issues",
-      "noIssues": "No deterministic issues recorded",
-      "unavailable": "This Report Revision has no Cases available for the Analyzer."
-    },
-    "generate": "Generate AI analysis",
-    "generateAgain": "Generate a new Analysis Revision",
-    "retry": "Retry as a new Revision",
-    "loading": "Loading Analysis Revision",
-    "loadError": "Could not load AI analysis",
-    "loadErrorDescription": "The fact report remains available. Retry loading the independent Analysis Revision.",
-    "emptyTitle": "No AI analysis yet",
-    "emptyDescription": "Select the Cases to analyze, then start an Analyzer Session with the project's shared capabilities.",
-    "pendingTitle": "Analyzer is queued",
-    "runningTitle": "Analyzer is running",
-    "runningDescription": "A separate script-free static HTML document will appear when it finishes. The fact report and its Revision will not change.",
-    "failedTitle": "AI analysis failed",
-    "failedDescription": "Failure does not affect the fact report. You can create a new Analysis Revision with the same Cases.",
-    "meta": "Actual model {{model}} · configured model {{configuredModel}} · Prompt {{prompt}} · {{count}} Cases",
-    "runtimePolicy": "Runtime {{schema}} · capabilities from {{capability}} · timeout {{timeout}}",
-    "usage": "{{input}} input · {{output}} output Tokens · ${{cost}} · {{duration}} · {{turns}} turns",
-    "logs": {
-      "title": "Live Analyzer logs",
-      "count": "{{count}} events",
-      "loading": "Loading logs",
-      "empty": "No Analyzer log events have arrived yet.",
-      "loadError": "Analyzer logs could not be loaded.",
-      "connectionError": "The live log connection was interrupted. The browser is reconnecting automatically.",
-      "loadEarlier": "Load earlier logs"
-    },
-    "downloadFullHtml": "Download complete HTML",
-    "downloadMarkdown": "Download analysis Markdown",
-    "documentTitle": "AI Analysis Revision {{revision}}"
-  },
-  "states": {
-    "loading": "Loading test reports",
-    "refreshing": "Refreshing report status",
-    "loadError": "Could not load test reports",
-    "loadErrorDescription": "Check the local service, database, and report migration state, then retry.",
-    "loadingDetail": "Loading report Revision",
-    "detailError": "Could not load this test report",
-    "findingReport": "Finding the report for this Run",
-    "reportLookupError": "Could not find the report for this Run",
-    "retry": "Retry"
   }
 }

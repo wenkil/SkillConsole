@@ -4,8 +4,24 @@
     "description": "查看「{{name}}」测试任务生成的 AI 分析报告。选择一条记录可查看 Token、费用、耗时和交互轮次对比，以及完整分析结果。"
   },
   "skillScore": {
-    "filters": { "status": "报告状态", "all": "全部报告状态" },
-    "status": { "PENDING": "等待评分", "RUNNING": "评分中", "AVAILABLE": "报告可用", "FAILED": "评分失败" },
+    "filters": {
+      "status": "报告状态",
+      "all": "全部报告状态"
+    },
+    "status": {
+      "PENDING": "等待评分",
+      "RUNNING": "评分中",
+      "AVAILABLE": "报告可用",
+      "FAILED": "评分失败"
+    },
+    "states": {
+      "loading": "正在加载 AI 评分报告",
+      "loadingDetail": "正在加载报告详情"
+    },
+    "pagination": {
+      "previous": "上一页",
+      "next": "下一页"
+    },
     "events": "报告状态事件",
     "progress": "生成进度",
     "analysis": "AI 分析",
@@ -18,7 +34,7 @@
       "title": "还没有 AI 评分报告",
       "description": "测试任务完成后，系统会自动生成 AI 评分报告。"
     },
-    "emptySelection": "从左侧选择一份 AI 评分报告。",
+    "emptySelection": "从列表中选择一份 AI 评分报告。",
     "loadError": "无法读取 AI 评分报告。",
     "eventsByType": {
       "created": "已创建 AI 评分报告",
@@ -45,7 +61,7 @@
       "cacheCreationTokens": "缓存写入",
       "cacheReadTokens": "缓存读取",
       "modelTokens": "模型 Token",
-      "costTitle": "费用占比",
+      "costTitle": "费用对比",
       "costDescription": "费用采用 SDK 上报值，不按 Token 重新估算。",
       "durationTitle": "活动耗时",
       "durationDescription": "执行与断言 Agent 活动耗时之和，不是页面等待时间。",
@@ -58,185 +74,5 @@
       "turns": "{{value}} 轮",
       "missing": "数据缺失"
     }
-  },
-  "summary": {
-    "total": "报告总数",
-    "available": "完整报告",
-    "partial": "部分报告",
-    "negative": "存在退化",
-    "failed": "生成失败",
-    "cost": "总成本"
-  },
-  "status": {
-    "GENERATION_PENDING": "正在生成",
-    "AVAILABLE": "报告完整",
-    "PARTIAL": "部分报告",
-    "GENERATION_FAILED": "生成失败",
-    "UNAVAILABLE": "报告不可用"
-  },
-  "runStatus": {
-    "COMPLETED": "任务完成",
-    "FAILED": "任务失败",
-    "CANCELED": "任务取消",
-    "INTERRUPTED": "任务中断"
-  },
-  "type": {
-    "skill_effect": "Skill 效果报告",
-    "version_comparison": "版本对比报告"
-  },
-  "comparability": {
-    "COMPARABLE": "可比较",
-    "COMPARABLE_WITH_LIMITATIONS": "有限可比",
-    "NOT_COMPARABLE": "不可比较",
-    "UNKNOWN_LEGACY": "历史可比性未知"
-  },
-  "filters": {
-    "reportType": "报告类型",
-    "allTypes": "全部报告类型",
-    "reportStatus": "报告状态",
-    "allReportStatuses": "全部报告状态",
-    "runStatus": "任务终态",
-    "allRunStatuses": "全部任务终态",
-    "comparability": "可比性",
-    "allComparability": "全部可比性",
-    "analysisStatus": "AI 分析状态",
-    "allAnalysisStatuses": "全部分析状态",
-    "changes": "变化",
-    "allChanges": "全部变化",
-    "hasNegative": "存在回归或退化",
-    "noNegative": "没有回归或退化",
-    "more": "更多筛选项",
-    "less": "收起筛选项",
-    "sort": "排序",
-    "sortOptions": {
-      "completedAt": "按完成时间",
-      "issueCount": "按问题数量",
-      "passRate": "按通过率",
-      "cost": "按成本",
-      "duration": "按耗时"
-    },
-    "clear": "清除筛选"
-  },
-  "list": {
-    "columns": {
-      "report": "报告",
-      "type": "类型",
-      "status": "报告 / 任务状态",
-      "subjects": "版本一 → 版本二",
-      "outcome": "正确性",
-      "changes": "变化 / 问题",
-      "analysis": "AI 分析",
-      "usage": "成本 / 耗时",
-      "evals": "Evals",
-      "completedAt": "完成时间",
-      "actions": "操作"
-    },
-    "coverage": "覆盖 {{value}}",
-    "issues": "{{count}} 个问题",
-    "view": "查看 HTML",
-    "total": "共 {{count}} 份",
-    "previous": "上一页",
-    "next": "下一页",
-    "page": "第 {{page}} / {{pageCount}} 页"
-  },
-  "empty": {
-    "title": "还没有终态测试报告",
-    "description": "测试任务进入完成、失败、取消或中断终态后，系统会自动生成对应报告。",
-    "filteredTitle": "当前筛选没有报告",
-    "filteredDescription": "清除部分筛选条件，或返回测试任务检查报告生成状态。"
-  },
-  "detail": {
-    "back": "返回测试报告",
-    "openRun": "查看原始任务",
-    "downloadHtml": "下载 HTML",
-    "downloadMarkdown": "下载 Markdown",
-    "documentTitle": "静态测试报告",
-    "metadata": {
-      "reportId": "报告 ID",
-      "runId": "来源任务",
-      "revision": "报告修订"
-    },
-    "tabs": {
-      "label": "报告内容",
-      "facts": "事实报告",
-      "analysis": "AI 分析"
-    },
-    "staticNotice": "报告正文是无脚本静态 HTML；JSON 只作为内部事实协议，不提供用户导出。",
-    "regenerate": "重新生成报告",
-    "unavailable": {
-      "GENERATION_PENDING": { "title": "正在生成静态报告", "description": "页面会自动刷新；原始测试任务和已完成证据不受影响。" },
-      "GENERATION_FAILED": { "title": "报告生成失败", "description": "可以安全重试；重试不会修改测试任务或原始证据。" },
-      "UNAVAILABLE": { "title": "无法从当前历史事实生成报告", "description": "请打开原始任务查看仍然可用的日志、Case 和 Artifact。" },
-      "AVAILABLE": { "title": "静态文档尚未就绪", "description": "报告状态与 Revision 不一致，请重试读取。" },
-      "PARTIAL": { "title": "静态文档尚未就绪", "description": "报告状态与 Revision 不一致，请重试读取。" }
-    }
-  },
-  "analysis": {
-    "title": "报告 Analyzer",
-    "disclaimer": "Analyzer 按项目 settings.json 使用统一能力，并依据工作区中的冻结报告、所选 Case 与上下文文件生成独立分析结果。",
-    "generatedNotice": "AI 分析是模型生成的解释层，不替代确定性事实报告，也不构成胜负、上线或根因结论。",
-    "modelGenerated": "模型生成",
-    "status": {
-      "NOT_REQUESTED": "未生成",
-      "PENDING": "等待分析",
-      "RUNNING": "分析中",
-      "AVAILABLE": "可查看",
-      "FAILED": "分析失败"
-    },
-    "revision": {
-      "label": "历史分析 Revision",
-      "option": "分析 R{{revision}} · {{status}}",
-      "title": "AI 分析 R{{revision}}"
-    },
-    "selection": {
-      "title": "选择分析 Case",
-      "description": "默认选择存在问题的 Case；若没有问题，则默认选择全部 Case。每次提交都会生成独立 Analysis Revision。",
-      "count": "已选 {{selected}} / {{total}}",
-      "default": "恢复默认",
-      "all": "全选",
-      "clear": "清空",
-      "issues": "{{count}} 个确定性问题",
-      "noIssues": "未记录确定性问题",
-      "unavailable": "当前 Report Revision 没有可供 Analyzer 选择的 Case。"
-    },
-    "generate": "生成 AI 分析",
-    "generateAgain": "生成新的分析 Revision",
-    "retry": "重试并创建新 Revision",
-    "loading": "正在读取 Analysis Revision",
-    "loadError": "无法读取 AI 分析",
-    "loadErrorDescription": "事实报告仍然可用。请重试读取独立的 Analysis Revision。",
-    "emptyTitle": "尚未生成 AI 分析",
-    "emptyDescription": "先选择需要分析的 Case，再按需启动使用项目统一能力的 Analyzer Session。",
-    "pendingTitle": "Analyzer 正在排队",
-    "runningTitle": "Analyzer 正在分析",
-    "runningDescription": "完成后会生成独立的无脚本静态 HTML；事实报告及其 Revision 不会改变。",
-    "failedTitle": "AI 分析失败",
-    "failedDescription": "失败不会影响事实报告。可以使用相同 Case 创建新的 Analysis Revision。",
-    "meta": "实际模型 {{model}} · 配置模型 {{configuredModel}} · Prompt {{prompt}} · {{count}} 个 Case",
-    "runtimePolicy": "Runtime {{schema}} · 能力来源 {{capability}} · 超时 {{timeout}}",
-    "usage": "输入 {{input}} · 输出 {{output}} Token · ${{cost}} · {{duration}} · {{turns}} 轮",
-    "logs": {
-      "title": "Analyzer 实时日志",
-      "count": "{{count}} 条",
-      "loading": "正在读取日志",
-      "empty": "尚未收到 Analyzer 日志事件。",
-      "loadError": "无法读取 Analyzer 日志。",
-      "connectionError": "实时日志连接暂时中断，浏览器正在自动重连。",
-      "loadEarlier": "加载更早日志"
-    },
-    "downloadFullHtml": "下载完整 HTML",
-    "downloadMarkdown": "下载分析 Markdown",
-    "documentTitle": "AI 分析 Revision {{revision}}"
-  },
-  "states": {
-    "loading": "正在读取测试报告",
-    "refreshing": "正在刷新报告状态",
-    "loadError": "无法读取测试报告",
-    "loadErrorDescription": "请确认本地服务、数据库和报告迁移状态后重试。",
-    "loadingDetail": "正在读取报告 Revision",
-    "detailError": "无法读取这份测试报告",
-    "findingReport": "正在查找该任务的报告",
-    "reportLookupError": "无法找到该任务的报告",
-    "retry": "重新加载"
   }
 }

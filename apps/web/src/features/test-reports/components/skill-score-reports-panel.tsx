@@ -107,7 +107,7 @@ export function SkillScoreReportsPanel({
             {(["PENDING", "RUNNING", "AVAILABLE", "FAILED"] as const).map((item) => <option key={item} value={item}>{t(`skillScore.status.${item}`)}</option>)}
           </select>
         </div>
-        {list.isPending ? <div className="p-5 text-sm text-muted-foreground"><LoaderCircle className="mr-2 inline size-4 animate-spin" />{t("states.loading")}</div> : null}
+        {list.isPending ? <div className="p-5 text-sm text-muted-foreground"><LoaderCircle className="mr-2 inline size-4 animate-spin" />{t("skillScore.states.loading")}</div> : null}
         {list.isError ? <div className="p-5 text-sm text-destructive">{t("skillScore.loadError")}</div> : null}
         {!list.isPending && !list.isError ? <div className="min-h-0 flex-1 overflow-auto">
           {(list.data?.items ?? []).map((item) => <button aria-label={`${t("skillScore.viewDetail")}: ${item.runId}`} className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-6 border-b border-border-subtle bg-paper-raised px-5 py-4 text-left transition-colors hover:bg-paper-muted focus-visible:bg-paper-muted" key={item.id} onClick={() => openDetail(item.id)} type="button">
@@ -125,8 +125,8 @@ export function SkillScoreReportsPanel({
           {(list.data?.items ?? []).length === 0 ? <div className="flex h-full items-center justify-center px-6 text-center"><div><FileText className="mx-auto size-7 text-technical" aria-hidden="true" /><h2 className="mt-3 text-base font-bold">{t("skillScore.empty.title")}</h2><p className="mt-1 text-sm text-muted-foreground">{t("skillScore.empty.description")}</p></div></div> : null}
         </div> : null}
         <footer className="flex shrink-0 items-center justify-between border-t border-border-strong bg-surface-muted px-5 py-3">
-          <Button className="rounded-none" disabled={page <= 1} onClick={() => setPage((value) => value - 1)} size="sm" type="button" variant="outline">{t("list.previous")}</Button>
-          <Button className="rounded-none" disabled={page >= (list.data?.pagination.pageCount ?? 0)} onClick={() => setPage((value) => value + 1)} size="sm" type="button" variant="outline">{t("list.next")}</Button>
+          <Button className="rounded-none" disabled={page <= 1} onClick={() => setPage((value) => value - 1)} size="sm" type="button" variant="outline">{t("skillScore.pagination.previous")}</Button>
+          <Button className="rounded-none" disabled={page >= (list.data?.pagination.pageCount ?? 0)} onClick={() => setPage((value) => value + 1)} size="sm" type="button" variant="outline">{t("skillScore.pagination.next")}</Button>
         </footer>
       </section>
     )
@@ -142,10 +142,10 @@ export function SkillScoreReportsPanel({
         <FileText className="size-6 shrink-0 text-muted-foreground" aria-hidden="true" />
       </header>
       <div className="min-h-0 flex-1 overflow-auto bg-paper-muted/20 p-5">
-        {detail.isPending ? <div className="text-sm text-muted-foreground"><LoaderCircle className="mr-2 inline size-4 animate-spin" />{t("states.loadingDetail")}</div> : null}
+        {detail.isPending ? <div className="text-sm text-muted-foreground"><LoaderCircle className="mr-2 inline size-4 animate-spin" />{t("skillScore.states.loadingDetail")}</div> : null}
         {detail.isError ? <div className="text-sm text-destructive">{t("skillScore.loadError")}</div> : null}
         {detail.data ? <div className="mx-auto max-w-[96rem]">
-          <Suspense fallback={<div className="border border-border-strong bg-paper-raised p-5 text-sm text-muted-foreground"><LoaderCircle className="mr-2 inline size-4 animate-spin" />{t("states.loadingDetail")}</div>}>
+          <Suspense fallback={<div className="border border-border-strong bg-paper-raised p-5 text-sm text-muted-foreground"><LoaderCircle className="mr-2 inline size-4 animate-spin" />{t("skillScore.states.loadingDetail")}</div>}>
             <SkillScoreMetricsComparison locale={locale} metrics={detail.data.metrics} />
           </Suspense>
           {detail.data.error ? <p className="mt-5 flex gap-2 border border-destructive/50 bg-paper-raised p-4 text-sm text-destructive"><AlertTriangle className="size-4 shrink-0" />{detail.data.error.code}: {detail.data.error.message}</p> : null}

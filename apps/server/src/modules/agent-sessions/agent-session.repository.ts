@@ -32,8 +32,6 @@ function originKey(origin: AgentSessionOrigin): string {
       return `${origin.runId}:${origin.caseId}:${origin.phase}`
     case "test_run_skill_score":
       return `${origin.runId}:${origin.reportId}:${origin.phase}`
-    case "report_analyzer":
-      return `${origin.reportId}:${origin.analysisId}:${origin.revisionId}`
     case "generic":
       return "generic"
   }

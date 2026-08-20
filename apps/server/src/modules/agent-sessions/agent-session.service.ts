@@ -209,10 +209,6 @@ export class AgentSessionService {
     }
   }
 
-  async registerRunReport(runId: string, reportId: string): Promise<void> {
-    await this.logs.registerRunReport(runId, reportId)
-  }
-
   async get(sessionId: string): Promise<AgentSessionView> {
     return this.repository.get(sessionId)
   }

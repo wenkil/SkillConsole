@@ -142,14 +142,6 @@ export type AgentSessionOrigin =
       readonly reportId: string
       readonly phase: "skill-score"
     }
-  | {
-      readonly type: "report_analyzer"
-      readonly runId: string
-      readonly reportId: string
-      readonly analysisId: string
-      readonly revisionId: string
-      readonly phase: "analysis"
-    }
   | { readonly type: "generic" }
 
 export type AssistantContent =

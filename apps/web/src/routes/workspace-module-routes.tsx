@@ -14,10 +14,6 @@ import { VersionCompareView } from "@/features/version-browser/components/versio
 import { EvalsWorkbenchView } from "@/features/evals/components/evals-workbench-view"
 import { TestRunDetailView } from "@/features/test-runs/components/test-run-detail-view"
 import { TestRunsWorkbenchView } from "@/features/test-runs/components/test-runs-workbench-view"
-import {
-  TestReportByRunRedirect,
-  TestReportDetailView,
-} from "@/features/test-reports/components/test-report-detail-view"
 import { TestReportsWorkbenchView } from "@/features/test-reports/components/test-reports-workbench-view"
 import type { SkillBrowserTarget } from "@/features/version-browser/model/version-browser"
 import { WorkbenchOverview } from "@/features/workbench-home/components/workbench-overview"
@@ -67,30 +63,6 @@ export function TestRunDetailRoute() {
 export function TestReportsWorkbenchRoute() {
   const { workspace, locale } = useWorkspaceRouteContext()
   return <TestReportsWorkbenchView locale={locale} workspace={workspace} />
-}
-
-export function TestReportDetailRoute() {
-  const { reportId } = useParams()
-  const { workspace, locale } = useWorkspaceRouteContext()
-  if (!reportId) {
-    return <Navigate replace to={`/workbenches/${workspace.id}/reports`} />
-  }
-  return (
-    <TestReportDetailView
-      locale={locale}
-      reportId={reportId}
-      workspace={workspace}
-    />
-  )
-}
-
-export function TestReportByRunRoute() {
-  const { runId } = useParams()
-  const { workspace } = useWorkspaceRouteContext()
-  if (!runId) {
-    return <Navigate replace to={`/workbenches/${workspace.id}/runs`} />
-  }
-  return <TestReportByRunRedirect runId={runId} workspace={workspace} />
 }
 
 function getVersionTargetPath(

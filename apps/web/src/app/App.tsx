@@ -11,8 +11,6 @@ import {
   ModulePlaceholderRoute,
   EvalsWorkbenchRoute,
   TestRunDetailRoute,
-  TestReportByRunRoute,
-  TestReportDetailRoute,
   TestReportsWorkbenchRoute,
   TestRunsWorkbenchRoute,
   VersionBrowserRoute,
@@ -57,14 +55,6 @@ export function AppRoutes() {
             path="runs/:runId"
           />
           <Route element={<TestReportsWorkbenchRoute />} path="reports" />
-          <Route
-            element={<TestReportByRunRoute />}
-            path="reports/by-run/:runId"
-          />
-          <Route
-            element={<TestReportDetailRoute />}
-            path="reports/:reportId"
-          />
           <Route element={<WorkspaceFallbackRoute />} path="*" />
         </Route>
         <Route element={<Navigate replace to="/" />} path="*" />
