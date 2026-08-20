@@ -1,7 +1,6 @@
 export type TestRunStatus =
   | "PREPARING"
   | "RUNNING"
-  | "SCORING"
   | "CANCELING"
   | "COMPLETED"
   | "CANCELED"
@@ -310,7 +309,6 @@ export interface TestRunLogPage {
 export const activeTestRunStatuses: readonly TestRunStatus[] = [
   "PREPARING",
   "RUNNING",
-  "SCORING",
   "CANCELING",
 ]
 

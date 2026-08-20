@@ -21,6 +21,9 @@ import type {
   TestRunLogPage,
   TestRunLogQuery,
   TestRunPage,
+  SkillScoreReportEventPage,
+  SkillScoreReportPage,
+  SkillScoreReportView,
   TestRunRuntimeCapabilitySnapshot,
   TestRunView,
 } from "./test-run.domain.js"
@@ -499,8 +502,14 @@ export class TestRunService {
   private readonly eventBus = new TestRunEventBus()
   private readonly workers = new Map<string, Promise<void>>()
   private readonly activeSessions = new Map<string, string>()
+  private readonly skillScoreWorkers = new Map<string, Promise<void>>()
+  private readonly activeSkillScoreSessions = new Map<string, string>()
   private readonly lastPublishedSequences = new Map<string, number>()
   private readonly runtimeEnvironments = new Map<
+    string,
+    TestRunRuntimeEnvironment
+  >()
+  private readonly skillScoreRuntimeEnvironments = new Map<
     string,
     TestRunRuntimeEnvironment
   >()
@@ -767,6 +776,34 @@ export class TestRunService {
     return this.options.repository.listLogs(runId, query)
   }
 
+  listSkillScoreReports(
+    workspaceId: string,
+    page: number,
+    pageSize: number,
+    status?: "PENDING" | "RUNNING" | "AVAILABLE" | "FAILED",
+  ): Promise<SkillScoreReportPage> {
+    return this.options.repository.listSkillScoreReports(workspaceId, {
+      page,
+      pageSize,
+      ...(status ? { status } : {}),
+    })
+  }
+
+  getSkillScoreReport(reportId: string): Promise<SkillScoreReportView> {
+    return this.options.repository.getSkillScoreReport(reportId)
+  }
+
+  listSkillScoreReportEvents(
+    reportId: string,
+    beforeSequence: number | undefined,
+    limit: number,
+  ): Promise<SkillScoreReportEventPage> {
+    return this.options.repository.listSkillScoreReportEvents(reportId, {
+      ...(beforeSequence ? { beforeSequence } : {}),
+      limit,
+    })
+  }
+
   subscribe(
     runId: string,
     listener: (event: TestRunEvent) => void,
@@ -783,7 +820,7 @@ export class TestRunService {
   async cancel(runId: string): Promise<TestRunView> {
     const run = await this.options.repository.getRow(runId)
     if (
-      !["PREPARING", "RUNNING", "SCORING", "CANCELING"].includes(
+      !["PREPARING", "RUNNING", "CANCELING"].includes(
         run.status,
       )
     ) {
@@ -900,6 +937,47 @@ export class TestRunService {
         this.runtimeEnvironments.delete(runId)
       })
     this.workers.set(runId, worker)
+  }
+
+  private launchSkillScoreReport(
+    runId: string,
+    reportId: string,
+    runtimeEnvironment: TestRunRuntimeEnvironment,
+  ): boolean {
+    if (this.skillScoreWorkers.has(reportId) || this.shuttingDown) return false
+    this.skillScoreRuntimeEnvironments.set(reportId, runtimeEnvironment)
+    const worker = this.executeSkillScoreReport(runId, reportId)
+      .catch(async (error) => {
+        this.options.logger.error(
+          { runId, reportId, error },
+          "Skill score report orchestration failed",
+        )
+        await this.options.repository
+          .failSkillScoreReport({
+            reportId,
+            code:
+              error instanceof DomainError
+                ? error.code
+                : "TEST_RUN_SKILL_SCORE_FAILED",
+            message:
+              error instanceof Error
+                ? error.message
+                : "The Skill score report could not continue.",
+          })
+          .catch((failureError) => {
+            this.options.logger.error(
+              { runId, reportId, error: failureError },
+              "Skill score report failure could not be persisted",
+            )
+          })
+      })
+      .finally(() => {
+        this.skillScoreWorkers.delete(reportId)
+        this.activeSkillScoreSessions.delete(reportId)
+        this.skillScoreRuntimeEnvironments.delete(reportId)
+      })
+    this.skillScoreWorkers.set(reportId, worker)
+    return true
   }
 
   private async executeRun(runId: string): Promise<void> {
@@ -1098,10 +1176,35 @@ export class TestRunService {
       await this.publishNewEvents(runId)
       return
     }
-    await this.scoreRun(runId, run)
+    const completed =
+      await this.options.repository.completeRunAndCreateSkillScoreReport({ runId })
     await this.publishNewEvents(runId)
-    await this.options.repository.completeRun({ runId })
-    await this.publishNewEvents(runId)
+    const runtimeEnvironment = this.runtimeEnvironments.get(runId)
+    if (!runtimeEnvironment) {
+      this.options.logger.error(
+        { runId },
+        "Completed test run has no runtime environment for its Skill score report",
+      )
+      await this.options.repository.failSkillScoreReport({
+        reportId: completed.reportId,
+        code: "TEST_RUN_RUNTIME_ENVIRONMENT_UNAVAILABLE",
+        message: "The frozen test run runtime environment is unavailable.",
+      })
+      return
+    }
+    if (
+      !this.launchSkillScoreReport(
+        runId,
+        completed.reportId,
+        runtimeEnvironment,
+      )
+    ) {
+      await this.options.repository.failSkillScoreReport({
+        reportId: completed.reportId,
+        code: "TEST_RUN_SKILL_SCORE_NOT_STARTED",
+        message: "The Skill score report could not start because the server is shutting down.",
+      })
+    }
   }
 
   private async executeCase(
@@ -1546,11 +1649,11 @@ export class TestRunService {
     }
   }
 
-  private async scoreRun(
+  private async executeSkillScoreReport(
     runId: string,
-    run: Awaited<ReturnType<TestRunRepository["getRow"]>>,
+    reportId: string,
   ): Promise<void> {
-    const runtimeEnvironment = this.runtimeEnvironments.get(runId)
+    const runtimeEnvironment = this.skillScoreRuntimeEnvironments.get(reportId)
     if (!runtimeEnvironment) {
       throw new DomainError({
         code: "TEST_RUN_RUNTIME_ENVIRONMENT_UNAVAILABLE",
@@ -1558,10 +1661,10 @@ export class TestRunService {
         kind: "precondition_failed",
       })
     }
-    const report = await this.options.repository.beginSkillScoreReport(runId)
-    await this.publishNewEvents(runId)
+    const run = await this.options.repository.getRow(runId)
     let sessionId: string | null = null
     try {
+      await this.options.repository.beginSkillScoreReport(reportId)
       const [assertionPrompt, scorePrompt] = await Promise.all([
         this.options.agentSessions.getSystemPrompt("test-run-assertion"),
         this.options.agentSessions.getSystemPrompt("test-run-skill-score"),
@@ -1573,7 +1676,7 @@ export class TestRunService {
         ) !== run.graderProtocolVersion
       ) {
         await this.options.repository.failSkillScoreReport({
-          reportId: report.id,
+          reportId,
           code: "TEST_RUN_AGENT_CHAIN_PROMPT_CHANGED",
           message:
             "The test assertion or Skill score System Prompt changed after the run was frozen.",
@@ -1615,7 +1718,7 @@ export class TestRunService {
       )
       if (cases.length === 0) {
         await this.options.repository.failSkillScoreReport({
-          reportId: report.id,
+          reportId,
           code: "TEST_RUN_SKILL_SCORE_INPUT_UNAVAILABLE",
           message: "The test run has no Case data for the Skill score Agent.",
         })
@@ -1632,7 +1735,7 @@ export class TestRunService {
         origin: {
           type: "test_run_skill_score",
           runId,
-          reportId: report.id,
+          reportId,
           phase: "skill-score",
         },
         prompt: buildSkillScorePrompt({ runId, cases: scoreCases }),
@@ -1645,8 +1748,8 @@ export class TestRunService {
         additionalRedactedValues: [...scoreRuntimeEnvironment.sensitiveValues],
       })
       sessionId = session.id
-      this.activeSessions.set(runId, session.id)
-      await this.options.repository.bindSkillScoreReportSession(report.id, session.id)
+      this.activeSkillScoreSessions.set(reportId, session.id)
+      await this.options.repository.bindSkillScoreReportSession(reportId, session.id)
       const result = await this.monitorSkillScoreSession({
         runId,
         sessionId: session.id,
@@ -1654,12 +1757,12 @@ export class TestRunService {
       })
       if (result.status === "COMPLETED" && result.finalOutput.length > 0) {
         await this.options.repository.completeSkillScoreReport(
-          report.id,
+          reportId,
           result.finalOutput,
         )
       } else {
         await this.options.repository.failSkillScoreReport({
-          reportId: report.id,
+          reportId,
           code:
             result.error?.code ??
             (result.status === "COMPLETED"
@@ -1673,7 +1776,7 @@ export class TestRunService {
     } catch (error) {
       await this.options.repository
         .failSkillScoreReport({
-          reportId: report.id,
+          reportId,
           code:
             error instanceof DomainError
               ? error.code
@@ -1685,7 +1788,7 @@ export class TestRunService {
         })
         .catch((failureError) => {
           this.options.logger.error(
-            { runId, reportId: report.id, error: failureError },
+            { runId, reportId, error: failureError },
             "Skill score failure could not be persisted",
           )
         })
@@ -1693,10 +1796,10 @@ export class TestRunService {
       if (sessionId) {
         this.options.agentSessions.release(sessionId)
       }
-      this.activeSessions.delete(runId)
+      this.activeSkillScoreSessions.delete(reportId)
       await this.options.storage.scrubSkillScoreSettings(runId).catch((error) => {
         this.options.logger.error(
-          { runId, reportId: report.id, error },
+          { runId, reportId, error },
           "Skill score workspace settings could not be scrubbed",
         )
       })

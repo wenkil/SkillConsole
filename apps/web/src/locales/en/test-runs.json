@@ -12,7 +12,6 @@
   "status": {
     "PREPARING": "Preparing",
     "RUNNING": "Running",
-    "SCORING": "Scoring",
     "CANCELING": "Canceling",
     "COMPLETED": "Completed",
     "CANCELED": "Canceled",
@@ -143,8 +142,9 @@
     "skillScoreReport": "Skill score report",
     "skillScorePending": "The Skill scoring Agent starts after every case is complete.",
     "skillScoreRunning": "The Skill scoring Agent is collecting the execution and assertion responses.",
+    "skillScoreAvailable": "The AI score report is ready.",
     "skillScoreFailed": "The Skill scoring Agent could not produce a report.",
-    "skillScoreIframeTitle": "Skill score report",
+    "skillScoreView": "View in test reports",
     "artifacts": "Artifacts",
     "observability": "Skill invocation observations",
     "skillInvocation": "Skill activation",

@@ -28,6 +28,7 @@ import {
   skillSnapshotFiles,
   skillTestArtifacts,
   skillTestRunScoreReports,
+  skillTestRunScoreReportEvents,
   skillTestRunCases,
   skillTestRunEvents,
   skillTestRuns,
@@ -38,6 +39,7 @@ import {
   type EvalRevisionFileRow,
   type SkillTestArtifactRow,
   type SkillTestRunScoreReportRow,
+  type SkillTestRunScoreReportEventRow,
   type SkillTestRunCaseRow,
   type SkillTestRunEventRow,
   type SkillTestRunRow,
@@ -56,6 +58,10 @@ import type {
   TestRunLogPage,
   TestRunLogQuery,
   TestRunPage,
+  SkillScoreReportEvent,
+  SkillScoreReportEventPage,
+  SkillScoreReportPage,
+  SkillScoreReportView,
   TestRunSkillScoreReportView,
   TestRunTraceability,
   TestRunView,
@@ -65,7 +71,6 @@ import { sanitizeTestRunPublicValue } from "./test-run-public-safety.js"
 const activeStatuses: readonly TestRunStatus[] = [
   "PREPARING",
   "RUNNING",
-  "SCORING",
   "CANCELING",
 ]
 
@@ -434,6 +439,38 @@ function mapSkillScoreReport(
     startedAt: row.startedAt?.toISOString() ?? null,
     completedAt: row.completedAt?.toISOString() ?? null,
   }
+}
+
+function mapScoreReportEvent(
+  row: SkillTestRunScoreReportEventRow,
+): SkillScoreReportEvent {
+  return {
+    sequence: row.sequence,
+    type: row.type,
+    reportId: row.reportId,
+    occurredAt: row.occurredAt.toISOString(),
+    payload: row.payload,
+  }
+}
+
+function mapScoreReport(
+  row: SkillTestRunScoreReportRow,
+  workspaceId: string,
+): SkillScoreReportView {
+  return {
+    ...mapSkillScoreReport(row),
+    runId: row.runId,
+    workspaceId,
+  }
+}
+
+function skillScoreReportNotFound(reportId: string): DomainError {
+  return new DomainError({
+    code: "TEST_RUN_SKILL_SCORE_NOT_FOUND",
+    message: "The requested Skill score report was not found.",
+    kind: "not_found",
+    details: { reportId },
+  })
 }
 
 export class TestRunRepository {
@@ -925,7 +962,7 @@ export class TestRunRepository {
       this.database
         .select({
           total: count(),
-          active: sql<number>`count(*) filter (where ${skillTestRuns.status} in ('PREPARING', 'RUNNING', 'SCORING', 'CANCELING'))::int`,
+          active: sql<number>`count(*) filter (where ${skillTestRuns.status} in ('PREPARING', 'RUNNING', 'CANCELING'))::int`,
           completed: sql<number>`count(*) filter (where ${skillTestRuns.status} = 'COMPLETED')::int`,
           interrupted: sql<number>`count(*) filter (where ${skillTestRuns.status} = 'INTERRUPTED')::int`,
           failed: sql<number>`count(*) filter (where ${skillTestRuns.status} = 'FAILED')::int`,
@@ -1483,15 +1520,15 @@ export class TestRunRepository {
         })
       }
       const [activeRun] = await transaction
-        .update(skillTestRuns)
-        .set({ status: "SCORING", updatedAt: new Date() })
+        .select({ id: skillTestRuns.id })
+        .from(skillTestRuns)
         .where(
           and(
             eq(skillTestRuns.id, runCase.runId),
             eq(skillTestRuns.status, "RUNNING"),
           ),
         )
-        .returning({ id: skillTestRuns.id })
+        .for("update")
       if (!activeRun) {
         throw new DomainError({
           code: "TEST_RUN_STATE_CONFLICT",
@@ -1535,7 +1572,7 @@ export class TestRunRepository {
         .where(
           and(
             eq(skillTestRuns.id, runCase.runId),
-            eq(skillTestRuns.status, "SCORING"),
+            eq(skillTestRuns.status, "RUNNING"),
           ),
         )
         .for("update")
@@ -1586,15 +1623,6 @@ export class TestRunRepository {
         })
         .where(eq(skillTestRunCases.id, input.caseId))
       await this.incrementCompletedCases(transaction, runCase.runId)
-      await transaction
-        .update(skillTestRuns)
-        .set({ status: "RUNNING", updatedAt: new Date() })
-        .where(
-          and(
-            eq(skillTestRuns.id, runCase.runId),
-            eq(skillTestRuns.status, "SCORING"),
-          ),
-        )
       const context = await this.getCaseEventContext(transaction, runCase)
       return this.appendEvent(
         transaction,
@@ -1645,15 +1673,6 @@ export class TestRunRepository {
         })
         .where(eq(skillTestRunCases.id, input.caseId))
       await this.incrementCompletedCases(transaction, runCase.runId)
-      await transaction
-        .update(skillTestRuns)
-        .set({ status: "RUNNING", updatedAt: new Date() })
-        .where(
-          and(
-            eq(skillTestRuns.id, runCase.runId),
-            eq(skillTestRuns.status, "SCORING"),
-          ),
-        )
       const context = await this.getCaseEventContext(transaction, runCase)
       return this.appendEvent(
         transaction,
@@ -1668,44 +1687,32 @@ export class TestRunRepository {
     })
   }
 
-  async beginSkillScoreReport(runId: string): Promise<{
-    readonly id: string
-    readonly event: TestRunEvent
-  }> {
-    return this.database.transaction(async (transaction) => {
-      const [run] = await transaction
+  async beginSkillScoreReport(reportId: string): Promise<void> {
+    await this.database.transaction(async (transaction) => {
+      const [report] = await transaction
         .select()
-        .from(skillTestRuns)
-        .where(eq(skillTestRuns.id, runId))
+        .from(skillTestRunScoreReports)
+        .where(eq(skillTestRunScoreReports.id, reportId))
         .for("update")
-      if (!run) throw runNotFound(runId)
-      const [created] = await transaction
-        .insert(skillTestRunScoreReports)
-        .values({ runId, status: "RUNNING", startedAt: new Date() })
-        .onConflictDoNothing({ target: skillTestRunScoreReports.runId })
-        .returning({ id: skillTestRunScoreReports.id })
-      const [existing] = created
-        ? [{ id: created.id }]
-        : await transaction
-            .select({ id: skillTestRunScoreReports.id })
-            .from(skillTestRunScoreReports)
-            .where(eq(skillTestRunScoreReports.runId, runId))
-            .for("update")
-      if (!existing) throw new Error("Skill score report could not be created.")
-      if (!created) {
-        await transaction
-          .update(skillTestRunScoreReports)
-          .set({ status: "RUNNING", startedAt: new Date(), errorCode: null, errorMessage: null })
-          .where(eq(skillTestRunScoreReports.id, existing.id))
+      if (!report) throw skillScoreReportNotFound(reportId)
+      if (report.status !== "PENDING") {
+        throw new DomainError({
+          code: "TEST_RUN_SKILL_SCORE_STATE_CONFLICT",
+          message: "The Skill score report is not pending.",
+          kind: "conflict",
+          details: { reportId, status: report.status },
+        })
       }
-      const event = await this.appendEvent(
+      await transaction
+        .update(skillTestRunScoreReports)
+        .set({ status: "RUNNING", startedAt: new Date() })
+        .where(eq(skillTestRunScoreReports.id, reportId))
+      await this.appendScoreReportEvent(
         transaction,
-        runId,
-        null,
-        "run.skill-score.started",
-        { phase: "skill-score", reportId: existing.id },
+        reportId,
+        "skill-score-report.analysis.started",
+        { runId: report.runId },
       )
-      return { id: existing.id, event }
     })
   }
 
@@ -1736,19 +1743,20 @@ export class TestRunRepository {
   async completeSkillScoreReport(
     reportId: string,
     html: string,
-  ): Promise<TestRunEvent> {
+  ): Promise<void> {
     return this.database.transaction(async (transaction) => {
       const [report] = await transaction
         .select()
         .from(skillTestRunScoreReports)
         .where(eq(skillTestRunScoreReports.id, reportId))
         .for("update")
-      if (!report) {
+      if (!report) throw skillScoreReportNotFound(reportId)
+      if (report.status !== "RUNNING") {
         throw new DomainError({
-          code: "TEST_RUN_SKILL_SCORE_NOT_FOUND",
-          message: "The requested Skill score report was not found.",
-          kind: "not_found",
-          details: { reportId },
+          code: "TEST_RUN_SKILL_SCORE_STATE_CONFLICT",
+          message: "The Skill score report is not running.",
+          kind: "conflict",
+          details: { reportId, status: report.status },
         })
       }
       await transaction
@@ -1762,12 +1770,11 @@ export class TestRunRepository {
           completedAt: new Date(),
         })
         .where(eq(skillTestRunScoreReports.id, reportId))
-      return this.appendEvent(
+      await this.appendScoreReportEvent(
         transaction,
-        report.runId,
-        null,
-        "run.skill-score.completed",
-        { phase: "skill-score", reportId },
+        reportId,
+        "skill-score-report.analysis.completed",
+        { runId: report.runId },
       )
     })
   }
@@ -1776,21 +1783,15 @@ export class TestRunRepository {
     readonly reportId: string
     readonly code: string
     readonly message: string
-  }): Promise<TestRunEvent> {
+  }): Promise<void> {
     return this.database.transaction(async (transaction) => {
       const [report] = await transaction
         .select()
         .from(skillTestRunScoreReports)
         .where(eq(skillTestRunScoreReports.id, input.reportId))
         .for("update")
-      if (!report) {
-        throw new DomainError({
-          code: "TEST_RUN_SKILL_SCORE_NOT_FOUND",
-          message: "The requested Skill score report was not found.",
-          kind: "not_found",
-          details: { reportId: input.reportId },
-        })
-      }
+      if (!report) throw skillScoreReportNotFound(input.reportId)
+      if (["AVAILABLE", "FAILED"].includes(report.status)) return
       const message = String(sanitizeTestRunPublicValue(input.message))
       await transaction
         .update(skillTestRunScoreReports)
@@ -1801,12 +1802,11 @@ export class TestRunRepository {
           completedAt: new Date(),
         })
         .where(eq(skillTestRunScoreReports.id, input.reportId))
-      return this.appendEvent(
+      await this.appendScoreReportEvent(
         transaction,
-        report.runId,
-        null,
-        "run.skill-score.failed",
-        { phase: "skill-score", reportId: input.reportId, error: { code: input.code, message } },
+        input.reportId,
+        "skill-score-report.analysis.failed",
+        { runId: report.runId, error: { code: input.code, message } },
       )
     })
   }
@@ -1817,14 +1817,7 @@ export class TestRunRepository {
       .from(skillTestRunScoreReports)
       .where(eq(skillTestRunScoreReports.id, reportId))
       .limit(1)
-    if (!report) {
-      throw new DomainError({
-        code: "TEST_RUN_SKILL_SCORE_NOT_FOUND",
-        message: "The requested Skill score report was not found.",
-        kind: "not_found",
-        details: { reportId },
-      })
-    }
+    if (!report) throw skillScoreReportNotFound(reportId)
     if (report.status !== "AVAILABLE" || report.html === null) {
       throw new DomainError({
         code: "TEST_RUN_SKILL_SCORE_UNAVAILABLE",
@@ -1836,9 +1829,94 @@ export class TestRunRepository {
     return report.html
   }
 
-  async completeRun(input: {
+  async listSkillScoreReports(
+    workspaceId: string,
+    input: {
+      readonly page: number
+      readonly pageSize: number
+      readonly status?: "PENDING" | "RUNNING" | "AVAILABLE" | "FAILED"
+    },
+  ): Promise<SkillScoreReportPage> {
+    const where = input.status
+      ? and(
+          eq(skillTestRuns.workspaceId, workspaceId),
+          eq(skillTestRunScoreReports.status, input.status),
+        )
+      : eq(skillTestRuns.workspaceId, workspaceId)
+    const offset = (input.page - 1) * input.pageSize
+    const [rows, totalRow] = await Promise.all([
+      this.database
+        .select({ report: skillTestRunScoreReports, workspaceId: skillTestRuns.workspaceId })
+        .from(skillTestRunScoreReports)
+        .innerJoin(skillTestRuns, eq(skillTestRunScoreReports.runId, skillTestRuns.id))
+        .where(where)
+        .orderBy(desc(skillTestRunScoreReports.createdAt), desc(skillTestRunScoreReports.id))
+        .limit(input.pageSize)
+        .offset(offset),
+      this.database
+        .select({ total: count() })
+        .from(skillTestRunScoreReports)
+        .innerJoin(skillTestRuns, eq(skillTestRunScoreReports.runId, skillTestRuns.id))
+        .where(where),
+    ])
+    const total = Number(totalRow[0]?.total ?? 0)
+    return {
+      items: rows.map((row) => mapScoreReport(row.report, row.workspaceId)),
+      pagination: {
+        page: input.page,
+        pageSize: input.pageSize,
+        total,
+        pageCount: Math.ceil(total / input.pageSize),
+      },
+    }
+  }
+
+  async getSkillScoreReport(reportId: string): Promise<SkillScoreReportView> {
+    const [row] = await this.database
+      .select({ report: skillTestRunScoreReports, workspaceId: skillTestRuns.workspaceId })
+      .from(skillTestRunScoreReports)
+      .innerJoin(skillTestRuns, eq(skillTestRunScoreReports.runId, skillTestRuns.id))
+      .where(eq(skillTestRunScoreReports.id, reportId))
+      .limit(1)
+    if (!row) throw skillScoreReportNotFound(reportId)
+    return mapScoreReport(row.report, row.workspaceId)
+  }
+
+  async listSkillScoreReportEvents(
+    reportId: string,
+    input: { readonly beforeSequence?: number; readonly limit: number },
+  ): Promise<SkillScoreReportEventPage> {
+    await this.getSkillScoreReport(reportId)
+    const where = input.beforeSequence
+      ? and(
+          eq(skillTestRunScoreReportEvents.reportId, reportId),
+          lt(skillTestRunScoreReportEvents.sequence, input.beforeSequence),
+        )
+      : eq(skillTestRunScoreReportEvents.reportId, reportId)
+    const rows = await this.database
+      .select()
+      .from(skillTestRunScoreReportEvents)
+      .where(where)
+      .orderBy(desc(skillTestRunScoreReportEvents.sequence))
+      .limit(input.limit + 1)
+    const visible = rows.slice(0, input.limit)
+    return {
+      items: visible.reverse().map(mapScoreReportEvent),
+      pagination: {
+        limit: input.limit,
+        hasMore: rows.length > input.limit,
+        nextBeforeSequence:
+          rows.length > input.limit ? visible.at(-1)?.sequence ?? null : null,
+      },
+    }
+  }
+
+  async completeRunAndCreateSkillScoreReport(input: {
     readonly runId: string
-  }): Promise<TestRunEvent> {
+  }): Promise<{
+    readonly runEvent: TestRunEvent
+    readonly reportId: string
+  }> {
     return this.database.transaction(async (transaction) => {
       const [run] = await transaction
         .select()
@@ -1846,7 +1924,7 @@ export class TestRunRepository {
         .where(eq(skillTestRuns.id, input.runId))
         .for("update")
       if (!run) throw runNotFound(input.runId)
-      if (!["RUNNING", "SCORING"].includes(run.status)) {
+      if (run.status !== "RUNNING") {
         throw new DomainError({
           code: "TEST_RUN_STATE_CONFLICT",
           message: "The test run is no longer ready to complete.",
@@ -1873,13 +1951,25 @@ export class TestRunRepository {
           completedAt: new Date(),
         })
         .where(eq(skillTestRuns.id, input.runId))
-      return this.appendEvent(
+      const [report] = await transaction
+        .insert(skillTestRunScoreReports)
+        .values({ runId: input.runId, status: "PENDING" })
+        .returning({ id: skillTestRunScoreReports.id })
+      if (!report) throw new Error("Skill score report insert returned no row.")
+      await this.appendScoreReportEvent(
+        transaction,
+        report.id,
+        "skill-score-report.created",
+        { runId: input.runId },
+      )
+      const runEvent = await this.appendEvent(
         transaction,
         input.runId,
         null,
         "run.completed",
         { schemaVersion: 1 },
       )
+      return { runEvent, reportId: report.id }
     })
   }
 
@@ -1894,7 +1984,6 @@ export class TestRunRepository {
             inArray(skillTestRuns.status, [
               "PREPARING",
               "RUNNING",
-              "SCORING",
             ]),
           ),
         )
@@ -2459,6 +2548,41 @@ export class TestRunRepository {
       .returning()
     if (!event) throw new Error("Test run event insert returned no row.")
     return mapEvent(event)
+  }
+
+  private async appendScoreReportEvent(
+    transaction: Transaction,
+    reportId: string,
+    type: string,
+    payload: Readonly<Record<string, unknown>>,
+  ): Promise<SkillScoreReportEvent> {
+    const safePayload = sanitizeTestRunPublicValue(payload) as Readonly<
+      Record<string, unknown>
+    >
+    const [report] = await transaction
+      .select({ id: skillTestRunScoreReports.id })
+      .from(skillTestRunScoreReports)
+      .where(eq(skillTestRunScoreReports.id, reportId))
+      .for("update")
+    if (!report) throw skillScoreReportNotFound(reportId)
+    const [sequenceRecord] = await transaction
+      .select({
+        next: sql<number>`coalesce(max(${skillTestRunScoreReportEvents.sequence}), 0) + 1`,
+      })
+      .from(skillTestRunScoreReportEvents)
+      .where(eq(skillTestRunScoreReportEvents.reportId, reportId))
+    const [event] = await transaction
+      .insert(skillTestRunScoreReportEvents)
+      .values({
+        id: randomUUID(),
+        reportId,
+        sequence: sequenceRecord?.next ?? 1,
+        type,
+        payload: safePayload,
+      })
+      .returning()
+    if (!event) throw new Error("Skill score report event insert returned no row.")
+    return mapScoreReportEvent(event)
   }
 
   private isUniqueViolation(error: unknown): boolean {

@@ -81,6 +81,7 @@ function createRun(
     benchmark: null,
     error: null,
     cases: [],
+    skillScoreReport: null,
     createdAt: now,
     updatedAt: now,
     startedAt: null,
@@ -174,6 +175,112 @@ test("test run API requires the current draft revision and hides runtime interna
       page: 2,
       pageSize: 50,
     })
+  } finally {
+    await application.close()
+  }
+})
+
+test("Skill score report APIs expose the independent report lifecycle", async () => {
+  const workspaceId = randomUUID()
+  const runId = randomUUID()
+  const reportId = randomUUID()
+  const now = new Date().toISOString()
+  const report = {
+    id: reportId,
+    runId,
+    workspaceId,
+    status: "AVAILABLE" as const,
+    documentUrl: `/api/skill-score-reports/${reportId}/document.html`,
+    error: null,
+    createdAt: now,
+    startedAt: now,
+    completedAt: now,
+  }
+  let capturedList: unknown
+  const fakeService = {
+    listSkillScoreReports: async (
+      requestedWorkspaceId: string,
+      page: number,
+      pageSize: number,
+      status?: "PENDING" | "RUNNING" | "AVAILABLE" | "FAILED",
+    ) => {
+      capturedList = { requestedWorkspaceId, page, pageSize, status }
+      return {
+        items: [report],
+        pagination: { page, pageSize, total: 1, pageCount: 1 },
+      }
+    },
+    getSkillScoreReport: async (requestedReportId: string) => {
+      assert.equal(requestedReportId, reportId)
+      return report
+    },
+    listSkillScoreReportEvents: async (
+      requestedReportId: string,
+      beforeSequence: number | undefined,
+      limit: number,
+    ) => {
+      assert.equal(requestedReportId, reportId)
+      assert.equal(beforeSequence, undefined)
+      return {
+        items: [
+          {
+            sequence: 1,
+            type: "skill-score-report.created",
+            reportId,
+            occurredAt: now,
+            payload: { runId },
+          },
+        ],
+        pagination: { limit, hasMore: false, nextBeforeSequence: null },
+      }
+    },
+    getSkillScoreReportHtml: async (requestedReportId: string) => {
+      assert.equal(requestedReportId, reportId)
+      return "<!doctype html><title>Skill score</title>"
+    },
+  } as unknown as TestRunService
+  const application = Fastify({ logger: false }).withTypeProvider<TypeBoxTypeProvider>()
+  application.decorate("testRunService", fakeService)
+  registerErrorHandling(application)
+  await application.register(testRunRoutes)
+
+  try {
+    const listResponse = await application.inject({
+      method: "GET",
+      url: `/api/skill-workspaces/${workspaceId}/skill-score-reports?page=2&pageSize=50&status=AVAILABLE`,
+    })
+    assert.equal(listResponse.statusCode, 200)
+    assert.deepEqual(capturedList, {
+      requestedWorkspaceId: workspaceId,
+      page: 2,
+      pageSize: 50,
+      status: "AVAILABLE",
+    })
+    assert.equal(listResponse.json<{ items: Array<{ id: string }> }>().items[0]?.id, reportId)
+
+    const detailResponse = await application.inject({
+      method: "GET",
+      url: `/api/skill-score-reports/${reportId}`,
+    })
+    assert.equal(detailResponse.statusCode, 200)
+    assert.equal(detailResponse.json<{ status: string }>().status, "AVAILABLE")
+
+    const eventResponse = await application.inject({
+      method: "GET",
+      url: `/api/skill-score-reports/${reportId}/events`,
+    })
+    assert.equal(eventResponse.statusCode, 200)
+    assert.equal(
+      eventResponse.json<{ items: Array<{ type: string }> }>().items[0]?.type,
+      "skill-score-report.created",
+    )
+
+    const documentResponse = await application.inject({
+      method: "GET",
+      url: `/api/skill-score-reports/${reportId}/document.html`,
+    })
+    assert.equal(documentResponse.statusCode, 200)
+    assert.match(documentResponse.headers["content-type"] ?? "", /^text\/html/)
   } finally {
     await application.close()
   }

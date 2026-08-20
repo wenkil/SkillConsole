@@ -210,6 +210,38 @@ export interface TestRunSkillScoreReportView {
   readonly completedAt: string | null
 }
 
+export interface SkillScoreReportView extends TestRunSkillScoreReportView {
+  readonly runId: string
+  readonly workspaceId: string
+}
+
+export interface SkillScoreReportEvent {
+  readonly sequence: number
+  readonly type: string
+  readonly reportId: string
+  readonly occurredAt: string
+  readonly payload: Readonly<Record<string, unknown>>
+}
+
+export interface SkillScoreReportPage {
+  readonly items: readonly SkillScoreReportView[]
+  readonly pagination: {
+    readonly page: number
+    readonly pageSize: number
+    readonly total: number
+    readonly pageCount: number
+  }
+}
+
+export interface SkillScoreReportEventPage {
+  readonly items: readonly SkillScoreReportEvent[]
+  readonly pagination: {
+    readonly limit: number
+    readonly hasMore: boolean
+    readonly nextBeforeSequence: number | null
+  }
+}
+
 export interface TestRunDetailView extends TestRunView {
   readonly cases: readonly TestRunCaseView[]
   readonly skillScoreReport: TestRunSkillScoreReportView | null
@@ -258,7 +290,6 @@ export interface TestRunLogQuery {
   readonly phase?:
     | "execution"
     | "assertion"
-    | "skill-score"
     | "orchestration"
 }
 

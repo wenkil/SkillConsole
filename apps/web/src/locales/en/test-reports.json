@@ -4,6 +4,20 @@
     "title": "Test reports",
     "description": "Review every terminal test Run for “{{name}}”. Each immutable Revision is shown as static HTML, Markdown is downloadable, and raw logs and Artifacts remain in the original Run."
   },
+  "tabs": {
+    "label": "Report group",
+    "deterministic": "Deterministic test reports",
+    "aiScore": "AI score reports"
+  },
+  "skillScore": {
+    "filters": { "status": "Report status", "all": "All report statuses" },
+    "status": { "PENDING": "Pending", "RUNNING": "Running", "AVAILABLE": "Available", "FAILED": "Failed" },
+    "events": "Report status events",
+    "loadEarlier": "Load earlier events",
+    "iframeTitle": "AI score report",
+    "emptySelection": "Select an AI score report from the list.",
+    "loadError": "Could not load the AI score report."
+  },
   "summary": {
     "total": "Reports",
     "available": "Complete",

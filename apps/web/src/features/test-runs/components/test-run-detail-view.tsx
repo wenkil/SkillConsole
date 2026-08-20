@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Cpu,
   FileDown,
+  FileChartColumn,
   Fingerprint,
   ListTree,
   LoaderCircle,
@@ -10,11 +11,13 @@ import {
   ScrollText,
   Square,
 } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useNavigate, useSearchParams } from "react-router-dom"
 
 import { TestRunStatusBadge } from "@/features/test-runs/components/test-run-status"
+import { getSkillScoreReport } from "@/features/test-reports/api/skill-score-reports-api"
 import { useTestRunDetailController } from "@/features/test-runs/hooks/use-test-runs-controller"
 import {
   getCoverageRate,
@@ -80,54 +83,79 @@ function BenchmarkCard({
 function SkillScoreReportPanel({
   report,
   labels,
+  onView,
 }: {
   report: import("@/features/test-runs/model/test-run").TestRunDetail["skillScoreReport"]
   labels: {
     readonly title: string
     readonly pending: string
     readonly running: string
+    readonly available: string
     readonly failed: string
-    readonly iframeTitle: string
+    readonly view: string
   }
+  onView: () => void
 }) {
-  if (!report) {
+  const scoreReportQuery = useQuery({
+    queryKey: ["skill-score-reports", report?.id],
+    queryFn: () => getSkillScoreReport(report!.id),
+    enabled:
+      report !== null &&
+      (report.status === "PENDING" || report.status === "RUNNING"),
+    refetchInterval: (current) => {
+      const status = current.state.data?.status ?? report?.status
+      return status === "PENDING" || status === "RUNNING" ? 1_500 : false
+    },
+  })
+  const currentReport = scoreReportQuery.data ?? report
+  if (!currentReport) {
     return (
       <section className="border border-rule-soft bg-paper-muted p-4 text-sm text-muted-foreground">
         {labels.pending}
       </section>
     )
   }
-  if (report.status === "FAILED") {
+  if (currentReport.status === "FAILED") {
     return (
-      <section className="border border-destructive/45 bg-destructive/5 p-4 text-sm">
+      <section className="border border-rule-soft bg-paper-muted p-4 text-sm">
         <strong className="font-mono text-[10px] uppercase">{labels.title}</strong>
-        <p className="mt-2 text-destructive">
-          {report.error?.message ?? labels.failed}
+        <p className="mt-2 text-muted-foreground">
+          {currentReport.error?.message ?? labels.failed}
         </p>
+        <Button className="mt-3 rounded-none" onClick={onView} size="sm" type="button" variant="outline">
+          <FileChartColumn data-icon="inline-start" />
+          {labels.view}
+        </Button>
       </section>
     )
   }
-  if (report.status !== "AVAILABLE" || !report.documentUrl) {
+  if (
+    currentReport.status !== "AVAILABLE" ||
+    !currentReport.documentUrl
+  ) {
     return (
       <section className="border border-rule-soft bg-paper-muted p-4 text-sm text-muted-foreground">
         <strong className="font-mono text-[10px] uppercase text-foreground">{labels.title}</strong>
         <p className="mt-2">
-          {report.status === "RUNNING" ? labels.running : labels.pending}
+          {currentReport.status === "RUNNING"
+            ? labels.running
+            : labels.pending}
         </p>
+        <Button className="mt-3 rounded-none" onClick={onView} size="sm" type="button" variant="outline">
+          <FileChartColumn data-icon="inline-start" />
+          {labels.view}
+        </Button>
       </section>
     )
   }
   return (
-    <section className="border border-foreground bg-paper-raised">
-      <header className="border-b border-rule-soft px-4 py-3 font-mono text-[10px] font-bold uppercase">
-        {labels.title}
-      </header>
-      <iframe
-        className="h-[36rem] w-full bg-white"
-        sandbox=""
-        src={report.documentUrl}
-        title={labels.iframeTitle}
-      />
+    <section className="border border-rule-soft bg-paper-muted p-4 text-sm">
+      <strong className="font-mono text-[10px] uppercase">{labels.title}</strong>
+      <p className="mt-2 text-muted-foreground">{labels.available}</p>
+      <Button className="mt-3 rounded-none" onClick={onView} size="sm" type="button" variant="outline">
+        <FileChartColumn data-icon="inline-start" />
+        {labels.view}
+      </Button>
     </section>
   )
 }
@@ -626,9 +654,11 @@ export function TestRunDetailView({
                   title: t("detail.skillScoreReport"),
                   pending: t("detail.skillScorePending"),
                   running: t("detail.skillScoreRunning"),
+                  available: t("detail.skillScoreAvailable"),
                   failed: t("detail.skillScoreFailed"),
-                  iframeTitle: t("detail.skillScoreIframeTitle"),
+                  view: t("detail.skillScoreView"),
                 }}
+                onView={() => navigate(`/workbenches/${workspace.id}/reports?tab=ai-score&reportId=${run.skillScoreReport?.id ?? ""}`)}
                 report={run.skillScoreReport}
               />
             </div>

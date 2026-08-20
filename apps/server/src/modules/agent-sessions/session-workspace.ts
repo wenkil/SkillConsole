@@ -115,6 +115,10 @@ export class AgentSessionWorkspaceStore {
       segments[0] === "test-runs" &&
       segments[2] === "cases" &&
       (segments[4] === "workspace" || segments[4] === "assertion")
+    const isTestRunSkillScoreWorkspace =
+      segments.length === 3 &&
+      segments[0] === "test-runs" &&
+      segments[2] === "skill-score"
     const isTestReportAnalysisWorkspace =
       segments.length === 3 &&
       segments[0] === "test-report-analyses" &&
@@ -125,6 +129,7 @@ export class AgentSessionWorkspaceStore {
       (!isSessionWorkspace &&
         !isEvalWorkspace &&
         !isTestRunWorkspace &&
+        !isTestRunSkillScoreWorkspace &&
         !isTestReportAnalysisWorkspace) ||
       !internalIdPattern.test(segments[1] ?? "") ||
       (isTestRunWorkspace &&
@@ -141,7 +146,7 @@ export class AgentSessionWorkspaceStore {
       ? this.sessionsRoot
       : isEvalWorkspace
         ? this.evalGenerationsRoot
-        : isTestRunWorkspace
+        : isTestRunWorkspace || isTestRunSkillScoreWorkspace
           ? this.testRunsRoot
           : this.testReportAnalysesRoot
     const relativeToRoot = path.relative(controlledRoot, absolutePath)

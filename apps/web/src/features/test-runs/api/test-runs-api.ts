@@ -123,9 +123,6 @@ const streamedEventTypes = [
   "assertion.turn.interrupted",
   "assertion.turn.failed",
   "assertion.session.failed",
-  "run.skill-score.started",
-  "run.skill-score.completed",
-  "run.skill-score.failed",
 ] as const
 
 export function subscribeToTestRun(

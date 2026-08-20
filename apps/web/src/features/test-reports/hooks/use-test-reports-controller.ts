@@ -27,13 +27,17 @@ import {
   type TestReportListFilters,
 } from "@/features/test-reports/model/test-report"
 
-export function useTestReportsListController(workspaceId: string) {
+export function useTestReportsListController(
+  workspaceId: string,
+  enabled = true,
+) {
   const [filters, setFilters] = useState<TestReportListFilters>(
     defaultTestReportListFilters,
   )
   const query = useQuery({
     queryKey: ["skill-workspaces", workspaceId, "test-reports", filters],
     queryFn: () => listTestReports(workspaceId, filters),
+    enabled,
     placeholderData: (previous) => previous,
     refetchInterval: (current) =>
       current.state.data?.items.some(
@@ -76,7 +80,9 @@ export function useTestReportsListController(workspaceId: string) {
     actions: {
       updateFilters,
       resetFilters: () => setFilters(defaultTestReportListFilters),
-      retry: () => void query.refetch(),
+      retry: () => {
+        if (enabled) void query.refetch()
+      },
     },
   }
 }

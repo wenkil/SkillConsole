@@ -81,6 +81,22 @@ export const TestRunSkillScoreReportParamsSchema = Type.Object(
   { additionalProperties: false },
 )
 
+export const SkillScoreReportListQuerySchema = Type.Object(
+  {
+    page: Type.Optional(Type.Integer({ minimum: 1 })),
+    pageSize: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })),
+    status: Type.Optional(
+      Type.Union([
+        Type.Literal("PENDING"),
+        Type.Literal("RUNNING"),
+        Type.Literal("AVAILABLE"),
+        Type.Literal("FAILED"),
+      ]),
+    ),
+  },
+  { additionalProperties: false },
+)
+
 export const TestRunListQuerySchema = Type.Object(
   {
     page: Type.Optional(Type.Integer({ minimum: 1 })),
@@ -401,6 +417,70 @@ const TestRunSkillScoreReportSchema = Type.Object(
   { additionalProperties: false },
 )
 
+export const SkillScoreReportSchema = Type.Intersect([
+  TestRunSkillScoreReportSchema,
+  Type.Object(
+    {
+      runId: Type.String({ format: "uuid" }),
+      workspaceId: Type.String({ format: "uuid" }),
+    },
+    { additionalProperties: false },
+  ),
+])
+
+export const SkillScoreReportEventSchema = Type.Object(
+  {
+    sequence: Type.Integer({ minimum: 1 }),
+    type: Type.String({ minLength: 1, maxLength: 100 }),
+    reportId: Type.String({ format: "uuid" }),
+    occurredAt: Type.String({ format: "date-time" }),
+    payload: Type.Record(Type.String(), Type.Unknown()),
+  },
+  { additionalProperties: false },
+)
+
+export const SkillScoreReportPageSchema = Type.Object(
+  {
+    items: Type.Array(SkillScoreReportSchema),
+    pagination: Type.Object(
+      {
+        page: Type.Integer({ minimum: 1 }),
+        pageSize: Type.Integer({ minimum: 1, maximum: 100 }),
+        total: Type.Integer({ minimum: 0 }),
+        pageCount: Type.Integer({ minimum: 0 }),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  { additionalProperties: false },
+)
+
+export const SkillScoreReportEventsQuerySchema = Type.Object(
+  {
+    beforeSequence: Type.Optional(Type.Integer({ minimum: 1 })),
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })),
+  },
+  { additionalProperties: false },
+)
+
+export const SkillScoreReportEventPageSchema = Type.Object(
+  {
+    items: Type.Array(SkillScoreReportEventSchema),
+    pagination: Type.Object(
+      {
+        limit: Type.Integer({ minimum: 1, maximum: 200 }),
+        hasMore: Type.Boolean(),
+        nextBeforeSequence: Type.Union([
+          Type.Integer({ minimum: 1 }),
+          Type.Null(),
+        ]),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  { additionalProperties: false },
+)
+
 export const TestRunCaseSchema = Type.Object(
   {
     id: Type.String({ format: "uuid" }),
@@ -527,7 +607,6 @@ export const TestRunLogsQuerySchema = Type.Object(
       Type.Union([
         Type.Literal("execution"),
         Type.Literal("assertion"),
-        Type.Literal("skill-score"),
         Type.Literal("orchestration"),
       ]),
     ),

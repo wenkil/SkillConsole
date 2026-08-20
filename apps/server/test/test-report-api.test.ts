@@ -45,6 +45,7 @@ test("test report API applies list defaults and exposes Run lookup", async () =>
   const item = listItem()
   let capturedList: unknown
   let capturedRunId: string | null = null
+  let regeneratedReportId: string | null = null
   const detail = {
     ...item,
     currentRevisionId: null,
@@ -77,7 +78,10 @@ test("test report API applies list defaults and exposes Run lookup", async () =>
       return detail
     },
     get: async () => pendingDetail,
-    regenerate: async () => detail,
+    regenerate: async (reportId: string) => {
+      regeneratedReportId = reportId
+      return detail
+    },
     getDocument: async (
       _reportId: string,
       _revisionId: string,
@@ -147,6 +151,14 @@ test("test report API applies list defaults and exposes Run lookup", async () =>
       url: `/api/test-reports/${item.id}/regenerate`,
     })
     assert.equal(missingIdempotencyKey.statusCode, 400)
+    const regenerate = await application.inject({
+      method: "POST",
+      url: `/api/test-reports/${item.id}/regenerate`,
+      headers: { "idempotency-key": "test-report-regenerate-1" },
+    })
+    assert.equal(regenerate.statusCode, 200)
+    assert.equal(regeneratedReportId, item.id)
+    assert.equal(regenerate.json().id, item.id)
   } finally {
     await application.close()
   }

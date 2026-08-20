@@ -74,9 +74,9 @@ describe("test run model", () => {
     ).toBe(false)
   })
 
-  it("treats preparation, execution, scoring, and cancellation as active", () => {
+  it("treats preparation, execution, and cancellation as active", () => {
     expect(isActiveTestRun("PREPARING")).toBe(true)
-    expect(isActiveTestRun("SCORING")).toBe(true)
+    expect(isActiveTestRun("RUNNING")).toBe(true)
     expect(isActiveTestRun("CANCELING")).toBe(true)
     expect(isActiveTestRun("COMPLETED")).toBe(false)
   })

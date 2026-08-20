@@ -10,8 +10,9 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 
+import { SkillScoreReportsPanel } from "@/features/test-reports/components/skill-score-reports-panel"
 import { TestReportStatusBadge } from "@/features/test-reports/components/test-report-status"
 import { useTestReportsListController } from "@/features/test-reports/hooks/use-test-reports-controller"
 import type {
@@ -47,7 +48,14 @@ export function TestReportsWorkbenchView({
 }) {
   const { t } = useTranslation("testReports")
   const navigate = useNavigate()
-  const controller = useTestReportsListController(workspace.id)
+  const [searchParams] = useSearchParams()
+  const [reportGroup, setReportGroup] = useState<"deterministic" | "ai-score">(
+    searchParams.get("tab") === "ai-score" ? "ai-score" : "deterministic",
+  )
+  const controller = useTestReportsListController(
+    workspace.id,
+    reportGroup === "deterministic",
+  )
   const [filtersExpanded, setFiltersExpanded] = useState(false)
   const filtersActive =
     controller.filters.reportType !== "" ||
@@ -57,7 +65,7 @@ export function TestReportsWorkbenchView({
     controller.filters.analysisStatus !== "" ||
     controller.filters.hasNegativeTransition !== ""
 
-  if (controller.loading) {
+  if (reportGroup === "deterministic" && controller.loading) {
     return (
       <main className="flex h-full items-center justify-center gap-2 text-xs">
         <LoaderCircle className="size-4 animate-spin" />
@@ -65,7 +73,7 @@ export function TestReportsWorkbenchView({
       </main>
     )
   }
-  if (controller.error) {
+  if (reportGroup === "deterministic" && controller.error) {
     return (
       <main className="flex h-full items-center justify-center px-8">
         <div className="max-w-md border border-destructive/50 bg-paper-raised p-7 text-center">
@@ -135,6 +143,20 @@ export function TestReportsWorkbenchView({
         }
         title={t("header.title")}
       />
+
+      <nav className="flex shrink-0 border-b border-border-strong bg-paper-raised" aria-label={t("tabs.label")}>
+        <button className={`border-b-2 px-5 py-3 font-mono text-xs font-bold ${reportGroup === "deterministic" ? "border-primary" : "border-transparent text-muted-foreground"}`} onClick={() => setReportGroup("deterministic")} type="button">{t("tabs.deterministic")}</button>
+        <button className={`border-b-2 px-5 py-3 font-mono text-xs font-bold ${reportGroup === "ai-score" ? "border-primary" : "border-transparent text-muted-foreground"}`} onClick={() => setReportGroup("ai-score")} type="button">{t("tabs.aiScore")}</button>
+      </nav>
+
+      {reportGroup === "ai-score" ? (
+        <SkillScoreReportsPanel
+          initialReportId={searchParams.get("reportId")}
+          locale={locale}
+          workspaceId={workspace.id}
+        />
+      ) : (
+        <>
 
       <section className="shrink-0 border-b border-border-strong bg-paper-muted/35 px-5 py-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -496,6 +518,8 @@ export function TestReportsWorkbenchView({
           </Button>
         </div>
       </footer>
+        </>
+      )}
     </main>
   )
 }

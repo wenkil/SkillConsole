@@ -26,9 +26,8 @@ import {
   skillDraftFiles,
   skillDrafts,
   skillSnapshots,
-  skillTestReportAnalyses,
-  skillTestReports,
-  skillTestReportRevisions,
+  skillTestRunScoreReportEvents,
+  skillTestRunScoreReports,
   skillTestRunEvents,
   skillTestRuns,
   skillVersions,
@@ -55,6 +54,9 @@ const migrationsFolder = fileURLToPath(
 const folderIgnorePolicyPath = fileURLToPath(
   new URL("../config/upload-folder-ignore.json", import.meta.url),
 )
+const agentPromptsRoot = fileURLToPath(
+  new URL("../../../agent-prompts", import.meta.url),
+)
 
 interface ExecutionObservation {
   readonly cwd: string
@@ -63,7 +65,11 @@ interface ExecutionObservation {
   readonly snapshotMarker: string
 }
 
-type FakeSessionPhase = "eval_generation" | "execution" | "grading"
+type FakeSessionPhase =
+  | "eval_generation"
+  | "execution"
+  | "assertion"
+  | "skill_score"
 
 interface SessionObservation {
   readonly phase: FakeSessionPhase
@@ -73,7 +79,7 @@ interface SessionObservation {
 }
 
 interface PlannedSessionFailure {
-  readonly phase: "execution" | "grading"
+  readonly phase: "execution" | "assertion"
   readonly externalId: number
   readonly snapshotMarker: string
 }
@@ -100,8 +106,6 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
   private closed = false
   private turnId: string | null = null
   private readonly sdkSessionId = randomUUID()
-  private gradingOutputPath: string | null = null
-
   constructor(
     private readonly input: OpenAgentRuntimeSessionInput,
     private readonly adapter: TestRunFakeAdapter,
@@ -125,14 +129,16 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
         `${path.sep}eval-generations${path.sep}`,
       )
         ? "eval_generation"
-        : this.input.cwd.endsWith(`${path.sep}grading`)
-          ? "grading"
+        : this.input.cwd.endsWith(`${path.sep}assertion`)
+          ? "assertion"
+          : this.input.cwd.endsWith(`${path.sep}skill-score`)
+            ? "skill_score"
           : "execution"
       const taskFacts =
         phase === "execution"
           ? await this.readExecutionTaskFacts()
-          : phase === "grading"
-            ? await this.readGradingTaskFacts()
+          : phase === "assertion"
+            ? this.readAssertionPromptFacts(turn.prompt)
             : { externalId: null, snapshotMarker: null }
       const externalId = taskFacts.externalId
       const executionFacts =
@@ -159,7 +165,7 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
         externalId !== null &&
         snapshotMarker !== null &&
         this.adapter.consumeFailure({
-          phase: phase === "grading" ? "grading" : "execution",
+          phase: phase === "assertion" ? "assertion" : "execution",
           externalId,
           snapshotMarker,
         })
@@ -167,13 +173,16 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
         await this.emitResult(turn.turnId, false)
         return
       }
+      if (phase === "skill_score" && this.adapter.consumeSkillScoreFailure()) {
+        await this.emitResult(turn.turnId, false)
+        return
+      }
 
       let responseText: string
       if (phase === "eval_generation") {
         responseText = await this.generateEvals()
-      } else if (phase === "grading") {
-        assert.ok(this.gradingOutputPath)
-        const grading = JSON.stringify({
+      } else if (phase === "assertion") {
+        responseText = JSON.stringify({
           assertions: [
             {
               index: 0,
@@ -182,21 +191,16 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
                 "The final output and Artifact contain the fixture summary.",
               evidence: [
                 {
-                  source: "artifact",
-                  reference: "summary.txt",
-                  startLine: 1,
-                  endLine: 1,
+                  source: "assistant_output",
+                  reference: "final_response",
+                  excerpt: "controlled fixture summary",
                 },
               ],
             },
           ],
         })
-        await writeFile(
-          this.gradingOutputPath,
-          `${grading}\n`,
-          "utf8",
-        )
-        responseText = "Wrote outputs/grading.json."
+      } else if (phase === "skill_score") {
+        responseText = "<!doctype html><html><body>Fake Skill score report</body></html>"
       } else {
         assert.ok(executionFacts)
         responseText = await this.executeCase(executionFacts)
@@ -332,49 +336,13 @@ class TestRunFakeRuntime implements AgentRuntimeSession {
     }
   }
 
-  private async readGradingTaskFacts(): Promise<{
+  private readAssertionPromptFacts(prompt: string): {
     readonly externalId: number | null
     readonly snapshotMarker: string | null
-  }> {
-    const task = JSON.parse(
-      await readFile(
-        path.join(this.input.cwd, "inputs", "task.json"),
-        "utf8",
-      ),
-    ) as {
-      readonly rubricPath: string
-      readonly testCasePath: string
-      readonly executorFinalOutputPath: string
-      readonly artifactIndexPath: string
-      readonly outputPath: string
-    }
-    for (const physicalPath of [
-      task.rubricPath,
-      task.testCasePath,
-      task.executorFinalOutputPath,
-      task.artifactIndexPath,
-      task.outputPath,
-    ]) {
-      assert.equal(path.isAbsolute(physicalPath), true)
-    }
-    this.gradingOutputPath = task.outputPath
-    const testCase = JSON.parse(
-      await readFile(task.testCasePath, "utf8"),
-    ) as { readonly userPrompt?: string }
-    const finalOutput = await readFile(task.executorFinalOutputPath, "utf8")
-    const artifactIndex = JSON.parse(
-      await readFile(task.artifactIndexPath, "utf8"),
-    ) as {
-      readonly artifacts?: readonly { readonly evidencePath?: string | null }[]
-    }
-    for (const artifact of artifactIndex.artifacts ?? []) {
-      if (artifact.evidencePath) {
-        assert.equal(path.isAbsolute(artifact.evidencePath), true)
-      }
-    }
+  } {
     return {
-      externalId: externalIdFromPrompt(testCase.userPrompt ?? ""),
-      snapshotMarker: snapshotMarkerFromPrompt(finalOutput),
+      externalId: externalIdFromPrompt(prompt),
+      snapshotMarker: snapshotMarkerFromPrompt(prompt),
     }
   }
 
@@ -455,6 +423,7 @@ class TestRunFakeAdapter implements AgentRuntimeAdapter {
   readonly executions: ExecutionObservation[] = []
   readonly sessions: SessionObservation[] = []
   readonly failures: PlannedSessionFailure[] = []
+  private failNextSkillScore = false
   activeSends = 0
   maxActiveSends = 0
   interruptCount = 0
@@ -487,6 +456,16 @@ class TestRunFakeAdapter implements AgentRuntimeAdapter {
 
   planFailure(failure: PlannedSessionFailure): void {
     this.failures.push(failure)
+  }
+
+  planSkillScoreFailure(): void {
+    this.failNextSkillScore = true
+  }
+
+  consumeSkillScoreFailure(): boolean {
+    if (!this.failNextSkillScore) return false
+    this.failNextSkillScore = false
+    return true
   }
 
   consumeFailure(failure: PlannedSessionFailure): boolean {
@@ -556,10 +535,12 @@ async function waitForRunTerminal(
   baseUrl: string,
   runId: string,
 ): Promise<TestRunDetailView> {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
+  let latest: TestRunDetailView | null = null
+  for (let attempt = 0; attempt < 500; attempt += 1) {
     const response = await fetch(`${baseUrl}/api/test-runs/${runId}`)
     assert.equal(response.status, 200)
     const run = (await response.json()) as TestRunDetailView
+    latest = run
     if (
       ["COMPLETED", "FAILED", "CANCELED", "INTERRUPTED"].includes(
         run.status,
@@ -569,7 +550,38 @@ async function waitForRunTerminal(
     }
     await new Promise((resolve) => setTimeout(resolve, 20))
   }
-  throw new Error("Timed out waiting for the fake test run.")
+  throw new Error(
+    `Timed out waiting for the fake test run. status=${latest?.status ?? "unknown"} error=${JSON.stringify(latest?.error ?? null)} cases=${JSON.stringify(latest?.cases.map((runCase) => ({ side: runCase.side, externalId: runCase.externalId, execution: runCase.executionStatus, assessment: runCase.assessmentStatus, executionError: runCase.executionError?.code ?? null, assessmentError: runCase.assessmentError?.code ?? null })) ?? [])}`,
+  )
+}
+
+async function waitForSkillScoreReportTerminal(
+  baseUrl: string,
+  runId: string,
+): Promise<NonNullable<TestRunDetailView["skillScoreReport"]>> {
+  for (let attempt = 0; attempt < 500; attempt += 1) {
+    const response = await fetch(`${baseUrl}/api/test-runs/${runId}`)
+    assert.equal(response.status, 200)
+    const run = (await response.json()) as TestRunDetailView
+    const report = run.skillScoreReport
+    if (report && ["AVAILABLE", "FAILED"].includes(report.status)) {
+      return report
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+  throw new Error("Timed out waiting for the fake Skill score report.")
+}
+
+async function assertLegacyReportUnavailable(
+  baseUrl: string,
+  runId: string,
+): Promise<void> {
+  const response = await fetch(`${baseUrl}/api/test-runs/${runId}/report`)
+  assert.equal(response.status, 409)
+  assert.equal(
+    ((await response.json()) as { error: { code: string } }).error.code,
+    "TEST_REPORT_AGENT_CHAIN_UNAVAILABLE",
+  )
 }
 
 async function waitForSignal(signal: Promise<void>, label: string): Promise<void> {
@@ -713,7 +725,6 @@ test(
     const draftId = randomUUID()
     const otherWorkspaceId = randomUUID()
     const otherDraftId = randomUUID()
-    const lifecycleAnalysisId = randomUUID()
     const skillContent =
       "---\nname: sample-skill\ndescription: Test Skill\n---\n\nSnapshot marker: baseline-v1\n"
     const candidateSkillContent =
@@ -837,7 +848,7 @@ test(
         openApiEnabled: false,
         dataRoot,
         claudeSettingsPath: settingsPath,
-        agentPromptsRoot: path.resolve("agent-prompts"),
+        agentPromptsRoot,
         uploadFolderIgnoreConfigPath: folderIgnorePolicyPath,
         uploadLimits: {
           maxFiles: 100,
@@ -920,57 +931,40 @@ test(
       const terminal = await waitForRunTerminal(address, started.id)
 
       assert.equal(terminal.status, "COMPLETED")
+      const terminalScoreReport = await waitForSkillScoreReportTerminal(
+        address,
+        terminal.id,
+      )
+      assert.equal(
+        terminalScoreReport.status,
+        "AVAILABLE",
+        terminalScoreReport.error?.message,
+      )
+      assert.ok(terminalScoreReport.documentUrl)
+      const scoreDocumentResponse = await fetch(
+        `${address}${terminalScoreReport.documentUrl}`,
+      )
+      assert.equal(scoreDocumentResponse.status, 200)
+      assert.match(
+        await scoreDocumentResponse.text(),
+        /Fake Skill score report/,
+      )
+      const scoreEvents = await application.databaseClient.database
+        .select({ type: skillTestRunScoreReportEvents.type })
+        .from(skillTestRunScoreReportEvents)
+        .where(eq(skillTestRunScoreReportEvents.reportId, terminalScoreReport.id))
+        .orderBy(skillTestRunScoreReportEvents.sequence)
+      assert.deepEqual(
+        scoreEvents.map((event) => event.type),
+        [
+          "skill-score-report.created",
+          "skill-score-report.analysis.started",
+          "skill-score-report.analysis.completed",
+        ],
+      )
       assert.equal(terminal.progress.completedCases, 6)
       assert.equal(terminal.cases.length, 6)
-      assert.equal(terminal.benchmark?.target.passed, 3)
-      assert.equal(terminal.benchmark?.baseline.passed, 3)
-      let automaticallyGeneratedReport:
-        | { readonly status: string; readonly currentRevisionId: string | null }
-        | undefined
-      for (let attempt = 0; attempt < 100; attempt += 1) {
-        ;[automaticallyGeneratedReport] =
-          await application.databaseClient.database
-            .select({
-              status: skillTestReports.status,
-              currentRevisionId: skillTestReports.currentRevisionId,
-            })
-            .from(skillTestReports)
-            .where(eq(skillTestReports.runId, terminal.id))
-            .limit(1)
-        if (
-          automaticallyGeneratedReport &&
-          automaticallyGeneratedReport.status !== "GENERATION_PENDING"
-        ) {
-          break
-        }
-        await new Promise((resolve) => setTimeout(resolve, 20))
-      }
-      assert.equal(automaticallyGeneratedReport?.status, "AVAILABLE")
-      assert.ok(automaticallyGeneratedReport?.currentRevisionId)
-      const skillEffectReportResponse = await fetch(
-        `${address}/api/test-runs/${terminal.id}/report`,
-      )
-      assert.equal(skillEffectReportResponse.status, 200)
-      const skillEffectReport = (await skillEffectReportResponse.json()) as {
-        reportType: string
-        status: string
-        report: {
-          schemaVersion: string
-          reportType: string
-          cases: unknown[]
-          metrics: {
-            baseline: { activation: { observedRate: { status: string } } }
-          }
-        }
-      }
-      assert.equal(skillEffectReport.reportType, "skill_effect")
-      assert.equal(skillEffectReport.status, "AVAILABLE")
-      assert.equal(skillEffectReport.report.schemaVersion, "test-report.v1")
-      assert.equal(skillEffectReport.report.cases.length, 3)
-      assert.equal(
-        skillEffectReport.report.metrics.baseline.activation.observedRate.status,
-        "NOT_APPLICABLE",
-      )
+      assert.equal(terminal.benchmark, null)
       const targetExecutions = agentRuntimeAdapter.executions.slice(
         targetExecutionStart,
         targetExecutionStart + 6,
@@ -1209,26 +1203,7 @@ test(
         ),
         true,
       )
-      const missingCapabilityReportResponse = await fetch(
-        `${address}/api/test-runs/${missingCapabilityRun.id}/report`,
-      )
-      assert.equal(missingCapabilityReportResponse.status, 200)
-      const missingCapabilityReport =
-        (await missingCapabilityReportResponse.json()) as {
-          status: string
-          report: {
-            run: {
-              runStatus: string
-              terminalError: { code: string } | null
-            }
-          }
-        }
-      assert.equal(missingCapabilityReport.status, "PARTIAL")
-      assert.equal(missingCapabilityReport.report.run.runStatus, "FAILED")
-      assert.equal(
-        missingCapabilityReport.report.run.terminalError?.code,
-        "TEST_RUN_RUNTIME_CAPABILITY_MISSING",
-      )
+      await assertLegacyReportUnavailable(address, missingCapabilityRun.id)
 
       const comparisonSessionStart = agentRuntimeAdapter.sessions.length
       const comparisonExecutionStart =
@@ -1322,7 +1297,7 @@ test(
         comparisonSessions.map((item) => item.phase),
         Array.from({ length: 6 }).flatMap(() => [
           "execution",
-          "grading",
+          "assertion",
         ]),
       )
       assert.deepEqual(
@@ -1350,209 +1325,52 @@ test(
         comparisonSessions.every((item, index) =>
           index % 2 === 0
             ? item.cwd.endsWith(`${path.sep}workspace`)
-            : item.cwd.endsWith(`${path.sep}grading`),
+            : item.cwd.endsWith(`${path.sep}assertion`),
         ),
         true,
       )
       assert.equal(agentRuntimeAdapter.maxActiveSends, 1)
 
-      const comparisonReportResponse = await fetch(
-        `${address}/api/test-runs/${comparison.id}/report`,
+      await assertLegacyReportUnavailable(address, comparison.id)
+      const terminalComparisonScoreReport =
+        await waitForSkillScoreReportTerminal(address, comparison.id)
+      assert.equal(terminalComparisonScoreReport.status, "AVAILABLE")
+      const scoreReportListResponse = await fetch(
+        `${address}/api/skill-workspaces/${workspaceId}/skill-score-reports?status=AVAILABLE`,
       )
-      assert.equal(comparisonReportResponse.status, 200)
-      const comparisonReport = (await comparisonReportResponse.json()) as {
-        id: string
-        reportType: string
-        status: string
-        comparabilityStatus: string
-        report: {
-          reportRevisionId: string
-          reportType: string
-          cases: Array<{ pairComparability: string }>
-          metrics: { delta: unknown }
-        }
+      assert.equal(scoreReportListResponse.status, 200)
+      const scoreReportList = (await scoreReportListResponse.json()) as {
+        items: Array<{ id: string; runId: string }>
       }
-      assert.equal(comparisonReport.reportType, "version_comparison")
-      assert.equal(comparisonReport.status, "AVAILABLE")
-      assert.equal(comparisonReport.comparabilityStatus, "COMPARABLE")
-      assert.equal(comparisonReport.report.cases.length, 3)
+      const comparisonScoreReport = scoreReportList.items.find(
+        (report) => report.runId === comparison.id,
+      )
+      assert.ok(comparisonScoreReport)
+      assert.equal(comparisonScoreReport.id, terminalComparisonScoreReport.id)
+      const scoreReportDetailResponse = await fetch(
+        `${address}/api/skill-score-reports/${comparisonScoreReport.id}`,
+      )
+      assert.equal(scoreReportDetailResponse.status, 200)
       assert.equal(
-        comparisonReport.report.cases.every(
-          (item) => item.pairComparability === "COMPARABLE",
-        ),
-        true,
+        ((await scoreReportDetailResponse.json()) as { status: string }).status,
+        "AVAILABLE",
       )
-      assert.notEqual(comparisonReport.report.metrics.delta, null)
-      const reportCasesResponse = await fetch(
-        `${address}/api/test-reports/${comparisonReport.id}/cases?pageSize=2`,
+      const scoreReportEventsResponse = await fetch(
+        `${address}/api/skill-score-reports/${comparisonScoreReport.id}/events`,
       )
-      assert.equal(reportCasesResponse.status, 200)
-      const reportCases = (await reportCasesResponse.json()) as {
-        items: unknown[]
-        pagination: { total: number; pageCount: number }
-      }
-      assert.equal(reportCases.items.length, 2)
-      assert.equal(reportCases.pagination.total, 3)
-      assert.equal(reportCases.pagination.pageCount, 2)
-      const firstReportCase = comparisonReport.report.cases[0]
-      assert.ok(firstReportCase)
-      const reportCaseDetailResponse = await fetch(
-        `${address}/api/test-reports/${comparisonReport.id}/cases/${comparison.cases[0]!.evalRevisionCaseId}`,
-      )
-      assert.equal(reportCaseDetailResponse.status, 200)
-      const reportCaseDetail = (await reportCaseDetailResponse.json()) as {
-        summary: { evalRevisionCaseId: string }
-        targetCase: { finalOutput: string | null }
-        baselineCase: { finalOutput: string | null }
-      }
-      assert.equal(
-        reportCaseDetail.summary.evalRevisionCaseId,
-        comparison.cases[0]!.evalRevisionCaseId,
-      )
-      assert.ok(reportCaseDetail.targetCase.finalOutput)
-      assert.ok(reportCaseDetail.baselineCase.finalOutput)
-      const regenerateResponse = await fetch(
-        `${address}/api/test-reports/${comparisonReport.id}/regenerate`,
-        {
-          method: "POST",
-          headers: { "idempotency-key": "comparison-report-regenerate-1" },
-        },
-      )
-      assert.equal(regenerateResponse.status, 200)
-      const regeneratedReport = (await regenerateResponse.json()) as {
-        currentRevisionId: string
-      }
-      assert.equal(
-        regeneratedReport.currentRevisionId,
-        comparisonReport.report.reportRevisionId,
-      )
-      const reportRevisions = await application.databaseClient.database
-        .select({ id: skillTestReportRevisions.id })
-        .from(skillTestReportRevisions)
-        .where(
-          eq(skillTestReportRevisions.reportId, comparisonReport.id),
-        )
-      assert.equal(reportRevisions.length, 1)
-      await application.databaseClient.database
-        .update(skillTestReportRevisions)
-        .set({ generatorVersion: "test-report-generator-legacy" })
-        .where(
-          eq(
-            skillTestReportRevisions.id,
-            comparisonReport.report.reportRevisionId,
-          ),
-        )
-      const upgradedGeneratorResponse = await fetch(
-        `${address}/api/test-reports/${comparisonReport.id}/regenerate`,
-        {
-          method: "POST",
-          headers: {
-            "idempotency-key": "comparison-report-regenerate-generator-v2",
-          },
-        },
-      )
-      assert.equal(upgradedGeneratorResponse.status, 200)
-      const upgradedGeneratorReport =
-        (await upgradedGeneratorResponse.json()) as {
-          currentRevisionId: string
-          report: { generatorVersion: string; reportRevisionNumber: number }
-        }
-      assert.notEqual(
-        upgradedGeneratorReport.currentRevisionId,
-        comparisonReport.report.reportRevisionId,
-      )
-      assert.equal(upgradedGeneratorReport.report.reportRevisionNumber, 2)
-      assert.equal(
+      assert.equal(scoreReportEventsResponse.status, 200)
+      assert.deepEqual(
         (
-          await application.databaseClient.database
-            .select({ id: skillTestReportRevisions.id })
-            .from(skillTestReportRevisions)
-            .where(
-              eq(skillTestReportRevisions.reportId, comparisonReport.id),
-            )
-        ).length,
-        2,
+          (await scoreReportEventsResponse.json()) as {
+            items: Array<{ type: string }>
+          }
+        ).items.map((event) => event.type),
+        [
+          "skill-score-report.created",
+          "skill-score-report.analysis.started",
+          "skill-score-report.analysis.completed",
+        ],
       )
-      await application.databaseClient.database
-        .insert(skillTestReportAnalyses)
-        .values({
-          id: lifecycleAnalysisId,
-          reportId: comparisonReport.id,
-          reportRevisionId: upgradedGeneratorReport.currentRevisionId,
-          revisionNumber: 1,
-          status: "PENDING",
-          configuredModelId: "sdk_default",
-          actualModelId: null,
-          configurationFingerprint: "a".repeat(64),
-          semanticConfigurationFingerprint: "b".repeat(64),
-          runtimePolicy: {
-            schemaVersion: "test-report-analyzer-runtime-policy.v4",
-            timeoutMs: 1_800_000,
-            cancellationGraceMs: 5_000,
-            maxInputCharacters: 500_000,
-            capabilitySource: "project_settings",
-            promptControlledFileAccess: true,
-          },
-          runtimePolicyFingerprint: "c".repeat(64),
-          promptVersion: "test-report-analyzer-prompt-v1",
-          inputFingerprint: "d".repeat(64),
-          selectedEvalRevisionCaseIds: [
-            comparison.cases[0]!.evalRevisionCaseId,
-          ],
-          idempotencyKey: `lifecycle-${lifecycleAnalysisId}`,
-        })
-      const htmlDocumentResponse = await fetch(
-        `${address}/api/test-reports/${comparisonReport.id}/revisions/${upgradedGeneratorReport.currentRevisionId}/document.html?locale=zh-CN`,
-      )
-      assert.equal(htmlDocumentResponse.status, 200)
-      assert.match(
-        htmlDocumentResponse.headers.get("content-type") ?? "",
-        /^text\/html/,
-      )
-      assert.match(
-        htmlDocumentResponse.headers.get("content-security-policy") ?? "",
-        /default-src 'none'/,
-      )
-      assert.match(
-        htmlDocumentResponse.headers.get("content-disposition") ?? "",
-        /^inline/,
-      )
-      const htmlDocument = await htmlDocumentResponse.text()
-      assert.match(htmlDocument, /^<!doctype html>/)
-      assert.match(htmlDocument, /逐 Eval 结果/)
-      assert.match(htmlDocument, /\?externalId=1/)
-      assert.doesNotMatch(htmlDocument, /controlled fixture summarized/)
-
-      const markdownDocumentResponse = await fetch(
-        `${address}/api/test-reports/${comparisonReport.id}/revisions/${upgradedGeneratorReport.currentRevisionId}/document.md?locale=en`,
-      )
-      assert.equal(markdownDocumentResponse.status, 200)
-      assert.match(
-        markdownDocumentResponse.headers.get("content-disposition") ?? "",
-        /^attachment/,
-      )
-      assert.match(await markdownDocumentResponse.text(), /^# /)
-
-      const historicalDocumentResponse = await fetch(
-        `${address}/api/test-reports/${comparisonReport.id}/revisions/${comparisonReport.report.reportRevisionId}/document.html?locale=en`,
-      )
-      assert.equal(historicalDocumentResponse.status, 200)
-      const jsonDocumentResponse = await fetch(
-        `${address}/api/test-reports/${comparisonReport.id}/revisions/${upgradedGeneratorReport.currentRevisionId}/document.json`,
-      )
-      assert.equal(jsonDocumentResponse.status, 404)
-      const reportListResponse = await fetch(
-        `${address}/api/skill-workspaces/${workspaceId}/test-reports?reportType=version_comparison`,
-      )
-      assert.equal(reportListResponse.status, 200)
-      const reportList = (await reportListResponse.json()) as {
-        items: Array<{ runId: string }>
-      }
-      assert.equal(
-        reportList.items.some((item) => item.runId === comparison.id),
-        true,
-      )
-
       for (const runCase of comparison.cases) {
         const artifact = runCase.artifacts[0]
         assert.ok(artifact)
@@ -1587,6 +1405,10 @@ test(
       assert.notEqual(
         swappedRun.traceability.runInputFingerprint,
         comparison.traceability.runInputFingerprint,
+      )
+      assert.equal(
+        (await waitForSkillScoreReportTerminal(address, swappedRun.id)).status,
+        "AVAILABLE",
       )
 
       const logsResponse = await fetch(
@@ -1722,73 +1544,53 @@ test(
         [
           "execution",
           "execution",
-          "grading",
+          "assertion",
           "execution",
-          "grading",
+          "assertion",
           "execution",
-          "grading",
+          "assertion",
           "execution",
-          "grading",
+          "assertion",
           "execution",
-          "grading",
+          "assertion",
         ],
       )
-      const executionFailureReportResponse = await fetch(
-        `${address}/api/test-runs/${executionFailureRun.id}/report`,
-      )
-      assert.equal(executionFailureReportResponse.status, 200)
-      const executionFailureReport =
-        (await executionFailureReportResponse.json()) as {
-          id: string
-          status: string
-        }
-      assert.equal(executionFailureReport.status, "PARTIAL")
-      const baselineExecutionIssueResponse = await fetch(
-        `${address}/api/test-reports/${executionFailureReport.id}/cases?issueKind=EXECUTION_ERROR&side=BASELINE&externalId=1`,
-      )
-      assert.equal(baselineExecutionIssueResponse.status, 200)
+      await assertLegacyReportUnavailable(address, executionFailureRun.id)
       assert.equal(
-        ((await baselineExecutionIssueResponse.json()) as {
-          pagination: { total: number }
-        }).pagination.total,
-        1,
-      )
-      const targetExecutionIssueResponse = await fetch(
-        `${address}/api/test-reports/${executionFailureReport.id}/cases?issueKind=EXECUTION_ERROR&side=TARGET&externalId=1`,
-      )
-      assert.equal(targetExecutionIssueResponse.status, 200)
-      assert.equal(
-        ((await targetExecutionIssueResponse.json()) as {
-          pagination: { total: number }
-        }).pagination.total,
-        0,
+        (
+          await waitForSkillScoreReportTerminal(
+            address,
+            executionFailureRun.id,
+          )
+        ).status,
+        "AVAILABLE",
       )
 
       agentRuntimeAdapter.planFailure({
-        phase: "grading",
+        phase: "assertion",
         externalId: 2,
         snapshotMarker: "candidate-v2",
       })
-      const gradingFailureSessionStart = agentRuntimeAdapter.sessions.length
-      const gradingFailureRun = await waitForRunTerminal(
+      const assertionFailureSessionStart = agentRuntimeAdapter.sessions.length
+      const assertionFailureRun = await waitForRunTerminal(
         address,
         (
           await startComparison(
-            "test-run-version-comparison-grading-failure",
+            "test-run-version-comparison-assertion-failure",
           )
         ).id,
       )
-      assert.equal(gradingFailureRun.status, "COMPLETED")
-      const failedGradingCase = gradingFailureRun.cases.find(
+      assert.equal(assertionFailureRun.status, "COMPLETED")
+      const failedAssertionCase = assertionFailureRun.cases.find(
         (runCase) =>
           runCase.side === "TARGET" && runCase.externalId === 2,
       )
-      assert.ok(failedGradingCase)
-      assert.equal(failedGradingCase.executionStatus, "COMPLETED")
-      assert.equal(failedGradingCase.assessmentStatus, "FAILED")
+      assert.ok(failedAssertionCase)
+      assert.equal(failedAssertionCase.executionStatus, "COMPLETED")
+      assert.equal(failedAssertionCase.assessmentStatus, "FAILED")
       assert.equal(
-        gradingFailureRun.cases
-          .filter((runCase) => runCase.id !== failedGradingCase.id)
+        assertionFailureRun.cases
+          .filter((runCase) => runCase.id !== failedAssertionCase.id)
           .every(
             (runCase) =>
               runCase.executionStatus === "COMPLETED" &&
@@ -1798,14 +1600,37 @@ test(
       )
       assert.deepEqual(
         agentRuntimeAdapter.sessions
-          .slice(gradingFailureSessionStart)
+          .slice(assertionFailureSessionStart)
+          .filter((item) => item.phase !== "skill_score")
           .map((item) => item.phase),
         Array.from({ length: 6 }).flatMap(() => [
           "execution",
-          "grading",
+          "assertion",
         ]),
       )
       assert.equal(agentRuntimeAdapter.failures.length, 0)
+      assert.equal(
+        (
+          await waitForSkillScoreReportTerminal(
+            address,
+            assertionFailureRun.id,
+          )
+        ).status,
+        "AVAILABLE",
+      )
+
+      agentRuntimeAdapter.planSkillScoreFailure()
+      const scoreFailureRun = await waitForRunTerminal(
+        address,
+        (await startComparison("test-run-version-comparison-score-failure")).id,
+      )
+      assert.equal(scoreFailureRun.status, "COMPLETED")
+      const failedScoreReport = await waitForSkillScoreReportTerminal(
+        address,
+        scoreFailureRun.id,
+      )
+      assert.equal(failedScoreReport.status, "FAILED")
+      assert.ok(failedScoreReport.error?.code)
 
       const deferredExecution = agentRuntimeAdapter.deferNextExecution()
       const canceledRunStarted = await startComparison(
@@ -1843,20 +1668,7 @@ test(
       assert.ok(agentRuntimeAdapter.interruptCount >= 1)
       assert.equal(agentRuntimeAdapter.maxActiveSends, 1)
       assert.equal(agentRuntimeAdapter.activeSends, 0)
-      const canceledReportResponse = await fetch(
-        `${address}/api/test-runs/${canceledRun.id}/report`,
-      )
-      assert.equal(canceledReportResponse.status, 200)
-      const canceledReport = (await canceledReportResponse.json()) as {
-        status: string
-        report: {
-          run: { runStatus: string }
-          completeness: { status: string }
-        }
-      }
-      assert.equal(canceledReport.status, "PARTIAL")
-      assert.equal(canceledReport.report.run.runStatus, "CANCELED")
-      assert.equal(canceledReport.report.completeness.status, "PARTIAL")
+      await assertLegacyReportUnavailable(address, canceledRun.id)
 
       const target = terminal.cases.find((item) => item.side === "TARGET")
       const baseline = terminal.cases.find(
@@ -1867,7 +1679,25 @@ test(
       assert.equal(target.inputFingerprint, baseline.inputFingerprint)
       assert.equal(target.executionStatus, "COMPLETED")
       assert.equal(target.assessmentStatus, "COMPLETED")
-      assert.equal(target.assertionResults[0]?.status, "PASSED")
+      assert.deepEqual(target.assertionResults, [])
+      assert.deepEqual(target.assertionAgentJson, {
+        assertions: [
+          {
+            index: 0,
+            status: "PASSED",
+            reason:
+              "The final output and Artifact contain the fixture summary.",
+            evidence: [
+              {
+                source: "assistant_output",
+                reference: "final_response",
+                excerpt: "controlled fixture summary",
+              },
+            ],
+          },
+        ],
+      })
+      assert.equal(target.assertionJsonParseError, null)
       assert.equal(target.artifacts[0]?.relativePath, "summary.txt")
       assert.deepEqual(
         targetExecutions.map((item) => ({
@@ -1888,20 +1718,31 @@ test(
           },
         ]),
       )
-      const graderOpens = agentRuntimeAdapter.opens.filter(
-        (item) => item.cwd.endsWith(`${path.sep}grading`),
+      const assertionOpens = agentRuntimeAdapter.opens.filter(
+        (item) => item.cwd.endsWith(`${path.sep}assertion`),
       )
-      assert.ok(graderOpens.length > 0)
+      assert.ok(assertionOpens.length > 0)
       assert.equal(
-        graderOpens.every(
+        assertionOpens.every(
           (item) =>
-            item.systemPrompt?.includes("exact absolute path") === true &&
+            item.systemPrompt?.includes("passed unchanged") === true &&
             item.environment?.DATABASE_URL === undefined,
         ),
         true,
       )
+      const inspectionClient = createDatabaseClient(testDatabaseUrl, {
+        applicationName: "skillconsole-test-run-loop-inspect",
+        maxConnections: 1,
+      })
+      const scoreReports = await inspectionClient.database
+        .select({ id: skillTestRunScoreReports.id })
+        .from(skillTestRunScoreReports)
+        .where(eq(skillTestRunScoreReports.runId, terminal.id))
+      assert.equal(scoreReports.length, 1)
       const executionOpens = agentRuntimeAdapter.opens.filter(
-        (item) => item.cwd.endsWith(`${path.sep}workspace`),
+        (item) =>
+          item.cwd.includes(`${path.sep}test-runs${path.sep}`) &&
+          item.cwd.endsWith(`${path.sep}workspace`),
       )
       assert.ok(executionOpens.length > 0)
       assert.equal(
@@ -1924,10 +1765,6 @@ test(
         "controlled fixture summarized | snapshot=baseline-v1",
       )
 
-      const inspectionClient = createDatabaseClient(testDatabaseUrl, {
-        applicationName: "skillconsole-test-run-loop-inspect",
-        maxConnections: 1,
-      })
       const events = await inspectionClient.database
         .select()
         .from(skillTestRunEvents)
@@ -2049,7 +1886,7 @@ test(
           access(
             path.join(
               caseRoot,
-              "grading",
+              "assertion",
               ".claude",
               "settings.json",
             ),
@@ -2072,16 +1909,6 @@ test(
         await cleanupClient.database
           .delete(skillTestRuns)
           .where(eq(skillTestRuns.workspaceId, workspaceId))
-        assert.equal(
-          (
-            await cleanupClient.database
-              .select({ id: skillTestReportAnalyses.id })
-              .from(skillTestReportAnalyses)
-              .where(eq(skillTestReportAnalyses.id, lifecycleAnalysisId))
-          ).length,
-          0,
-          "deleting the Run must cascade through Report, Revision, and Analysis",
-        )
         await cleanupClient.database
           .delete(evalRevisions)
           .where(inArray(evalRevisions.suiteId, generationSuiteIds))

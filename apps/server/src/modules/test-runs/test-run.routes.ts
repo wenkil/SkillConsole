@@ -18,6 +18,11 @@ import {
   TestRunListQuerySchema,
   TestRunPageSchema,
   TestRunParamsSchema,
+  SkillScoreReportEventPageSchema,
+  SkillScoreReportEventsQuerySchema,
+  SkillScoreReportListQuerySchema,
+  SkillScoreReportPageSchema,
+  SkillScoreReportSchema,
   TestRunSchema,
   TestRunSkillScoreReportParamsSchema,
   TestRunStartHeadersSchema,
@@ -142,6 +147,87 @@ export const testRunRoutes: FastifyPluginAsyncTypebox = async (
   application,
 ) => {
   const service = application.testRunService
+
+  application.get(
+    "/api/skill-workspaces/:workspaceId/skill-score-reports",
+    {
+      schema: {
+        tags: ["skill-score-reports"],
+        summary: "List independent AI Skill score reports for a workbench",
+        params: WorkspaceTestRunParamsSchema,
+        querystring: SkillScoreReportListQuerySchema,
+        response: { 200: SkillScoreReportPageSchema, 400: ErrorResponseSchema },
+      },
+    },
+    async (request, reply) =>
+      reply
+        .header("Cache-Control", "private, no-store")
+        .send(
+          ((page) => ({
+            ...page,
+            items: page.items.map((report) => ({
+              ...report,
+              error: report.error ? { ...report.error } : null,
+            })),
+            pagination: { ...page.pagination },
+          }))(
+            await service.listSkillScoreReports(
+              request.params.workspaceId,
+              request.query.page ?? 1,
+              request.query.pageSize ?? 20,
+              request.query.status,
+            ),
+          ),
+        ),
+  )
+
+  application.get(
+    "/api/skill-score-reports/:reportId",
+    {
+      schema: {
+        tags: ["skill-score-reports"],
+        summary: "Read an independent AI Skill score report",
+        params: TestRunSkillScoreReportParamsSchema,
+        response: { 200: SkillScoreReportSchema, 404: ErrorResponseSchema },
+      },
+    },
+    async (request, reply) =>
+      reply
+        .header("Cache-Control", "private, no-store")
+        .send(await service.getSkillScoreReport(request.params.reportId)),
+  )
+
+  application.get(
+    "/api/skill-score-reports/:reportId/events",
+    {
+      schema: {
+        tags: ["skill-score-reports"],
+        summary: "Read lifecycle events for an independent AI Skill score report",
+        params: TestRunSkillScoreReportParamsSchema,
+        querystring: SkillScoreReportEventsQuerySchema,
+        response: { 200: SkillScoreReportEventPageSchema, 404: ErrorResponseSchema },
+      },
+    },
+    async (request, reply) =>
+      reply
+        .header("Cache-Control", "private, no-store")
+        .send(
+          ((page) => ({
+            ...page,
+            items: page.items.map((event) => ({
+              ...event,
+              payload: { ...event.payload },
+            })),
+            pagination: { ...page.pagination },
+          }))(
+            await service.listSkillScoreReportEvents(
+              request.params.reportId,
+              request.query.beforeSequence,
+              request.query.limit ?? 200,
+            ),
+          ),
+        ),
+  )
 
   application.get(
     "/api/skill-workspaces/:workspaceId/test-runs",

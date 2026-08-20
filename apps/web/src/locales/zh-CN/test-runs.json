@@ -12,7 +12,6 @@
   "status": {
     "PREPARING": "准备工作区",
     "RUNNING": "正在执行",
-    "SCORING": "独立评分",
     "CANCELING": "正在取消",
     "COMPLETED": "运行完成",
     "CANCELED": "已取消",
@@ -143,8 +142,9 @@
     "skillScoreReport": "Skill 评分报告",
     "skillScorePending": "等待所有用例完成后启动 Skill 评分 Agent。",
     "skillScoreRunning": "Skill 评分 Agent 正在汇总全部执行和断言回复。",
+    "skillScoreAvailable": "AI 评分报告已生成。",
     "skillScoreFailed": "Skill 评分 Agent 未能生成报告。",
-    "skillScoreIframeTitle": "Skill 评分报告",
+    "skillScoreView": "在测试报告中查看",
     "artifacts": "运行产物",
     "observability": "Skill 调用观察",
     "skillInvocation": "Skill 激活",

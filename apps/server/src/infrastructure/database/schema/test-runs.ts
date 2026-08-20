@@ -628,6 +628,39 @@ export const skillTestRunScoreReports = pgTable(
   ],
 )
 
+/** Lifecycle events that belong to an AI score report, never to its Run. */
+export const skillTestRunScoreReportEvents = pgTable(
+  "skill_test_run_score_report_events",
+  {
+    id: uuid("id").primaryKey().default(sql`uuidv7()`),
+    reportId: uuid("report_id")
+      .notNull()
+      .references(() => skillTestRunScoreReports.id, { onDelete: "cascade" }),
+    sequence: integer("sequence").notNull(),
+    type: text("type").notNull(),
+    payload: jsonb("payload")
+      .$type<Readonly<Record<string, unknown>>>()
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
+    occurredAt: timestamp("occurred_at", {
+      mode: "date",
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("skill_test_run_score_report_events_report_sequence_unique").on(
+      table.reportId,
+      table.sequence,
+    ),
+    index("skill_test_run_score_report_events_report_occurred_idx").on(
+      table.reportId,
+      table.occurredAt,
+    ),
+  ],
+)
+
 export const runBenchmarks = pgTable(
   "run_benchmarks",
   {
@@ -656,6 +689,8 @@ export type SkillTestArtifactRow = typeof skillTestArtifacts.$inferSelect
 export type AssertionResultRow = typeof assertionResults.$inferSelect
 export type SkillTestRunScoreReportRow =
   typeof skillTestRunScoreReports.$inferSelect
+export type SkillTestRunScoreReportEventRow =
+  typeof skillTestRunScoreReportEvents.$inferSelect
 export type RunBenchmarkRow = typeof runBenchmarks.$inferSelect
 export type TestRunStatus = (typeof testRunStatus.enumValues)[number]
 export type TestRunMode = (typeof testRunMode.enumValues)[number]

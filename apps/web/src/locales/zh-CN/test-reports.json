@@ -4,6 +4,20 @@
     "title": "测试报告",
     "description": "汇总「{{name}}」所有终态测试任务。页面以不可变 Revision 的静态 HTML 展示，Markdown 可下载，原始日志与 Artifact 仍保留在测试任务中。"
   },
+  "tabs": {
+    "label": "报告分组",
+    "deterministic": "确定性测试报告",
+    "aiScore": "AI 评分报告"
+  },
+  "skillScore": {
+    "filters": { "status": "报告状态", "all": "全部报告状态" },
+    "status": { "PENDING": "等待评分", "RUNNING": "评分中", "AVAILABLE": "报告可用", "FAILED": "评分失败" },
+    "events": "报告状态事件",
+    "loadEarlier": "加载更早事件",
+    "iframeTitle": "AI 评分报告",
+    "emptySelection": "从左侧选择一份 AI 评分报告。",
+    "loadError": "无法读取 AI 评分报告。"
+  },
   "summary": {
     "total": "报告总数",
     "available": "完整报告",

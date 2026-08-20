@@ -11,14 +11,9 @@ import {
   buildExecutionPrompt,
   buildExecutionPromptProtocolVersion,
   buildExecutionSkillPolicyFingerprint,
-  buildGraderPrompt,
+  buildAssertionPrompt,
+  buildSkillScorePrompt,
 } from "../src/modules/test-runs/test-run-prompt.js"
-import {
-  formatEvidenceWithLineNumbers,
-  resolveEvidenceAnchors,
-  TestRunGraderProtocolError,
-} from "../src/modules/test-runs/test-run-grader-protocol.js"
-import { TestRunScorer } from "../src/modules/test-runs/test-run-scorer.js"
 import {
   containsPublicRuntimeLeakContent,
   containsPublicRuntimeLeakText,
@@ -30,11 +25,8 @@ import {
 } from "../src/modules/test-runs/test-run-runtime-environment.js"
 import {
   buildTestRunSemanticConfigurationFingerprint,
-  extractInvokedSkillName,
-  TestRunToolFailureTracker,
   extractObservedBundledScriptPaths,
   getTestRunCaseSideOrder,
-  validateExecutionSkillPolicy,
 } from "../src/modules/test-runs/test-run.service.js"
 import { TestRunStorage } from "../src/modules/test-runs/test-run-storage.js"
 
@@ -53,50 +45,6 @@ test("version comparison alternates the paired serial order by Eval", () => {
     getTestRunCaseSideOrder("target_vs_no_skill", 1),
     ["TARGET", "BASELINE"],
   )
-})
-
-test("stops the third permission failure even when the Agent switches tools", () => {
-  const tracker = new TestRunToolFailureTracker()
-  const attempts = [
-    { toolUseId: "write-1", name: "Write", input: { file_path: "/output/a" } },
-    { toolUseId: "bash-1", name: "Bash", input: { command: "write a" } },
-    { toolUseId: "python-1", name: "Bash", input: { command: "python write.py" } },
-  ].map((toolUse) =>
-    tracker.record(
-      toolUse,
-      "Permission denied: this operation requires approval.",
-    ),
-  )
-
-  assert.deepEqual(
-    attempts.map((attempt) => ({
-      category: attempt.category,
-      count: attempt.count,
-      limitReached: attempt.limitReached,
-    })),
-    [
-      { category: "permission_denied", count: 1, limitReached: false },
-      { category: "permission_denied", count: 2, limitReached: false },
-      { category: "permission_denied", count: 3, limitReached: true },
-    ],
-  )
-})
-
-test("keeps path-not-found retry budgets separate by target", () => {
-  const tracker = new TestRunToolFailureTracker()
-  const first = tracker.record(
-    { toolUseId: "read-a", name: "Read", input: { file_path: "/input/a" } },
-    "ENOENT: no such file",
-  )
-  const second = tracker.record(
-    { toolUseId: "read-b", name: "Read", input: { file_path: "/input/b" } },
-    "ENOENT: no such file",
-  )
-
-  assert.equal(first.count, 1)
-  assert.equal(second.count, 1)
-  assert.equal(first.limitReached, false)
-  assert.equal(second.limitReached, false)
 })
 
 test("semantic configuration fingerprint ignores credentials but tracks model changes", () => {
@@ -388,198 +336,39 @@ test("test execution bootstrap delegates task detail to the workspace file", () 
   assert.doesNotMatch(prompt, /fixture/)
 })
 
-test("test grader bootstrap uses the exact absolute task path", () => {
-  const taskPath = "/workspace/test-runs/run/cases/case/grading/inputs/task.json"
-  const prompt = buildGraderPrompt({ taskPath })
-  assert.match(prompt, new RegExp(taskPath))
-  assert.match(prompt, /exact outputPath/)
+test("assertion prompt contains the complete Case context without a result schema gate", () => {
+  const prompt = buildAssertionPrompt({
+    userTask: "Summarize fixture case 3.",
+    assertions: ["Contains a summary"],
+    executionFinalResponse: "controlled fixture summary | snapshot=candidate-v2",
+  })
+  assert.match(prompt, /Summarize fixture case 3\./)
+  assert.match(prompt, /Contains a summary/)
+  assert.match(prompt, /snapshot=candidate-v2/)
+  assert.match(prompt, /Return the assertion result as JSON in your final response/)
 })
 
-test("test run scorer requires one independently evidenced result per assertion", () => {
-  const scorer = new TestRunScorer()
-  const result = scorer.parse(
-    `\`\`\`json\n${JSON.stringify({
-      assertions: [
-        {
-          index: 1,
-          status: "INSUFFICIENT_EVIDENCE",
-          reason: "The output does not prove the second assertion.",
-          evidence: [],
-        },
-        {
-          index: 0,
-          status: "PASSED",
-          reason: "The final output contains the required summary.",
-          evidence: [
-            {
-              source: "assistant_output",
-              reference: "final-output",
-              startLine: 2,
-              endLine: 2,
-            },
-          ],
-        },
-      ],
-    })}\n\`\`\``,
-    ["Contains a summary", "Uses the requested structure"],
-  )
-
-  assert.deepEqual(
-    result.map((item) => ({
-      assertionIndex: item.assertionIndex,
-      status: item.status,
-    })),
-    [
-      { assertionIndex: 0, status: "PASSED" },
-      { assertionIndex: 1, status: "INSUFFICIENT_EVIDENCE" },
-    ],
-  )
-  assert.throws(
-    () =>
-      scorer.parse(
-        JSON.stringify({
-          assertions: [
-            {
-              index: 0,
-              status: "INSUFFICIENT_EVIDENCE",
-              reason: "First copy.",
-              evidence: [],
-            },
-            {
-              index: 0,
-              status: "INSUFFICIENT_EVIDENCE",
-              reason: "Duplicate copy.",
-              evidence: [],
-            },
-          ],
-        }),
-        ["First", "Second"],
-      ),
-    /duplicate indexes/i,
-  )
-  assert.throws(
-    () =>
-      scorer.parse(
-        JSON.stringify({
-          assertions: [
-            {
-              index: 0,
-              status: "NOT_EVALUATED",
-              reason: "Not a grader status.",
-              evidence: [],
-            },
-          ],
-        }),
-        ["First"],
-      ),
-    (error: unknown) =>
-      error instanceof TestRunGraderProtocolError &&
-      error.code === "TEST_RUN_GRADER_SCHEMA_INVALID" &&
-      /failed validation/i.test(error.message),
-  )
-  assert.throws(
-    () =>
-      scorer.parse(
-        `Grading complete: ${JSON.stringify({
-          assertions: [
-            {
-              index: 0,
-              status: "PASSED",
-              reason: "Has evidence.",
-              evidence: [
-                {
-                  source: "assistant_output",
-                  reference: "final-output",
-                  startLine: 1,
-                  endLine: 1,
-                },
-              ],
-            },
-          ],
-        })}`,
-        ["First"],
-      ),
-    (error: unknown) =>
-      error instanceof TestRunGraderProtocolError &&
-      error.code === "TEST_RUN_GRADER_JSON_INVALID" &&
-      /not valid JSON/i.test(error.message),
-  )
-})
-
-test("test run grader protocol resolves line anchors from original evidence", () => {
-  assert.equal(
-    formatEvidenceWithLineNumbers("Heading\r\nSummary complete."),
-    "L1: Heading\nL2: Summary complete.",
-  )
-
-  const resolved = resolveEvidenceAnchors(
-    [
+test("Skill score prompt carries raw assertion responses without interpreting them", () => {
+  const prompt = buildSkillScorePrompt({
+    runId: "run-1",
+    cases: [
       {
-        assertionIndex: 0,
-        status: "PASSED",
-        reason: "The summary is present.",
-        evidence: [
-          {
-            source: "assistant_output",
-            reference: "final-output",
-            startLine: 2,
-            endLine: 2,
-          },
-          {
-            source: "artifact",
-            reference: "summary.txt",
-            startLine: 1,
-            endLine: 2,
-          },
-        ],
+        externalId: 1,
+        name: "Fixture",
+        prompt: "Summarize the fixture.",
+        target: {
+          executionFinalResponse: "target output",
+          assertionAgentRawResponse: "this is not JSON",
+          assertionAgentJson: null,
+          assertionJsonParseError: "Unexpected token 'h'",
+        },
+        baseline: null,
       },
     ],
-    "Heading\r\nSummary complete.",
-    [
-      {
-        relativePath: "summary.txt",
-        content: "First line\nSecond line",
-      },
-    ],
-  )
-
-  assert.deepEqual(resolved[0]?.evidence, [
-    {
-      source: "assistant_output",
-      reference: "final-output#L2-L2",
-      excerpt: "Summary complete.",
-    },
-    {
-      source: "artifact",
-      reference: "summary.txt#L1-L2",
-      excerpt: "First line\nSecond line",
-    },
-  ])
-  assert.throws(
-    () =>
-      resolveEvidenceAnchors(
-        [
-          {
-            assertionIndex: 0,
-            status: "PASSED",
-            reason: "Invalid citation.",
-            evidence: [
-              {
-                source: "artifact",
-                reference: "summary.txt",
-                startLine: 3,
-                endLine: 3,
-              },
-            ],
-          },
-        ],
-        "Summary complete.",
-        [{ relativePath: "summary.txt", content: "Only one line" }],
-      ),
-    (error: unknown) =>
-      error instanceof TestRunGraderProtocolError &&
-      error.code === "TEST_RUN_GRADER_EVIDENCE_INVALID",
-  )
+  })
+  assert.match(prompt, /this is not JSON/)
+  assert.match(prompt, /Unexpected token 'h'/)
+  assert.match(prompt, /return one HTML document in your final response/)
 })
 
 test("Agent Session workspace resolver accepts only controlled test run locators", () => {
@@ -605,15 +394,19 @@ test("Agent Session workspace resolver accepts only controlled test run locators
     ),
   )
   assert.equal(
-    store.resolve(`test-runs/${runId}/cases/${caseId}/grading`),
+    store.resolve(`test-runs/${runId}/cases/${caseId}/assertion`),
     path.resolve(
       dataRoot,
       "test-runs",
       runId,
       "cases",
       caseId,
-      "grading",
+      "assertion",
     ),
+  )
+  assert.equal(
+    store.resolve(`test-runs/${runId}/skill-score`),
+    path.resolve(dataRoot, "test-runs", runId, "skill-score"),
   )
   assert.throws(
     () =>
@@ -659,58 +452,6 @@ test("required-Skill and no-Skill participants receive distinct constraints", ()
       noSkillConstraintTemplate: "forbidden",
     }),
     /^test-run-execution\.composed@sha256:[0-9a-f]{64}$/u,
-  )
-})
-
-test("execution Skill policy validates exact activation and no-Skill isolation", () => {
-  assert.equal(
-    extractInvokedSkillName({ skill: "/sample-skill arguments" }),
-    "sample-skill",
-  )
-  assert.equal(
-    validateExecutionSkillPolicy({
-      policy: { kind: "required", skillName: "sample-skill" },
-      selectedSkillInvocationCount: 1,
-      totalSkillInvocationCount: 1,
-      invokedBeforeTaskWork: true,
-    }),
-    null,
-  )
-  assert.equal(
-    validateExecutionSkillPolicy({
-      policy: { kind: "forbidden", skillName: "sample-skill" },
-      selectedSkillInvocationCount: 0,
-      totalSkillInvocationCount: 0,
-      invokedBeforeTaskWork: false,
-    }),
-    null,
-  )
-  assert.equal(
-    validateExecutionSkillPolicy({
-      policy: { kind: "required", skillName: "sample-skill" },
-      selectedSkillInvocationCount: 0,
-      totalSkillInvocationCount: 1,
-      invokedBeforeTaskWork: false,
-    })?.code,
-    "TEST_RUN_REQUIRED_SKILL_NOT_INVOKED",
-  )
-  assert.equal(
-    validateExecutionSkillPolicy({
-      policy: { kind: "required", skillName: "sample-skill" },
-      selectedSkillInvocationCount: 1,
-      totalSkillInvocationCount: 1,
-      invokedBeforeTaskWork: false,
-    })?.code,
-    "TEST_RUN_REQUIRED_SKILL_INVOKED_TOO_LATE",
-  )
-  assert.equal(
-    validateExecutionSkillPolicy({
-      policy: { kind: "forbidden", skillName: "sample-skill" },
-      selectedSkillInvocationCount: 0,
-      totalSkillInvocationCount: 1,
-      invokedBeforeTaskWork: false,
-    })?.code,
-    "TEST_RUN_SKILL_INVOCATION_FORBIDDEN",
   )
 })
 
