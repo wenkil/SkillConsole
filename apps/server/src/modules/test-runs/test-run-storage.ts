@@ -304,6 +304,11 @@ export class TestRunStorage {
     )
   }
 
+  getSkillScoreLocator(runId: string): string {
+    assertInternalId(runId)
+    return path.posix.join("test-runs", runId, "skill-score")
+  }
+
   getWorkspacePath(runId: string, caseId: string): string {
     const workspace = path.join(this.getCaseRoot(runId, caseId), "workspace")
     assertWithinRoot(this.root, workspace)
@@ -314,6 +319,28 @@ export class TestRunStorage {
     const assertion = path.join(this.getCaseRoot(runId, caseId), "assertion")
     assertWithinRoot(this.root, assertion)
     return assertion
+  }
+
+  getSkillScorePath(runId: string): string {
+    assertInternalId(runId)
+    const workspace = path.join(this.root, runId, "skill-score")
+    assertWithinRoot(this.root, workspace)
+    return workspace
+  }
+
+  async prepareSkillScoreWorkspace(runId: string): Promise<{
+    readonly locator: string
+    readonly absolutePath: string
+  }> {
+    const workspace = this.getSkillScorePath(runId)
+    await Promise.all([
+      mkdir(path.join(workspace, ".claude"), { recursive: true }),
+      mkdir(path.join(workspace, "outputs", ".tmp"), { recursive: true }),
+    ])
+    return {
+      locator: this.getSkillScoreLocator(runId),
+      absolutePath: workspace,
+    }
   }
 
   async prepareCase(
@@ -708,6 +735,18 @@ export class TestRunStorage {
         ),
         { recursive: true, force: true },
       ),
+    ])
+  }
+
+  async scrubSkillScoreSettings(runId: string): Promise<void> {
+    await Promise.all([
+      rm(path.join(this.getSkillScorePath(runId), ".claude", "settings.json"), {
+        force: true,
+      }),
+      rm(path.join(this.getSkillScorePath(runId), "outputs", ".tmp"), {
+        recursive: true,
+        force: true,
+      }),
     ])
   }
 }

@@ -1560,91 +1560,92 @@ export class TestRunService {
     }
     const report = await this.options.repository.beginSkillScoreReport(runId)
     await this.publishNewEvents(runId)
-    const [assertionPrompt, scorePrompt] = await Promise.all([
-      this.options.agentSessions.getSystemPrompt("test-run-assertion"),
-      this.options.agentSessions.getSystemPrompt("test-run-skill-score"),
-    ])
-    if (
-      buildAgentChainProtocolVersion(
-        assertionPrompt.version,
-        scorePrompt.version,
-      ) !== run.graderProtocolVersion
-    ) {
-      await this.options.repository.failSkillScoreReport({
-        reportId: report.id,
-        code: "TEST_RUN_AGENT_CHAIN_PROMPT_CHANGED",
-        message:
-          "The test assertion or Skill score System Prompt changed after the run was frozen.",
-      })
-      return
-    }
-    const cases = await this.options.repository.listCaseRows(runId)
-    const scoreCases = [...new Set(cases.map((item) => item.externalId))].map(
-      (externalId) => {
-        const target = cases.find(
-          (item) => item.externalId === externalId && item.side === "TARGET",
-        )
-        const baseline = cases.find(
-          (item) => item.externalId === externalId && item.side === "BASELINE",
-        )
-        const source = target ?? baseline
-        return {
-          externalId,
-          name: source?.name ?? `Case ${externalId}`,
-          prompt: source?.prompt ?? "",
-          target: target
-            ? {
-                executionFinalResponse: target.finalOutput,
-                assertionAgentRawResponse: target.assertionAgentRawResponse,
-                assertionAgentJson: target.assertionAgentJson ?? null,
-                assertionJsonParseError: target.assertionJsonParseError,
-              }
-            : null,
-          baseline: baseline
-            ? {
-                executionFinalResponse: baseline.finalOutput,
-                assertionAgentRawResponse: baseline.assertionAgentRawResponse,
-                assertionAgentJson: baseline.assertionAgentJson ?? null,
-                assertionJsonParseError: baseline.assertionJsonParseError,
-              }
-            : null,
-        }
-      },
-    )
-    const sessionCase = cases[0]
-    if (!sessionCase) {
-      await this.options.repository.failSkillScoreReport({
-        reportId: report.id,
-        code: "TEST_RUN_SKILL_SCORE_INPUT_UNAVAILABLE",
-        message: "The test run has no Case data for the Skill score Agent.",
-      })
-      return
-    }
-    const scoreRuntimeEnvironment = forTestRunWorkspace(
-      runtimeEnvironment,
-      this.options.storage.getAssertionPath(runId, sessionCase.id),
-    )
-    const session = await this.options.agentSessions.createInWorkspace({
-      origin: {
-        type: "test_run_skill_score",
-        runId,
-        reportId: report.id,
-        phase: "skill-score",
-      },
-      prompt: buildSkillScorePrompt({ runId, cases: scoreCases }),
-      workspaceLocator: this.options.storage.getAssertionLocator(
-        runId,
-        sessionCase.id,
-      ),
-      expectedConfigurationFingerprint: run.configurationFingerprint,
-      systemPromptRole: "test-run-skill-score",
-      expectedSystemPromptFingerprint: scorePrompt.sha256,
-      environment: scoreRuntimeEnvironment.values,
-      protectedEnvironmentNames: scoreRuntimeEnvironment.protectedNames,
-      additionalRedactedValues: [...scoreRuntimeEnvironment.sensitiveValues],
-    })
-    this.activeSessions.set(runId, session.id)
+    let sessionId: string | null = null
     try {
+      const [assertionPrompt, scorePrompt] = await Promise.all([
+        this.options.agentSessions.getSystemPrompt("test-run-assertion"),
+        this.options.agentSessions.getSystemPrompt("test-run-skill-score"),
+      ])
+      if (
+        buildAgentChainProtocolVersion(
+          assertionPrompt.version,
+          scorePrompt.version,
+        ) !== run.graderProtocolVersion
+      ) {
+        await this.options.repository.failSkillScoreReport({
+          reportId: report.id,
+          code: "TEST_RUN_AGENT_CHAIN_PROMPT_CHANGED",
+          message:
+            "The test assertion or Skill score System Prompt changed after the run was frozen.",
+        })
+        return
+      }
+      const cases = await this.options.repository.listCaseRows(runId)
+      const scoreCases = [...new Set(cases.map((item) => item.externalId))].map(
+        (externalId) => {
+          const target = cases.find(
+            (item) => item.externalId === externalId && item.side === "TARGET",
+          )
+          const baseline = cases.find(
+            (item) => item.externalId === externalId && item.side === "BASELINE",
+          )
+          const source = target ?? baseline
+          return {
+            externalId,
+            name: source?.name ?? `Case ${externalId}`,
+            prompt: source?.prompt ?? "",
+            target: target
+              ? {
+                  executionFinalResponse: target.finalOutput,
+                  assertionAgentRawResponse: target.assertionAgentRawResponse,
+                  assertionAgentJson: target.assertionAgentJson ?? null,
+                  assertionJsonParseError: target.assertionJsonParseError,
+                }
+              : null,
+            baseline: baseline
+              ? {
+                  executionFinalResponse: baseline.finalOutput,
+                  assertionAgentRawResponse: baseline.assertionAgentRawResponse,
+                  assertionAgentJson: baseline.assertionAgentJson ?? null,
+                  assertionJsonParseError: baseline.assertionJsonParseError,
+                }
+              : null,
+          }
+        },
+      )
+      if (cases.length === 0) {
+        await this.options.repository.failSkillScoreReport({
+          reportId: report.id,
+          code: "TEST_RUN_SKILL_SCORE_INPUT_UNAVAILABLE",
+          message: "The test run has no Case data for the Skill score Agent.",
+        })
+        return
+      }
+      const scoreWorkspace = await this.options.storage.prepareSkillScoreWorkspace(
+        runId,
+      )
+      const scoreRuntimeEnvironment = forTestRunWorkspace(
+        runtimeEnvironment,
+        scoreWorkspace.absolutePath,
+      )
+      const session = await this.options.agentSessions.createInWorkspace({
+        origin: {
+          type: "test_run_skill_score",
+          runId,
+          reportId: report.id,
+          phase: "skill-score",
+        },
+        prompt: buildSkillScorePrompt({ runId, cases: scoreCases }),
+        workspaceLocator: scoreWorkspace.locator,
+        expectedConfigurationFingerprint: run.configurationFingerprint,
+        systemPromptRole: "test-run-skill-score",
+        expectedSystemPromptFingerprint: scorePrompt.sha256,
+        environment: scoreRuntimeEnvironment.values,
+        protectedEnvironmentNames: scoreRuntimeEnvironment.protectedNames,
+        additionalRedactedValues: [...scoreRuntimeEnvironment.sensitiveValues],
+      })
+      sessionId = session.id
+      this.activeSessions.set(runId, session.id)
       await this.options.repository.bindSkillScoreReportSession(report.id, session.id)
       const result = await this.monitorSkillScoreSession({
         runId,
@@ -1689,8 +1690,16 @@ export class TestRunService {
           )
         })
     } finally {
-      this.options.agentSessions.release(session.id)
+      if (sessionId) {
+        this.options.agentSessions.release(sessionId)
+      }
       this.activeSessions.delete(runId)
+      await this.options.storage.scrubSkillScoreSettings(runId).catch((error) => {
+        this.options.logger.error(
+          { runId, reportId: report.id, error },
+          "Skill score workspace settings could not be scrubbed",
+        )
+      })
     }
   }
 
