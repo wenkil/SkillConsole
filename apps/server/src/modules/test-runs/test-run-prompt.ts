@@ -68,12 +68,33 @@ export function buildExecutionPromptProtocolVersion(input: {
   return `test-run-execution.composed@sha256:${fingerprint}`
 }
 
-export function buildGraderPrompt(input: {
-  readonly taskPath: string
+export function buildAssertionPrompt(input: {
+  readonly userTask: string
+  readonly assertions: readonly string[]
+  readonly executionFinalResponse: string
 }): string {
-  return [
-    "Read the grading task manifest from this exact absolute path:",
-    JSON.stringify(input.taskPath),
-    "Use this path exactly as provided. Do not replace it, resolve it to another directory, or guess an alternative path. Grade every assertion and write the required JSON output to the exact outputPath declared in the manifest.",
-  ].join("\n")
+  return `You are receiving the complete response from the execution Agent. Analyze that response against the supplied task and assertions. Return the assertion result as JSON in your final response.\n\n<user_task>\n${input.userTask}\n</user_task>\n\n<assertions>\n${JSON.stringify(input.assertions, null, 2)}\n</assertions>\n\n<execution_agent_final_response>\n${input.executionFinalResponse}\n</execution_agent_final_response>`
+}
+
+export function buildSkillScorePrompt(input: {
+  readonly runId: string
+  readonly cases: readonly {
+    readonly externalId: number
+    readonly name: string
+    readonly prompt: string
+    readonly target: {
+      readonly executionFinalResponse: string | null
+      readonly assertionAgentRawResponse: string | null
+      readonly assertionAgentJson: unknown | null
+      readonly assertionJsonParseError: string | null
+    } | null
+    readonly baseline: {
+      readonly executionFinalResponse: string | null
+      readonly assertionAgentRawResponse: string | null
+      readonly assertionAgentJson: unknown | null
+      readonly assertionJsonParseError: string | null
+    } | null
+  }[]
+}): string {
+  return `Analyze this complete Skill test Run and return one HTML document in your final response. The HTML is shown directly to the user as the Skill comparison report.\n\n<skill_test_run>\n${JSON.stringify(input, null, 2)}\n</skill_test_run>`
 }

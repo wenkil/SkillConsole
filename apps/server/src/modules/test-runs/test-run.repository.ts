@@ -27,6 +27,7 @@ import {
   skillSnapshots,
   skillSnapshotFiles,
   skillTestArtifacts,
+  skillTestRunScoreReports,
   skillTestRunCases,
   skillTestRunEvents,
   skillTestRuns,
@@ -36,6 +37,7 @@ import {
   type EvalRevisionCaseRow,
   type EvalRevisionFileRow,
   type SkillTestArtifactRow,
+  type SkillTestRunScoreReportRow,
   type SkillTestRunCaseRow,
   type SkillTestRunEventRow,
   type SkillTestRunRow,
@@ -54,6 +56,7 @@ import type {
   TestRunLogPage,
   TestRunLogQuery,
   TestRunPage,
+  TestRunSkillScoreReportView,
   TestRunTraceability,
   TestRunView,
 } from "./test-run.domain.js"
@@ -141,19 +144,6 @@ export interface CollectedArtifactInput {
   readonly contentKind: "text" | "binary"
 }
 
-export interface StoredAssertionResultInput {
-  readonly id: string
-  readonly assertionIndex: number
-  readonly assertion: string
-  readonly status:
-    | "PASSED"
-    | "FAILED"
-    | "INSUFFICIENT_EVIDENCE"
-    | "NOT_EVALUATED"
-  readonly reason: string
-  readonly evidence: readonly StoredAssertionEvidence[]
-}
-
 interface RunWithDisplay {
   readonly run: SkillTestRunRow
   readonly draftId: string | null
@@ -181,7 +171,7 @@ interface CaseEventContext {
 
 function caseEventPayload(
   context: CaseEventContext,
-  phase: "execution" | "grading" | "orchestration",
+  phase: "execution" | "assertion" | "orchestration",
   extra: Readonly<Record<string, unknown>> = {},
 ): Readonly<Record<string, unknown>> {
   return {
@@ -383,10 +373,11 @@ function mapCase(
       row.participantExecutionFingerprint,
     executionStatus: row.executionStatus,
     assessmentStatus: row.assessmentStatus,
-    finalOutput:
-      row.finalOutput === null
-        ? null
-        : String(sanitizeTestRunPublicValue(row.finalOutput)),
+    finalOutput: row.finalOutput,
+    assertionAgentSessionId: row.assertionAgentSessionId,
+    assertionAgentRawResponse: row.assertionAgentRawResponse,
+    assertionAgentJson: row.assertionAgentJson ?? null,
+    assertionJsonParseError: row.assertionJsonParseError,
     usage: row.usage,
     gradingUsage: row.gradingUsage,
     skillInvocationObserved: row.skillInvocationObserved,
@@ -419,6 +410,29 @@ function mapCase(
       row.executionCompletedAt?.toISOString() ?? null,
     assessmentCompletedAt:
       row.assessmentCompletedAt?.toISOString() ?? null,
+  }
+}
+
+function mapSkillScoreReport(
+  row: SkillTestRunScoreReportRow,
+): TestRunSkillScoreReportView {
+  return {
+    id: row.id,
+    status: row.status,
+    documentUrl:
+      row.status === "AVAILABLE"
+        ? `/api/skill-score-reports/${row.id}/document.html`
+        : null,
+    error:
+      row.errorCode && row.errorMessage
+        ? {
+            code: row.errorCode,
+            message: String(sanitizeTestRunPublicValue(row.errorMessage)),
+          }
+        : null,
+    createdAt: row.createdAt.toISOString(),
+    startedAt: row.startedAt?.toISOString() ?? null,
+    completedAt: row.completedAt?.toISOString() ?? null,
   }
 }
 
@@ -847,13 +861,19 @@ export class TestRunRepository {
   }
 
   async getDetail(runId: string): Promise<TestRunDetailView> {
-    const [runRecord, cases] = await Promise.all([
+    const [runRecord, cases, scoreReport] = await Promise.all([
       this.getRunRecord(runId),
       this.database
         .select()
         .from(skillTestRunCases)
         .where(eq(skillTestRunCases.runId, runId))
         .orderBy(asc(skillTestRunCases.executionOrder)),
+      this.database
+        .select()
+        .from(skillTestRunScoreReports)
+        .where(eq(skillTestRunScoreReports.runId, runId))
+        .limit(1)
+        .then((rows) => rows[0] ?? null),
     ])
     const caseIds = cases.map((runCase) => runCase.id)
     const [artifacts, assertions] =
@@ -865,11 +885,13 @@ export class TestRunRepository {
               .from(skillTestArtifacts)
               .where(inArray(skillTestArtifacts.caseId, caseIds))
               .orderBy(asc(skillTestArtifacts.relativePath)),
-            this.database
-              .select()
-              .from(assertionResults)
-              .where(inArray(assertionResults.caseId, caseIds))
-              .orderBy(asc(assertionResults.assertionIndex)),
+            runRecord.run.protocolVersion === "skill-test-run-agent-chain-v6"
+              ? Promise.resolve([])
+              : this.database
+                  .select()
+                  .from(assertionResults)
+                  .where(inArray(assertionResults.caseId, caseIds))
+                  .orderBy(asc(assertionResults.assertionIndex)),
           ])
     const artifactsByCase = groupByCaseId(artifacts)
     const assertionsByCase = groupByCaseId(assertions)
@@ -884,6 +906,7 @@ export class TestRunRepository {
           assertionsByCase.get(runCase.id) ?? [],
         ),
       ),
+      skillScoreReport: scoreReport ? mapSkillScoreReport(scoreReport) : null,
     }
   }
 
@@ -959,13 +982,13 @@ export class TestRunRepository {
       ? query.phase === "execution"
         ? sql<boolean>`(${skillTestRunEvents.type} like 'execution.%'
             or ${skillTestRunEvents.type} like 'case.execution.%')`
-        : query.phase === "grading"
-          ? sql<boolean>`(${skillTestRunEvents.type} like 'grading.%'
-              or ${skillTestRunEvents.type} like 'case.assessment.%')`
+        : query.phase === "assertion"
+          ? sql<boolean>`(${skillTestRunEvents.type} like 'assertion.%'
+              or ${skillTestRunEvents.type} like 'case.assertion.%')`
           : sql<boolean>`(${skillTestRunEvents.type} not like 'execution.%'
               and ${skillTestRunEvents.type} not like 'case.execution.%'
-              and ${skillTestRunEvents.type} not like 'grading.%'
-              and ${skillTestRunEvents.type} not like 'case.assessment.%')`
+              and ${skillTestRunEvents.type} not like 'assertion.%'
+              and ${skillTestRunEvents.type} not like 'case.assertion.%')`
       : undefined
     const rows = await this.database
       .select({ event: skillTestRunEvents })
@@ -1251,7 +1274,7 @@ export class TestRunRepository {
     readonly caseId: string
     readonly sessionId: string
     readonly sourceSequence: number
-    readonly phase: "execution" | "grading"
+    readonly phase: "execution" | "assertion"
     readonly mode: "target_vs_no_skill" | "version_vs_version"
     readonly side: "TARGET" | "BASELINE"
     readonly subjectKind: "no_skill" | "skill_version" | "draft_snapshot"
@@ -1426,12 +1449,6 @@ export class TestRunRepository {
           assessmentCompletedAt: new Date(),
         })
         .where(eq(skillTestRunCases.id, input.caseId))
-      await this.insertNotEvaluatedAssertions(
-        transaction,
-        runCase,
-        input.code,
-        safeMessage,
-      )
       await this.incrementCompletedCases(transaction, runCase.runId)
       const context = await this.getCaseEventContext(transaction, runCase)
       return this.appendEvent(
@@ -1447,7 +1464,7 @@ export class TestRunRepository {
     })
   }
 
-  async beginAssessment(caseId: string): Promise<TestRunEvent> {
+  async beginAssertion(caseId: string): Promise<TestRunEvent> {
     return this.database.transaction(async (transaction) => {
       const runCase = await this.lockCase(transaction, caseId)
       if (
@@ -1456,7 +1473,7 @@ export class TestRunRepository {
       ) {
         throw new DomainError({
           code: "TEST_RUN_CASE_STATE_CONFLICT",
-          message: "The test Case is not ready for assessment.",
+          message: "The test Case is not ready for assertion.",
           kind: "conflict",
           details: {
             caseId,
@@ -1492,13 +1509,13 @@ export class TestRunRepository {
         transaction,
         runCase.runId,
         caseId,
-        "case.assessment.started",
-        caseEventPayload(context, "grading"),
+        "case.assertion.started",
+        caseEventPayload(context, "assertion"),
       )
     })
   }
 
-  async bindGraderSession(
+  async bindAssertionSession(
     caseId: string,
     sessionId: string,
   ): Promise<void> {
@@ -1507,7 +1524,7 @@ export class TestRunRepository {
       if (runCase.assessmentStatus !== "RUNNING") {
         throw new DomainError({
           code: "TEST_RUN_CASE_STATE_CONFLICT",
-          message: "The test Case is not ready to bind a grader.",
+          message: "The test Case is not ready to bind an assertion Agent.",
           kind: "conflict",
           details: { caseId },
         })
@@ -1532,38 +1549,42 @@ export class TestRunRepository {
       }
       await transaction
         .update(skillTestRunCases)
-        .set({ graderAgentSessionId: sessionId, updatedAt: new Date() })
+        .set({ assertionAgentSessionId: sessionId, updatedAt: new Date() })
         .where(eq(skillTestRunCases.id, caseId))
     })
   }
 
-  async completeAssessment(
-    caseId: string,
-    results: readonly StoredAssertionResultInput[],
-    gradingUsage: StoredTestRunUsage | null,
-  ): Promise<TestRunEvent> {
+  async completeAssertion(input: {
+    readonly caseId: string
+    readonly rawResponse: string
+    readonly parsedJson: unknown | null
+    readonly parseError: string | null
+    readonly usage: StoredTestRunUsage | null
+  }): Promise<TestRunEvent> {
     return this.database.transaction(async (transaction) => {
-      const runCase = await this.lockCase(transaction, caseId)
+      const runCase = await this.lockCase(transaction, input.caseId)
       if (runCase.assessmentStatus !== "RUNNING") {
         throw new DomainError({
           code: "TEST_RUN_CASE_STATE_CONFLICT",
-          message: "The test Case assessment is not running.",
+          message: "The test Case assertion is not running.",
           kind: "conflict",
-          details: { caseId, assessmentStatus: runCase.assessmentStatus },
+          details: { caseId: input.caseId, assessmentStatus: runCase.assessmentStatus },
         })
       }
-      await transaction.insert(assertionResults).values(
-        results.map((result) => ({ ...result, caseId })),
-      )
       await transaction
         .update(skillTestRunCases)
         .set({
           assessmentStatus: "COMPLETED",
-          gradingUsage,
+          gradingUsage: input.usage,
+          assertionAgentRawResponse: input.rawResponse,
+          assertionAgentJson: input.parsedJson,
+          assertionJsonParseError: input.parseError,
+          assessmentErrorCode: null,
+          assessmentErrorMessage: null,
           updatedAt: new Date(),
           assessmentCompletedAt: new Date(),
         })
-        .where(eq(skillTestRunCases.id, caseId))
+        .where(eq(skillTestRunCases.id, input.caseId))
       await this.incrementCompletedCases(transaction, runCase.runId)
       await transaction
         .update(skillTestRuns)
@@ -1578,24 +1599,23 @@ export class TestRunRepository {
       return this.appendEvent(
         transaction,
         runCase.runId,
-        caseId,
-        "case.assessment.completed",
-        caseEventPayload(context, "grading", {
-          usage: gradingUsage,
-          results: results.map((result) => ({
-            assertionIndex: result.assertionIndex,
-            status: result.status,
-          })),
+        input.caseId,
+        "case.assertion.completed",
+        caseEventPayload(context, "assertion", {
+          usage: input.usage,
+          jsonParsed: input.parsedJson !== null,
+          ...(input.parseError ? { jsonParseError: input.parseError } : {}),
         }),
       )
     })
   }
 
-  async failAssessment(input: {
+  async failAssertion(input: {
     readonly caseId: string
     readonly code: string
     readonly message: string
-    readonly gradingUsage?: StoredTestRunUsage | null
+    readonly usage?: StoredTestRunUsage | null
+    readonly rawResponse?: string | null
   }): Promise<TestRunEvent> {
     return this.database.transaction(async (transaction) => {
       const runCase = await this.lockCase(transaction, input.caseId)
@@ -1608,19 +1628,16 @@ export class TestRunRepository {
         )
         if (existing) return existing
       }
-      await this.insertNotEvaluatedAssertions(
-        transaction,
-        runCase,
-        input.code,
-        safeMessage,
-      )
       await transaction
         .update(skillTestRunCases)
         .set({
           assessmentStatus: "FAILED",
-          ...(input.gradingUsage !== undefined
-            ? { gradingUsage: input.gradingUsage }
+          ...(input.usage !== undefined ? { gradingUsage: input.usage } : {}),
+          ...(input.rawResponse !== undefined
+            ? { assertionAgentRawResponse: input.rawResponse }
             : {}),
+          assertionAgentJson: null,
+          assertionJsonParseError: null,
           assessmentErrorCode: input.code,
           assessmentErrorMessage: safeMessage,
           updatedAt: new Date(),
@@ -1642,21 +1659,185 @@ export class TestRunRepository {
         transaction,
         runCase.runId,
         input.caseId,
-        "case.assessment.failed",
-        caseEventPayload(context, "grading", {
-          ...(input.gradingUsage !== undefined
-            ? { usage: input.gradingUsage }
-            : {}),
+        "case.assertion.failed",
+        caseEventPayload(context, "assertion", {
+          ...(input.usage !== undefined ? { usage: input.usage } : {}),
           error: { code: input.code, message: safeMessage },
         }),
       )
     })
   }
 
+  async beginSkillScoreReport(runId: string): Promise<{
+    readonly id: string
+    readonly event: TestRunEvent
+  }> {
+    return this.database.transaction(async (transaction) => {
+      const [run] = await transaction
+        .select()
+        .from(skillTestRuns)
+        .where(eq(skillTestRuns.id, runId))
+        .for("update")
+      if (!run) throw runNotFound(runId)
+      const [created] = await transaction
+        .insert(skillTestRunScoreReports)
+        .values({ runId, status: "RUNNING", startedAt: new Date() })
+        .onConflictDoNothing({ target: skillTestRunScoreReports.runId })
+        .returning({ id: skillTestRunScoreReports.id })
+      const [existing] = created
+        ? [{ id: created.id }]
+        : await transaction
+            .select({ id: skillTestRunScoreReports.id })
+            .from(skillTestRunScoreReports)
+            .where(eq(skillTestRunScoreReports.runId, runId))
+            .for("update")
+      if (!existing) throw new Error("Skill score report could not be created.")
+      if (!created) {
+        await transaction
+          .update(skillTestRunScoreReports)
+          .set({ status: "RUNNING", startedAt: new Date(), errorCode: null, errorMessage: null })
+          .where(eq(skillTestRunScoreReports.id, existing.id))
+      }
+      const event = await this.appendEvent(
+        transaction,
+        runId,
+        null,
+        "run.skill-score.started",
+        { phase: "skill-score", reportId: existing.id },
+      )
+      return { id: existing.id, event }
+    })
+  }
+
+  async bindSkillScoreReportSession(
+    reportId: string,
+    sessionId: string,
+  ): Promise<void> {
+    const [updated] = await this.database
+      .update(skillTestRunScoreReports)
+      .set({ agentSessionId: sessionId })
+      .where(
+        and(
+          eq(skillTestRunScoreReports.id, reportId),
+          eq(skillTestRunScoreReports.status, "RUNNING"),
+        ),
+      )
+      .returning({ id: skillTestRunScoreReports.id })
+    if (!updated) {
+      throw new DomainError({
+        code: "TEST_RUN_SKILL_SCORE_STATE_CONFLICT",
+        message: "The Skill score report is not ready to bind its Agent Session.",
+        kind: "conflict",
+        details: { reportId },
+      })
+    }
+  }
+
+  async completeSkillScoreReport(
+    reportId: string,
+    html: string,
+  ): Promise<TestRunEvent> {
+    return this.database.transaction(async (transaction) => {
+      const [report] = await transaction
+        .select()
+        .from(skillTestRunScoreReports)
+        .where(eq(skillTestRunScoreReports.id, reportId))
+        .for("update")
+      if (!report) {
+        throw new DomainError({
+          code: "TEST_RUN_SKILL_SCORE_NOT_FOUND",
+          message: "The requested Skill score report was not found.",
+          kind: "not_found",
+          details: { reportId },
+        })
+      }
+      await transaction
+        .update(skillTestRunScoreReports)
+        .set({
+          status: "AVAILABLE",
+          html,
+          rawResponse: html,
+          errorCode: null,
+          errorMessage: null,
+          completedAt: new Date(),
+        })
+        .where(eq(skillTestRunScoreReports.id, reportId))
+      return this.appendEvent(
+        transaction,
+        report.runId,
+        null,
+        "run.skill-score.completed",
+        { phase: "skill-score", reportId },
+      )
+    })
+  }
+
+  async failSkillScoreReport(input: {
+    readonly reportId: string
+    readonly code: string
+    readonly message: string
+  }): Promise<TestRunEvent> {
+    return this.database.transaction(async (transaction) => {
+      const [report] = await transaction
+        .select()
+        .from(skillTestRunScoreReports)
+        .where(eq(skillTestRunScoreReports.id, input.reportId))
+        .for("update")
+      if (!report) {
+        throw new DomainError({
+          code: "TEST_RUN_SKILL_SCORE_NOT_FOUND",
+          message: "The requested Skill score report was not found.",
+          kind: "not_found",
+          details: { reportId: input.reportId },
+        })
+      }
+      const message = String(sanitizeTestRunPublicValue(input.message))
+      await transaction
+        .update(skillTestRunScoreReports)
+        .set({
+          status: "FAILED",
+          errorCode: input.code,
+          errorMessage: message,
+          completedAt: new Date(),
+        })
+        .where(eq(skillTestRunScoreReports.id, input.reportId))
+      return this.appendEvent(
+        transaction,
+        report.runId,
+        null,
+        "run.skill-score.failed",
+        { phase: "skill-score", reportId: input.reportId, error: { code: input.code, message } },
+      )
+    })
+  }
+
+  async getSkillScoreReportHtml(reportId: string): Promise<string> {
+    const [report] = await this.database
+      .select({ status: skillTestRunScoreReports.status, html: skillTestRunScoreReports.html })
+      .from(skillTestRunScoreReports)
+      .where(eq(skillTestRunScoreReports.id, reportId))
+      .limit(1)
+    if (!report) {
+      throw new DomainError({
+        code: "TEST_RUN_SKILL_SCORE_NOT_FOUND",
+        message: "The requested Skill score report was not found.",
+        kind: "not_found",
+        details: { reportId },
+      })
+    }
+    if (report.status !== "AVAILABLE" || report.html === null) {
+      throw new DomainError({
+        code: "TEST_RUN_SKILL_SCORE_UNAVAILABLE",
+        message: "The Skill score report is not available.",
+        kind: "conflict",
+        details: { reportId, status: report.status },
+      })
+    }
+    return report.html
+  }
+
   async completeRun(input: {
     readonly runId: string
-    readonly target: StoredBenchmarkSide
-    readonly baseline: StoredBenchmarkSide
   }): Promise<TestRunEvent> {
     return this.database.transaction(async (transaction) => {
       const [run] = await transaction
@@ -1684,12 +1865,6 @@ export class TestRunRepository {
           },
         })
       }
-      await transaction.insert(runBenchmarks).values({
-        id: randomUUID(),
-        runId: input.runId,
-        target: input.target,
-        baseline: input.baseline,
-      })
       await transaction
         .update(skillTestRuns)
         .set({
@@ -1703,13 +1878,7 @@ export class TestRunRepository {
         input.runId,
         null,
         "run.completed",
-        {
-          schemaVersion: 1,
-          benchmark: {
-            target: input.target,
-            baseline: input.baseline,
-          },
-        },
+        { schemaVersion: 1 },
       )
     })
   }

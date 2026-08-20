@@ -422,9 +422,9 @@ export function useTestRunDetailController(
         event.type.startsWith("execution.") ||
         event.type.startsWith("case.execution.")
         ? "execution"
-        : event.type.startsWith("grading.") ||
-            event.type.startsWith("case.assessment.")
-          ? "grading"
+        : event.type.startsWith("assertion.") ||
+            event.type.startsWith("case.assertion.")
+          ? "assertion"
           : "orchestration"
       if (
         (logFilters.side && eventCase?.side !== logFilters.side) ||

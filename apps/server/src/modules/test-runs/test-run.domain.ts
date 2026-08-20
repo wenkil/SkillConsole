@@ -171,6 +171,10 @@ export interface TestRunCaseView {
   readonly executionStatus: TestRunCaseExecutionStatus
   readonly assessmentStatus: TestRunCaseAssessmentStatus
   readonly finalOutput: string | null
+  readonly assertionAgentSessionId: string | null
+  readonly assertionAgentRawResponse: string | null
+  readonly assertionAgentJson: unknown | null
+  readonly assertionJsonParseError: string | null
   readonly usage: StoredTestRunUsage | null
   readonly gradingUsage: StoredTestRunUsage | null
   readonly skillInvocationObserved: SkillInvocationObservation | null
@@ -193,8 +197,22 @@ export interface TestRunCaseView {
   readonly assessmentCompletedAt: string | null
 }
 
+export interface TestRunSkillScoreReportView {
+  readonly id: string
+  readonly status: "PENDING" | "RUNNING" | "AVAILABLE" | "FAILED"
+  readonly documentUrl: string | null
+  readonly error: {
+    readonly code: string
+    readonly message: string
+  } | null
+  readonly createdAt: string
+  readonly startedAt: string | null
+  readonly completedAt: string | null
+}
+
 export interface TestRunDetailView extends TestRunView {
   readonly cases: readonly TestRunCaseView[]
+  readonly skillScoreReport: TestRunSkillScoreReportView | null
 }
 
 export interface TestRunPage {
@@ -237,7 +255,11 @@ export interface TestRunLogQuery {
   readonly limit: number
   readonly side?: TestRunCaseSide
   readonly externalId?: number
-  readonly phase?: "execution" | "grading" | "orchestration"
+  readonly phase?:
+    | "execution"
+    | "assertion"
+    | "skill-score"
+    | "orchestration"
 }
 
 interface CreateTestRunInputBase {

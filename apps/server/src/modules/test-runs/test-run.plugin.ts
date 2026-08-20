@@ -6,7 +6,6 @@ import { DraftRevisionService } from "../skill-workspaces/draft-revision.service
 import { LocalSnapshotStorage } from "../skill-workspaces/snapshot-storage.js"
 import { TestRunRepository } from "./test-run.repository.js"
 import { testRunRoutes } from "./test-run.routes.js"
-import { TestRunScorer } from "./test-run-scorer.js"
 import { TestRunService } from "./test-run.service.js"
 import { TestRunStorage } from "./test-run-storage.js"
 
@@ -32,7 +31,6 @@ const testRunModulePlugin: FastifyPluginAsyncTypebox = async (
     ),
     storage,
     agentSessions: application.agentSessionService,
-    scorer: new TestRunScorer(),
     logger: application.log,
   })
   await service.initialize()

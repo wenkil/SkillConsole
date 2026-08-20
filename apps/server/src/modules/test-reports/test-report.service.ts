@@ -187,9 +187,16 @@ export class TestReportService {
 
   private handleRunEvent(event: TestRunEvent): void {
     if (!terminalEventTypes.has(event.type) || this.shuttingDown) return
-    void this.options.repository
-      .ensureForRun(event.runId)
+    void this.options.testRuns
+      .get(event.runId)
+      .then((run) => {
+        if (run.traceability.protocolVersion === "skill-test-run-agent-chain-v6") {
+          return null
+        }
+        return this.options.repository.ensureForRun(event.runId)
+      })
       .then(async (report) => {
+        if (!report) return
         await this.registerReportLog(report.runId, report.id)
         this.launch(report.id)
       })

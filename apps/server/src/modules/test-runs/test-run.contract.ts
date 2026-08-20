@@ -74,6 +74,13 @@ export const TestRunArtifactParamsSchema = Type.Object(
   { additionalProperties: false },
 )
 
+export const TestRunSkillScoreReportParamsSchema = Type.Object(
+  {
+    reportId: Type.String({ format: "uuid" }),
+  },
+  { additionalProperties: false },
+)
+
 export const TestRunListQuerySchema = Type.Object(
   {
     page: Type.Optional(Type.Integer({ minimum: 1 })),
@@ -376,6 +383,24 @@ const CaseErrorSchema = Type.Object(
   { additionalProperties: false },
 )
 
+const TestRunSkillScoreReportSchema = Type.Object(
+  {
+    id: Type.String({ format: "uuid" }),
+    status: Type.Union([
+      Type.Literal("PENDING"),
+      Type.Literal("RUNNING"),
+      Type.Literal("AVAILABLE"),
+      Type.Literal("FAILED"),
+    ]),
+    documentUrl: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
+    error: Type.Union([CaseErrorSchema, Type.Null()]),
+    createdAt: Type.String({ format: "date-time" }),
+    startedAt: NullableDateTimeSchema,
+    completedAt: NullableDateTimeSchema,
+  },
+  { additionalProperties: false },
+)
+
 export const TestRunCaseSchema = Type.Object(
   {
     id: Type.String({ format: "uuid" }),
@@ -398,10 +423,14 @@ export const TestRunCaseSchema = Type.Object(
     participantExecutionFingerprint: HashSchema,
     executionStatus: TestRunCaseExecutionStatusSchema,
     assessmentStatus: TestRunCaseAssessmentStatusSchema,
-    finalOutput: Type.Union([
-      Type.String({ maxLength: 200_000 }),
+    finalOutput: Type.Union([Type.String(), Type.Null()]),
+    assertionAgentSessionId: Type.Union([
+      Type.String({ format: "uuid" }),
       Type.Null(),
     ]),
+    assertionAgentRawResponse: Type.Union([Type.String(), Type.Null()]),
+    assertionAgentJson: Type.Union([Type.Unknown(), Type.Null()]),
+    assertionJsonParseError: Type.Union([Type.String(), Type.Null()]),
     usage: Type.Union([TestRunUsageSchema, Type.Null()]),
     gradingUsage: Type.Union([TestRunUsageSchema, Type.Null()]),
     skillInvocationObserved: Type.Union([
@@ -439,6 +468,7 @@ export const TestRunDetailSchema = Type.Intersect([
   Type.Object(
     {
       cases: Type.Array(TestRunCaseSchema),
+      skillScoreReport: Type.Union([TestRunSkillScoreReportSchema, Type.Null()]),
     },
     { additionalProperties: false },
   ),
@@ -496,7 +526,8 @@ export const TestRunLogsQuerySchema = Type.Object(
     phase: Type.Optional(
       Type.Union([
         Type.Literal("execution"),
-        Type.Literal("grading"),
+        Type.Literal("assertion"),
+        Type.Literal("skill-score"),
         Type.Literal("orchestration"),
       ]),
     ),

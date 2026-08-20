@@ -71,8 +71,10 @@ export {
   skillTestArtifacts,
   skillTestRunCases,
   skillTestRunEvents,
+  skillTestRunScoreReports,
   skillTestRuns,
   skillInvocationObservation,
+  testRunSkillScoreReportStatus,
   testRunCaseAssessmentStatus,
   testRunCaseExecutionStatus,
   testRunCaseSide,
@@ -85,6 +87,7 @@ export {
   type SkillTestArtifactRow,
   type SkillTestRunCaseRow,
   type SkillTestRunEventRow,
+  type SkillTestRunScoreReportRow,
   type SkillTestRunRow,
   type SkillInvocationObservation,
   type StoredBundledScriptUse,
@@ -97,6 +100,7 @@ export {
   type TestRunExecutionPolicy,
   type TestRunMode,
   type TestRunStatus,
+  type TestRunSkillScoreReportStatus,
 } from "./test-runs.js"
 
 export {

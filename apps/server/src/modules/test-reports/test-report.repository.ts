@@ -9,6 +9,7 @@ import {
   gt,
   inArray,
   isNull,
+  ne,
   lte,
   max,
   or,
@@ -496,6 +497,7 @@ export class TestReportRepository {
       .where(
         and(
           inArray(skillTestRuns.status, [...terminalRunStatuses]),
+          ne(skillTestRuns.protocolVersion, "skill-test-run-agent-chain-v6"),
           isNull(skillTestReports.id),
           workspaceId
             ? eq(skillTestRuns.workspaceId, workspaceId)
@@ -527,12 +529,22 @@ export class TestReportRepository {
         workspaceId: skillTestRuns.workspaceId,
         mode: skillTestRuns.mode,
         status: skillTestRuns.status,
+        protocolVersion: skillTestRuns.protocolVersion,
       })
       .from(skillTestRuns)
       .where(eq(skillTestRuns.id, runId))
       .limit(1)
     if (!run || !terminalRunStatuses.includes(run.status as never)) {
       throw runReportNotFound(runId)
+    }
+    if (run.protocolVersion === "skill-test-run-agent-chain-v6") {
+      throw new DomainError({
+        code: "TEST_REPORT_AGENT_CHAIN_UNAVAILABLE",
+        message:
+          "Agent-chain test Runs use the Skill score HTML report instead of the legacy deterministic report.",
+        kind: "conflict",
+        details: { runId },
+      })
     }
     await this.database
       .insert(skillTestReports)

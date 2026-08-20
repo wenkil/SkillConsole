@@ -78,6 +78,11 @@ export const testRunCaseAssessmentStatus = pgEnum(
   ],
 )
 
+export const testRunSkillScoreReportStatus = pgEnum(
+  "test_run_skill_score_report_status",
+  ["PENDING", "RUNNING", "AVAILABLE", "FAILED"],
+)
+
 export const assertionResultStatus = pgEnum(
   "assertion_result_status",
   [
@@ -337,8 +342,15 @@ export const skillTestRunCases = pgTable(
       () => agentSessions.id,
       { onDelete: "restrict" },
     ),
+    assertionAgentSessionId: uuid("assertion_agent_session_id").references(
+      () => agentSessions.id,
+      { onDelete: "restrict" },
+    ),
     workspaceLocator: text("workspace_locator"),
     finalOutput: text("final_output"),
+    assertionAgentRawResponse: text("assertion_agent_raw_response"),
+    assertionAgentJson: jsonb("assertion_agent_json").$type<unknown>(),
+    assertionJsonParseError: text("assertion_json_parse_error"),
     usage: jsonb("usage").$type<StoredTestRunUsage>(),
     gradingUsage: jsonb("grading_usage").$type<StoredTestRunUsage>(),
     skillInvocationObserved: skillInvocationObservation(
@@ -567,6 +579,55 @@ export const assertionResults = pgTable(
   ],
 )
 
+/**
+ * Raw Run-level HTML emitted by the Skill score Agent. The Server deliberately
+ * stores it without interpreting its conclusions or document structure.
+ */
+export const skillTestRunScoreReports = pgTable(
+  "skill_test_run_score_reports",
+  {
+    id: uuid("id").primaryKey().default(sql`uuidv7()`),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => skillTestRuns.id, { onDelete: "cascade" }),
+    status: testRunSkillScoreReportStatus("status")
+      .default("PENDING")
+      .notNull(),
+    agentSessionId: uuid("agent_session_id").references(
+      () => agentSessions.id,
+      { onDelete: "restrict" },
+    ),
+    html: text("html"),
+    rawResponse: text("raw_response"),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", {
+      mode: "date",
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+    startedAt: timestamp("started_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+    completedAt: timestamp("completed_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+  },
+  (table) => [
+    uniqueIndex("skill_test_run_score_reports_run_unique").on(table.runId),
+    uniqueIndex("skill_test_run_score_reports_session_unique")
+      .on(table.agentSessionId)
+      .where(sql`${table.agentSessionId} is not null`),
+    index("skill_test_run_score_reports_status_created_idx").on(
+      table.status,
+      table.createdAt,
+    ),
+  ],
+)
+
 export const runBenchmarks = pgTable(
   "run_benchmarks",
   {
@@ -593,6 +654,8 @@ export type SkillTestRunCaseRow = typeof skillTestRunCases.$inferSelect
 export type SkillTestRunEventRow = typeof skillTestRunEvents.$inferSelect
 export type SkillTestArtifactRow = typeof skillTestArtifacts.$inferSelect
 export type AssertionResultRow = typeof assertionResults.$inferSelect
+export type SkillTestRunScoreReportRow =
+  typeof skillTestRunScoreReports.$inferSelect
 export type RunBenchmarkRow = typeof runBenchmarks.$inferSelect
 export type TestRunStatus = (typeof testRunStatus.enumValues)[number]
 export type TestRunMode = (typeof testRunMode.enumValues)[number]
@@ -605,5 +668,7 @@ export type TestRunCaseExecutionStatus =
   (typeof testRunCaseExecutionStatus.enumValues)[number]
 export type TestRunCaseAssessmentStatus =
   (typeof testRunCaseAssessmentStatus.enumValues)[number]
+export type TestRunSkillScoreReportStatus =
+  (typeof testRunSkillScoreReportStatus.enumValues)[number]
 export type AssertionResultStatus =
   (typeof assertionResultStatus.enumValues)[number]

@@ -28,8 +28,10 @@ function originKey(origin: AgentSessionOrigin): string {
     case "eval_generation":
       return origin.taskId
     case "test_run_execution":
-    case "test_run_grader":
+    case "test_run_assertion":
       return `${origin.runId}:${origin.caseId}:${origin.phase}`
+    case "test_run_skill_score":
+      return `${origin.runId}:${origin.reportId}:${origin.phase}`
     case "report_analyzer":
       return `${origin.reportId}:${origin.analysisId}:${origin.revisionId}`
     case "generic":

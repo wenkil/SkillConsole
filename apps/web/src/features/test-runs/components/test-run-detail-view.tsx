@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   Cpu,
   FileDown,
-  FileChartColumn,
   Fingerprint,
   ListTree,
   LoaderCircle,
@@ -22,7 +21,6 @@ import {
   getPassRate,
   isActiveTestRun,
   isBenchmarkComparable,
-  type TestRunAssertionStatus,
   type TestRunBenchmarkSide,
   type TestRunCase,
   type TestRunLogFilters,
@@ -34,30 +32,6 @@ import { cn } from "@/shared/lib/utils"
 function formatRate(side: TestRunBenchmarkSide): string {
   const rate = getPassRate(side)
   return rate === null ? "—" : `${Math.round(rate * 100)}%`
-}
-
-function AssertionStatus({
-  status,
-}: {
-  status: TestRunAssertionStatus
-}) {
-  return (
-    <span
-      className={cn(
-        "inline-flex border px-1.5 py-0.5 font-mono text-[8px] font-bold",
-        status === "PASSED" &&
-          "border-status-passed/55 text-status-passed",
-        status === "FAILED" &&
-          "border-status-failed/55 text-status-failed",
-        status === "INSUFFICIENT_EVIDENCE" &&
-          "border-status-blocked/55 text-status-blocked",
-        status === "NOT_EVALUATED" &&
-          "border-status-cancelled/55 text-status-cancelled",
-      )}
-    >
-      {status}
-    </span>
-  )
 }
 
 function BenchmarkCard({
@@ -103,6 +77,61 @@ function BenchmarkCard({
   )
 }
 
+function SkillScoreReportPanel({
+  report,
+  labels,
+}: {
+  report: import("@/features/test-runs/model/test-run").TestRunDetail["skillScoreReport"]
+  labels: {
+    readonly title: string
+    readonly pending: string
+    readonly running: string
+    readonly failed: string
+    readonly iframeTitle: string
+  }
+}) {
+  if (!report) {
+    return (
+      <section className="border border-rule-soft bg-paper-muted p-4 text-sm text-muted-foreground">
+        {labels.pending}
+      </section>
+    )
+  }
+  if (report.status === "FAILED") {
+    return (
+      <section className="border border-destructive/45 bg-destructive/5 p-4 text-sm">
+        <strong className="font-mono text-[10px] uppercase">{labels.title}</strong>
+        <p className="mt-2 text-destructive">
+          {report.error?.message ?? labels.failed}
+        </p>
+      </section>
+    )
+  }
+  if (report.status !== "AVAILABLE" || !report.documentUrl) {
+    return (
+      <section className="border border-rule-soft bg-paper-muted p-4 text-sm text-muted-foreground">
+        <strong className="font-mono text-[10px] uppercase text-foreground">{labels.title}</strong>
+        <p className="mt-2">
+          {report.status === "RUNNING" ? labels.running : labels.pending}
+        </p>
+      </section>
+    )
+  }
+  return (
+    <section className="border border-foreground bg-paper-raised">
+      <header className="border-b border-rule-soft px-4 py-3 font-mono text-[10px] font-bold uppercase">
+        {labels.title}
+      </header>
+      <iframe
+        className="h-[36rem] w-full bg-white"
+        sandbox=""
+        src={report.documentUrl}
+        title={labels.iframeTitle}
+      />
+    </section>
+  )
+}
+
 function CaseSidePanel({
   title,
   runCase,
@@ -116,7 +145,7 @@ function CaseSidePanel({
   empty: string
   labels: {
     readonly finalOutput: string
-    readonly assertions: string
+    readonly assertionResponse: string
     readonly artifacts: string
     readonly observability: string
     readonly skillInvocation: string
@@ -197,41 +226,11 @@ function CaseSidePanel({
         </div>
         <div>
           <span className="font-mono text-[9px] text-muted-foreground uppercase">
-            {labels.assertions}
+            {labels.assertionResponse}
           </span>
-          <div className="mt-1.5 grid gap-2">
-            {runCase.assertionResults.length === 0 ? (
-              <span className="text-xs text-muted-foreground">—</span>
-            ) : (
-              runCase.assertionResults.map((result) => (
-                <article
-                  className="border border-rule-soft p-3 text-[11px] leading-5"
-                  key={result.id}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <strong>{result.assertion}</strong>
-                    <AssertionStatus status={result.status} />
-                  </div>
-                  <p className="mt-1.5 text-muted-foreground">
-                    {result.reason}
-                  </p>
-                  {result.evidence.map((evidence, index) => (
-                    <div
-                      className="mt-2 border-l-2 border-technical pl-2 font-mono text-[9px]"
-                      key={`${result.id}:${index}`}
-                    >
-                      {evidence.source} · {evidence.reference}
-                      {evidence.excerpt ? (
-                        <span className="mt-1 block text-muted-foreground">
-                          {evidence.excerpt}
-                        </span>
-                      ) : null}
-                    </div>
-                  ))}
-                </article>
-              ))
-            )}
-          </div>
+          <pre className="mt-1.5 max-h-44 overflow-auto whitespace-pre-wrap break-words border border-rule-soft bg-paper-muted p-3 font-mono text-[10px] leading-5">
+            {runCase.assertionAgentRawResponse ?? "—"}
+          </pre>
         </div>
         <div>
           <span className="font-mono text-[9px] text-muted-foreground uppercase">
@@ -320,7 +319,7 @@ export function TestRunDetailView({
   const [logSide, setLogSide] = useState<"" | "TARGET" | "BASELINE">("")
   const [logExternalId, setLogExternalId] = useState("")
   const [logPhase, setLogPhase] = useState<
-    "" | "execution" | "grading" | "orchestration"
+    "" | "execution" | "assertion" | "orchestration"
   >("")
   const logFilters = useMemo<TestRunLogFilters>(
     () => ({
@@ -505,21 +504,7 @@ export function TestRunDetailView({
               <Square data-icon="inline-start" />
               {t("detail.cancel")}
             </Button>
-          ) : (
-            <Button
-              className="rounded-none"
-              onClick={() =>
-                navigate(
-                  `/workbenches/${workspace.id}/reports/by-run/${run.id}`,
-                )
-              }
-              type="button"
-              variant="outline"
-            >
-              <FileChartColumn data-icon="inline-start" />
-              {t("detail.viewReport")}
-            </Button>
-          )}
+          ) : null}
           </div>
         </div>
         <div className="mt-4 h-1.5 border border-rule bg-paper-muted">
@@ -635,6 +620,18 @@ export function TestRunDetailView({
           </aside>
 
           <div className="min-h-0 overflow-y-auto p-5">
+            <div className="mb-4">
+              <SkillScoreReportPanel
+                labels={{
+                  title: t("detail.skillScoreReport"),
+                  pending: t("detail.skillScorePending"),
+                  running: t("detail.skillScoreRunning"),
+                  failed: t("detail.skillScoreFailed"),
+                  iframeTitle: t("detail.skillScoreIframeTitle"),
+                }}
+                report={run.skillScoreReport}
+              />
+            </div>
             {target || baseline ? (
               <section className="mb-4 border border-rule-soft bg-paper-muted p-4">
                 <div className="ui-label">
@@ -662,7 +659,7 @@ export function TestRunDetailView({
                   runActive={isActiveTestRun(run.status)}
                   labels={{
                     finalOutput: t("detail.finalOutput"),
-                    assertions: t("detail.assertions"),
+                    assertionResponse: t("detail.assertionResponse"),
                     artifacts: t("detail.artifacts"),
                     observability: t("detail.observability"),
                     skillInvocation: t("detail.skillInvocation"),
@@ -752,7 +749,7 @@ export function TestRunDetailView({
                     event.target.value as
                       | ""
                       | "execution"
-                      | "grading"
+                      | "assertion"
                       | "orchestration",
                   )
                 }
@@ -762,8 +759,8 @@ export function TestRunDetailView({
                 <option value="execution">
                   {t("detail.phaseExecution")}
                 </option>
-                <option value="grading">
-                  {t("detail.phaseGrading")}
+                <option value="assertion">
+                  {t("detail.phaseAssertion")}
                 </option>
                 <option value="orchestration">
                   {t("detail.phaseOrchestration")}

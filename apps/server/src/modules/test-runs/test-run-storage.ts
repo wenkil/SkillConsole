@@ -215,7 +215,7 @@ async function assertImmutableFileSet(
 export interface PreparedTestRunCaseWorkspace {
   readonly locator: string
   readonly absolutePath: string
-  readonly gradingLocator: string
+  readonly assertionLocator: string
   readonly inputPaths: readonly string[]
   readonly taskPath: string
 }
@@ -292,7 +292,7 @@ export class TestRunStorage {
     )
   }
 
-  getGradingLocator(runId: string, caseId: string): string {
+  getAssertionLocator(runId: string, caseId: string): string {
     assertInternalId(runId)
     assertInternalId(caseId)
     return path.posix.join(
@@ -300,7 +300,7 @@ export class TestRunStorage {
       runId,
       "cases",
       caseId,
-      "grading",
+      "assertion",
     )
   }
 
@@ -310,10 +310,10 @@ export class TestRunStorage {
     return workspace
   }
 
-  getGradingPath(runId: string, caseId: string): string {
-    const grading = path.join(this.getCaseRoot(runId, caseId), "grading")
-    assertWithinRoot(this.root, grading)
-    return grading
+  getAssertionPath(runId: string, caseId: string): string {
+    const assertion = path.join(this.getCaseRoot(runId, caseId), "assertion")
+    assertWithinRoot(this.root, assertion)
+    return assertion
   }
 
   async prepareCase(
@@ -326,7 +326,7 @@ export class TestRunStorage {
   ): Promise<PreparedTestRunCaseWorkspace> {
     const caseRoot = this.getCaseRoot(runId, caseId)
     const workspace = this.getWorkspacePath(runId, caseId)
-    const grading = this.getGradingPath(runId, caseId)
+    const assertion = this.getAssertionPath(runId, caseId)
     await rm(caseRoot, { recursive: true, force: true })
     await Promise.all([
       mkdir(path.join(workspace, ".claude"), { recursive: true }),
@@ -335,8 +335,8 @@ export class TestRunStorage {
       mkdir(path.join(workspace, "outputs", ".tmp"), {
         recursive: true,
       }),
-      mkdir(path.join(grading, ".claude"), { recursive: true }),
-      mkdir(path.join(grading, "outputs", ".tmp"), {
+      mkdir(path.join(assertion, ".claude"), { recursive: true }),
+      mkdir(path.join(assertion, "outputs", ".tmp"), {
         recursive: true,
       }),
     ])
@@ -419,7 +419,7 @@ export class TestRunStorage {
       return {
         locator: this.getWorkspaceLocator(runId, caseId),
         absolutePath: workspace,
-        gradingLocator: this.getGradingLocator(runId, caseId),
+        assertionLocator: this.getAssertionLocator(runId, caseId),
         inputPaths,
         taskPath,
       }
@@ -565,121 +565,6 @@ export class TestRunStorage {
     )
   }
 
-  async prepareGradingTask(
-    runId: string,
-    caseId: string,
-    input: {
-      readonly rubric: string
-      readonly userPrompt: string
-      readonly expectedOutput: string
-      readonly assertions: readonly string[]
-      readonly finalOutput: string
-      readonly artifacts: readonly (SnapshotManifestFile & {
-        readonly content: string | null
-      })[]
-    },
-  ): Promise<{
-    readonly absolutePath: string
-    readonly taskPath: string
-    readonly outputPath: string
-  }> {
-    const gradingRoot = this.getGradingPath(runId, caseId)
-    const inputsRoot = path.join(gradingRoot, "inputs")
-    const artifactEvidenceRoot = path.join(
-      inputsRoot,
-      "artifacts",
-      "evidence",
-    )
-    const outputPath = path.join(gradingRoot, "outputs", "grading.json")
-    await mkdir(artifactEvidenceRoot, { recursive: true })
-
-    const rubricPath = path.join(inputsRoot, "rubric.md")
-    const testCasePath = path.join(inputsRoot, "test-case.json")
-    const finalOutputPath = path.join(inputsRoot, "executor-final-output.txt")
-    const artifactIndexPath = path.join(inputsRoot, "artifacts", "index.json")
-    await Promise.all([
-      writeFile(rubricPath, input.rubric, { encoding: "utf8", flag: "wx" }),
-      writeFile(
-        testCasePath,
-        `${JSON.stringify(
-          {
-            userPrompt: input.userPrompt,
-            expectedOutput: input.expectedOutput,
-            assertions: input.assertions.map((assertion, index) => ({
-              index,
-              assertion,
-            })),
-          },
-          null,
-          2,
-        )}\n`,
-        { encoding: "utf8", flag: "wx" },
-      ),
-      writeFile(finalOutputPath, input.finalOutput, {
-        encoding: "utf8",
-        flag: "wx",
-      }),
-    ])
-
-    const artifactIndex = []
-    for (const artifact of input.artifacts) {
-      let evidencePath: string | null = null
-      if (artifact.content !== null) {
-        assertEvalRelativePath(artifact.relativePath)
-        const evidenceFile = path.join(
-          artifactEvidenceRoot,
-          ...artifact.relativePath.split("/"),
-        )
-        assertWithinRoot(artifactEvidenceRoot, evidenceFile)
-        await mkdir(path.dirname(evidenceFile), { recursive: true })
-        await writeFile(evidenceFile, artifact.content, {
-          encoding: "utf8",
-          flag: "wx",
-        })
-        evidencePath = evidenceFile
-      }
-      artifactIndex.push({
-        path: artifact.relativePath,
-        sha256: artifact.sha256,
-        byteSize: artifact.byteSize,
-        mediaTypeHint: artifact.mediaTypeHint,
-        contentKind: artifact.contentKind,
-        evidencePath,
-      })
-    }
-    await writeFile(
-      artifactIndexPath,
-      `${JSON.stringify({ artifacts: artifactIndex }, null, 2)}\n`,
-      { encoding: "utf8", flag: "wx" },
-    )
-
-    const taskPath = path.join(inputsRoot, "task.json")
-    await writeFile(
-      taskPath,
-      `${JSON.stringify(
-        {
-          schemaVersion: "test-run-grading-task.v1",
-          rubricPath,
-          testCasePath,
-          executorFinalOutputPath: finalOutputPath,
-          artifactIndexPath,
-          outputPath,
-        },
-        null,
-        2,
-      )}\n`,
-      { encoding: "utf8", flag: "wx" },
-    )
-    return { absolutePath: gradingRoot, taskPath, outputPath }
-  }
-
-  readGradingOutput(runId: string, caseId: string): Promise<string> {
-    return readFile(
-      path.join(this.getGradingPath(runId, caseId), "outputs", "grading.json"),
-      "utf8",
-    )
-  }
-
   async collectArtifacts(
     runId: string,
     caseId: string,
@@ -801,7 +686,7 @@ export class TestRunStorage {
       ),
       rm(
         path.join(
-          this.getGradingPath(runId, caseId),
+          this.getAssertionPath(runId, caseId),
           ".claude",
           "settings.json",
         ),
@@ -817,7 +702,7 @@ export class TestRunStorage {
       ),
       rm(
         path.join(
-          this.getGradingPath(runId, caseId),
+          this.getAssertionPath(runId, caseId),
           "outputs",
           ".tmp",
         ),

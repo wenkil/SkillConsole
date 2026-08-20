@@ -129,12 +129,18 @@ export type AgentSessionOrigin =
       readonly phase: "execution"
     }
   | {
-      readonly type: "test_run_grader"
+      readonly type: "test_run_assertion"
       readonly runId: string
       readonly caseId: string
       readonly externalId: number
       readonly side: "TARGET" | "BASELINE"
-      readonly phase: "grading"
+      readonly phase: "assertion"
+    }
+  | {
+      readonly type: "test_run_skill_score"
+      readonly runId: string
+      readonly reportId: string
+      readonly phase: "skill-score"
     }
   | {
       readonly type: "report_analyzer"

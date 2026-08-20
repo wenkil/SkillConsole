@@ -4,7 +4,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
-  FileChartColumn,
   FlaskConical,
   LoaderCircle,
   Plus,
@@ -360,24 +359,6 @@ export function TestRunsWorkbenchView({
                         <Eye data-icon="inline-start" />
                         {t("list.view")}
                       </Button>
-                      {!["PREPARING", "RUNNING", "SCORING", "CANCELING"].includes(
-                        run.status,
-                      ) ? (
-                        <Button
-                          className="rounded-none"
-                          onClick={() =>
-                            navigate(
-                              `/workbenches/${workspace.id}/reports/by-run/${run.id}`,
-                            )
-                          }
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                        >
-                          <FileChartColumn data-icon="inline-start" />
-                          {t("list.viewReport")}
-                        </Button>
-                      ) : null}
                       </div>
                     </td>
                   </tr>

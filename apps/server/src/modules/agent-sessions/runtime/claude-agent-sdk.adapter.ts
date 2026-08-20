@@ -15,7 +15,6 @@ import type {
 } from "../agent-session.domain.js"
 import { AsyncMessageQueue } from "./async-message-queue.js"
 import {
-  classifyClaudeErrorText,
   classifySdkMessageFailure,
   createClaudeError,
 } from "./claude-error-classifier.js"
@@ -127,9 +126,7 @@ function summarizeSdkMessage(message: SDKMessage): AgentRuntimeDiagnostic {
 }
 
 function classifyRuntimeFailure(error: unknown): AgentRuntimeFailure {
-  const classified = classifyClaudeErrorText(error)
-  const failure =
-    classified ?? createClaudeError("CLAUDE_PROCESS_FAILED")
+  const failure = createClaudeError("CLAUDE_PROCESS_FAILED")
   const terminalCodes = new Set([
     "CLAUDE_AUTHENTICATION_FAILED",
     "CLAUDE_ORGANIZATION_NOT_ALLOWED",

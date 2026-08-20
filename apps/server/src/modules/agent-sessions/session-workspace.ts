@@ -114,7 +114,7 @@ export class AgentSessionWorkspaceStore {
       segments.length === 5 &&
       segments[0] === "test-runs" &&
       segments[2] === "cases" &&
-      (segments[4] === "workspace" || segments[4] === "grading")
+      (segments[4] === "workspace" || segments[4] === "assertion")
     const isTestReportAnalysisWorkspace =
       segments.length === 3 &&
       segments[0] === "test-report-analyses" &&
@@ -196,10 +196,18 @@ export class AgentSessionWorkspaceStore {
       const redactedValues = [rawSettings]
       let defaultPermissionMode: PermissionMode | undefined
 
+      let parsed: {
+          readonly permissions?: { readonly defaultMode?: unknown }
+        } | null = null
       try {
-        const parsed = JSON.parse(rawSettings) as {
+        parsed = JSON.parse(rawSettings) as {
           readonly permissions?: { readonly defaultMode?: unknown }
         }
+      } catch {
+        // Claude Agent SDK owns validation for settings outside the explicit
+        // permission mode that SkillConsole forwards.
+      }
+      if (parsed) {
         const configuredMode = parsed.permissions?.defaultMode
         if (configuredMode !== undefined) {
           if (
@@ -213,15 +221,6 @@ export class AgentSessionWorkspaceStore {
           defaultPermissionMode = configuredMode as PermissionMode
         }
         collectSensitiveSettingValues(parsed, redactedValues)
-      } catch (error) {
-        if (
-          error instanceof Error &&
-          error.message.includes("permissions.defaultMode")
-        ) {
-          throw error
-        }
-        // Claude Agent SDK owns validation for all settings other than the
-        // permission mode that SkillConsole must explicitly forward.
       }
 
       return {

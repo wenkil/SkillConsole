@@ -19,6 +19,7 @@ import {
   TestRunPageSchema,
   TestRunParamsSchema,
   TestRunSchema,
+  TestRunSkillScoreReportParamsSchema,
   TestRunStartHeadersSchema,
   WorkspaceTestRunParamsSchema,
 } from "./test-run.contract.js"
@@ -102,6 +103,14 @@ function serializeRun(run: TestRunView) {
 function serializeRunDetail(run: TestRunDetailView) {
   return {
     ...serializeRun(run),
+    skillScoreReport: run.skillScoreReport
+      ? {
+          ...run.skillScoreReport,
+          error: run.skillScoreReport.error
+            ? { ...run.skillScoreReport.error }
+            : null,
+        }
+      : null,
     cases: run.cases.map((runCase) => ({
       ...runCase,
       assertions: [...runCase.assertions],
@@ -214,6 +223,30 @@ export const testRunRoutes: FastifyPluginAsyncTypebox = async (
           serializeRunDetail(
             await service.getDetail(request.params.runId),
           ),
+        ),
+  )
+
+  application.get(
+    "/api/skill-score-reports/:reportId/document.html",
+    {
+      schema: {
+        tags: ["test-runs"],
+        summary: "Read the raw HTML Skill score report for one test Run",
+        params: TestRunSkillScoreReportParamsSchema,
+        response: {
+          200: Type.String({ contentMediaType: "text/html" }),
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) =>
+      reply
+        .header("Cache-Control", "private, no-store")
+        .header("Content-Security-Policy", "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data: https:")
+        .type("text/html; charset=utf-8")
+        .send(
+          await service.getSkillScoreReportHtml(request.params.reportId),
         ),
   )
 

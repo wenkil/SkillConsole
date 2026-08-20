@@ -158,151 +158,6 @@ function classifyHttpStatus(status: number | null | undefined) {
   return null
 }
 
-export function classifyClaudeErrorText(
-  value: unknown,
-): AgentSessionError | null {
-  const details = value instanceof Error ? value.message : String(value ?? "")
-  const normalized = details.toLowerCase()
-
-  const matches = (...needles: readonly string[]) =>
-    needles.some((needle) => normalized.includes(needle))
-
-  if (
-    matches(
-      "oauth_org_not_allowed",
-      "organization is not allowed",
-      "org is not allowed",
-      "organization not allowed",
-    )
-  ) {
-    return createClaudeError("CLAUDE_ORGANIZATION_NOT_ALLOWED")
-  }
-  if (
-    matches(
-      "out_of_credits",
-      "credits required",
-      "credit balance",
-      "insufficient credits",
-    )
-  ) {
-    return createClaudeError("CLAUDE_CREDITS_EXHAUSTED")
-  }
-  if (matches("billing", "payment required", "purchase credits")) {
-    return createClaudeError("CLAUDE_BILLING_ERROR")
-  }
-  if (
-    matches(
-      "not logged in",
-      "please run /login",
-      "authentication",
-      "api key",
-      "unauthorized",
-      "invalid token",
-      "invalid credential",
-      "oauth token",
-    )
-  ) {
-    return createClaudeError("CLAUDE_AUTHENTICATION_FAILED")
-  }
-  if (matches("rate limit", "too many requests", "status 429", "http 429")) {
-    return createClaudeError("CLAUDE_RATE_LIMITED")
-  }
-  if (matches("overloaded", "status 529", "http 529")) {
-    return createClaudeError("CLAUDE_SERVICE_OVERLOADED")
-  }
-  if (
-    matches(
-      "max output token",
-      "maximum output token",
-      "stop_reason=max_tokens",
-    )
-  ) {
-    return createClaudeError("CLAUDE_MAX_OUTPUT_TOKENS")
-  }
-  if (
-    matches(
-      "prompt is too long",
-      "prompt too long",
-      "context window",
-      "request too large",
-    )
-  ) {
-    return createClaudeError("CLAUDE_PROMPT_TOO_LONG")
-  }
-  if (
-    matches(
-      "model not found",
-      "unknown model",
-      "model_not_found",
-      "model is not supported",
-      "unsupported model",
-    ) ||
-    (normalized.includes("model") &&
-      normalized.includes("is not supported"))
-  ) {
-    return createClaudeError("CLAUDE_MODEL_NOT_FOUND")
-  }
-  if (matches("permission denied", "not permitted", "tool use denied")) {
-    return createClaudeError("CLAUDE_PERMISSION_DENIED")
-  }
-  if (matches("timed out", "timeout", "etimedout")) {
-    return createClaudeError("CLAUDE_REQUEST_TIMEOUT")
-  }
-  if (
-    matches(
-      "connection closed mid-response",
-      "response above may be incomplete",
-      "stream was interrupted",
-      "stream interrupted",
-      "aborted streaming",
-    )
-  ) {
-    return createClaudeError("CLAUDE_STREAM_ABORTED")
-  }
-  if (
-    matches(
-      "network error",
-      "connection error",
-      "econnreset",
-      "econnrefused",
-      "enotfound",
-      "socket hang up",
-    )
-  ) {
-    return createClaudeError("CLAUDE_NETWORK_ERROR")
-  }
-  if (matches("model refused", "stop_reason=refusal")) {
-    return createClaudeError("CLAUDE_MODEL_REFUSED")
-  }
-  if (
-    matches(
-      "invalid request",
-      "invalid_request",
-      "malformed request",
-      "status 400",
-      "http 400",
-    )
-  ) {
-    return createClaudeError("CLAUDE_INVALID_REQUEST")
-  }
-  if (
-    matches(
-      "native cli binary",
-      "invalid setting",
-      "settings.json",
-      "configuration",
-      "enoent",
-      "command not found",
-    )
-  ) {
-    return createClaudeError("CLAUDE_CONFIGURATION_INVALID")
-  }
-  if (matches("server error", "server_error", "internal server error")) {
-    return createClaudeError("CLAUDE_SERVER_ERROR")
-  }
-  return null
-}
-
 function classifyStopReason(
   stopReason: string | null,
 ): AgentSessionError | null {
@@ -312,7 +167,7 @@ function classifyStopReason(
   if (stopReason === "refusal") {
     return createClaudeError("CLAUDE_MODEL_REFUSED")
   }
-  return classifyClaudeErrorText(stopReason)
+  return null
 }
 
 function classifyTerminalReason(
@@ -350,11 +205,6 @@ export function classifyClaudeResult(
   if (stopError) return stopError
 
   if (message.subtype === "success") {
-    const resultError = classifyClaudeErrorText(message.result)
-    if (resultError && (message.is_error || hasNoUsage(message))) {
-      return resultError
-    }
-
     const statusError = classifyHttpStatus(message.api_error_status)
     if (statusError) return createClaudeError(statusError)
 
@@ -369,11 +219,9 @@ export function classifyClaudeResult(
     if (message.permission_denials.length > 0) {
       return createClaudeError("CLAUDE_PERMISSION_DENIED")
     }
-    return resultError ?? createClaudeError("CLAUDE_EXECUTION_FAILED")
+    return createClaudeError("CLAUDE_EXECUTION_FAILED")
   }
 
-  const detailsError = classifyClaudeErrorText(message.errors.join(" "))
-  if (detailsError) return detailsError
   if (priorFailure) return priorFailure
   if (message.permission_denials.length > 0) {
     return createClaudeError("CLAUDE_PERMISSION_DENIED")
@@ -389,11 +237,6 @@ export function classifySdkMessageFailure(
     return classifyClaudeAssistantError(message.error)
   }
   if (message.type === "auth_status") {
-    const authError = classifyClaudeErrorText([
-      message.error,
-      ...message.output,
-    ].join(" "))
-    if (authError) return authError
     if (message.error) {
       return createClaudeError("CLAUDE_AUTHENTICATION_FAILED")
     }

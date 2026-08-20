@@ -98,7 +98,13 @@ interface SessionLogHandle {
 
 type GroupedSessionOrigin = Extract<
   AgentSessionOrigin,
-  { readonly type: "test_run_execution" | "test_run_grader" | "report_analyzer" }
+  {
+    readonly type:
+      | "test_run_execution"
+      | "test_run_assertion"
+      | "test_run_skill_score"
+      | "report_analyzer"
+  }
 >
 
 interface RunLogManifestSession {
@@ -112,7 +118,7 @@ interface RunLogManifestSession {
 
 interface RunLogManifestSideSessions {
   readonly execution: RunLogManifestSession | null
-  readonly grading: RunLogManifestSession | null
+  readonly assertion: RunLogManifestSession | null
 }
 
 interface RunLogManifestCase {
@@ -134,6 +140,7 @@ interface RunLogManifestReport {
     readonly analysisId: string
     readonly revisionId: string
   }[]
+  readonly skillScore: RunLogManifestSession | null
 }
 
 interface RunLogManifest {
@@ -148,13 +155,20 @@ interface RunLogManifest {
 function isGroupedSessionOrigin(
   origin: AgentSessionOrigin,
 ): origin is GroupedSessionOrigin {
-  if (origin.type === "test_run_execution" || origin.type === "test_run_grader") {
+  if (origin.type === "test_run_execution" || origin.type === "test_run_assertion") {
     return (
       typeof origin.runId === "string" &&
       typeof origin.caseId === "string" &&
       Number.isSafeInteger(origin.externalId) &&
       (origin.side === "TARGET" || origin.side === "BASELINE") &&
-      (origin.phase === "execution" || origin.phase === "grading")
+      (origin.phase === "execution" || origin.phase === "assertion")
+    )
+  }
+  if (origin.type === "test_run_skill_score") {
+    return (
+      typeof origin.runId === "string" &&
+      typeof origin.reportId === "string" &&
+      origin.phase === "skill-score"
     )
   }
   return (
@@ -193,6 +207,9 @@ function canonicalRelativePath(
       sessionLeaf,
     )
   }
+  if (origin.type === "test_run_skill_score") {
+    return path.posix.join(origin.runId, "skill-score", origin.reportId, sessionLeaf)
+  }
   return path.posix.join(
     origin.runId,
     "cases",
@@ -216,17 +233,24 @@ function emptyRunLogManifest(runId: string): RunLogManifest {
 }
 
 function emptyRunLogManifestSideSessions(): RunLogManifestSideSessions {
-  return { execution: null, grading: null }
+  return { execution: null, assertion: null }
 }
 
 function metadataContext(origin: AgentSessionOrigin): Readonly<Record<string, unknown>> {
-  if (origin.type === "test_run_execution" || origin.type === "test_run_grader") {
+  if (origin.type === "test_run_execution" || origin.type === "test_run_assertion") {
     return {
       runId: origin.runId,
       caseKey: caseKey(origin.externalId),
       caseId: origin.caseId,
       externalId: origin.externalId,
       side: origin.side,
+      phase: origin.phase,
+    }
+  }
+  if (origin.type === "test_run_skill_score") {
+    return {
+      runId: origin.runId,
+      reportId: origin.reportId,
       phase: origin.phase,
     }
   }
@@ -405,6 +429,7 @@ export class AgentSessionLogManager {
           url: `/reports/${reportId}`,
           relativePath: path.posix.join("report", reportId),
           analyses: existingReport?.analyses ?? [],
+          skillScore: existingReport?.skillScore ?? null,
         },
       } satisfies RunLogManifest)
     })
@@ -861,7 +886,7 @@ export class AgentSessionLogManager {
       let cases = [...manifest.cases]
       let report = manifest.report
       if (origin.type === "test_run_execution" ||
-          origin.type === "test_run_grader") {
+          origin.type === "test_run_assertion") {
         const existingCase = cases.find(
           (item) => item.externalId === origin.externalId,
         )
@@ -917,6 +942,21 @@ export class AgentSessionLogManager {
               revisionId: origin.revisionId,
             },
           ],
+          skillScore: existingReport?.skillScore ?? null,
+        }
+      }
+      if (origin.type === "test_run_skill_score") {
+        const existingReport = report?.reportId === origin.reportId
+          ? report
+          : null
+        report = {
+          reportId: origin.reportId,
+          url: existingReport?.url ?? `/test-runs/${origin.runId}`,
+          relativePath:
+            existingReport?.relativePath ??
+            path.posix.join("skill-score", origin.reportId),
+          analyses: existingReport?.analyses ?? [],
+          skillScore: entry,
         }
       }
       await atomicWriteJson(manifestPath, {

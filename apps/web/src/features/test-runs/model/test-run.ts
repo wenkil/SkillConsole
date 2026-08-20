@@ -18,7 +18,7 @@ export type TestRunExecutionPolicy =
 
 export type TestRunLogPhase =
   | "execution"
-  | "grading"
+  | "assertion"
   | "orchestration"
 
 export type SkillInvocationObservation =
@@ -199,6 +199,10 @@ export interface TestRunCase {
   executionStatus: TestRunCaseExecutionStatus
   assessmentStatus: TestRunCaseAssessmentStatus
   finalOutput: string | null
+  assertionAgentSessionId: string | null
+  assertionAgentRawResponse: string | null
+  assertionAgentJson: unknown | null
+  assertionJsonParseError: string | null
   usage: TestRunUsage | null
   gradingUsage: TestRunUsage | null
   executionError: { code: string; message: string } | null
@@ -237,6 +241,15 @@ export interface TestRunCase {
 
 export interface TestRunDetail extends TestRunView {
   cases: TestRunCase[]
+  skillScoreReport: {
+    id: string
+    status: "PENDING" | "RUNNING" | "AVAILABLE" | "FAILED"
+    documentUrl: string | null
+    error: { code: string; message: string } | null
+    createdAt: string
+    startedAt: string | null
+    completedAt: string | null
+  } | null
 }
 
 export interface TestRunPage {

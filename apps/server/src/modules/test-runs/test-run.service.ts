@@ -13,7 +13,6 @@ import {
 } from "../agent-sessions/agent-session.domain.js"
 import type { AgentSessionService } from "../agent-sessions/agent-session.service.js"
 import { DraftRevisionService } from "../skill-workspaces/draft-revision.service.js"
-import { calculateTestRunBenchmark } from "./test-run-benchmark.js"
 import type {
   CreateTestRunInput,
   TestRunDetailView,
@@ -27,14 +26,11 @@ import type {
 } from "./test-run.domain.js"
 import { TestRunEventBus } from "./test-run-event-bus.js"
 import {
-  resolveEvidenceAnchors,
-  TestRunGraderProtocolError,
-} from "./test-run-grader-protocol.js"
-import {
   buildExecutionPrompt,
   buildExecutionPromptProtocolVersion,
   buildExecutionSkillPolicyFingerprint,
-  buildGraderPrompt,
+  buildAssertionPrompt,
+  buildSkillScorePrompt,
   type TestRunExecutionSkillPolicy,
 } from "./test-run-prompt.js"
 import {
@@ -50,14 +46,10 @@ import {
   forTestRunWorkspace,
   type TestRunRuntimeEnvironment,
 } from "./test-run-runtime-environment.js"
-import {
-  TestRunScorer,
-} from "./test-run-scorer.js"
 import { TestRunStorage } from "./test-run-storage.js"
 
-export const testRunProtocolVersion = "skill-test-run-v5"
+export const testRunProtocolVersion = "skill-test-run-agent-chain-v6"
 const projectSettingsPermissionPolicyVersion = "root-settings-explicit-v2"
-const maxFinalOutputCharacters = 200_000
 const executionLimits = {
   timeoutMs: 1_800_000,
 } as const
@@ -82,7 +74,6 @@ export interface TestRunServiceOptions {
   readonly draftRevisions: DraftRevisionService
   readonly storage: TestRunStorage
   readonly agentSessions: AgentSessionService
-  readonly scorer: TestRunScorer
   readonly logger: TestRunLogger
 }
 
@@ -91,6 +82,16 @@ interface MonitoredSessionResult {
   readonly finalOutput: string
   readonly usage: StoredTestRunUsage | null
   readonly observations: ExecutionObservations
+  readonly error: {
+    readonly code: string
+    readonly message: string
+  } | null
+}
+
+interface MonitoredScoreSessionResult {
+  readonly status: "COMPLETED" | "CANCELED" | "INTERRUPTED" | "FAILED"
+  readonly finalOutput: string
+  readonly usage: StoredTestRunUsage | null
   readonly error: {
     readonly code: string
     readonly message: string
@@ -119,6 +120,15 @@ interface SemanticRuntimeConfiguration {
 export interface TestRunPromptVersions {
   readonly executionPromptVersion: string
   readonly graderProtocolVersion: string
+}
+
+function buildAgentChainProtocolVersion(
+  assertionPromptVersion: string,
+  scorePromptVersion: string,
+): string {
+  return `test-run-agent-chain@sha256:${sha256(
+    JSON.stringify({ assertionPromptVersion, scorePromptVersion }),
+  )}`
 }
 
 function sha256(value: Buffer | string): string {
@@ -442,22 +452,6 @@ function collectStringValues(value: unknown): readonly string[] {
   return []
 }
 
-export const testRunToolFailureRetryLimit = 3
-
-export type ToolFailureCategory =
-  | "permission_denied"
-  | "path_not_found"
-  | "read_only"
-  | "invalid_arguments"
-  | "command_failed"
-  | "tool_error"
-
-export interface ObservedToolUse {
-  readonly toolUseId: string
-  readonly name: string
-  readonly input: Readonly<Record<string, unknown>>
-}
-
 export function extractInvokedSkillName(
   input: Readonly<Record<string, unknown>>,
 ): string | null {
@@ -468,111 +462,6 @@ export function extractInvokedSkillName(
     if (normalized) return normalized
   }
   return null
-}
-
-export function validateExecutionSkillPolicy(input: {
-  readonly policy: TestRunExecutionSkillPolicy
-  readonly selectedSkillInvocationCount: number
-  readonly totalSkillInvocationCount: number
-  readonly invokedBeforeTaskWork: boolean
-}): { readonly code: string; readonly message: string } | null {
-  if (input.policy.kind === "forbidden") {
-    return input.totalSkillInvocationCount > 0
-      ? {
-          code: "TEST_RUN_SKILL_INVOCATION_FORBIDDEN",
-          message:
-            "The no-Skill test participant invoked the Skill tool.",
-        }
-      : null
-  }
-  if (input.selectedSkillInvocationCount === 0) {
-    return {
-      code: "TEST_RUN_REQUIRED_SKILL_NOT_INVOKED",
-      message: `The test execution Agent did not invoke the required Skill ${JSON.stringify(input.policy.skillName)}.`,
-    }
-  }
-  return input.invokedBeforeTaskWork
-    ? null
-    : {
-        code: "TEST_RUN_REQUIRED_SKILL_INVOKED_TOO_LATE",
-        message: `The test execution Agent began task work before invoking the required Skill ${JSON.stringify(input.policy.skillName)}.`,
-      }
-}
-
-export function classifyTestRunToolFailure(
-  content: unknown,
-): ToolFailureCategory {
-  const text = collectStringValues(content).join("\n")
-  if (
-    /permission|not permitted|not allowed|denied|requires? approval|haven't granted|policy block/i.test(
-      text,
-    )
-  ) {
-    return "permission_denied"
-  }
-  if (/read-only|\bEROFS\b/i.test(text)) return "read_only"
-  if (
-    /no such file|not found|does not exist|cannot find|\bENOENT\b/i.test(text)
-  ) {
-    return "path_not_found"
-  }
-  if (/invalid (?:argument|parameter|input)|malformed|schema/i.test(text)) {
-    return "invalid_arguments"
-  }
-  if (/exit code|command failed|non-zero|\bfailed with code\b/i.test(text)) {
-    return "command_failed"
-  }
-  return "tool_error"
-}
-
-function normalizedToolTarget(
-  input: Readonly<Record<string, unknown>>,
-): string | null {
-  for (const key of [
-    "file_path",
-    "path",
-    "notebook_path",
-    "directory",
-    "cwd",
-  ]) {
-    const value = input[key]
-    if (typeof value === "string" && value.trim().length > 0) {
-      return value.trim().replaceAll("\\", "/")
-    }
-  }
-  return null
-}
-
-export function buildTestRunToolFailureKey(
-  toolUse: ObservedToolUse,
-  category: ToolFailureCategory,
-): string {
-  if (category === "permission_denied" || category === "read_only") {
-    return category
-  }
-  const target = normalizedToolTarget(toolUse.input)
-  if (target) return `${category}:${target}`
-  return `${category}:${toolUse.name}`
-}
-
-export class TestRunToolFailureTracker {
-  private readonly failureCounts = new Map<string, number>()
-
-  record(toolUse: ObservedToolUse, content: unknown): {
-    readonly category: ToolFailureCategory
-    readonly count: number
-    readonly limitReached: boolean
-  } {
-    const category = classifyTestRunToolFailure(content)
-    const key = buildTestRunToolFailureKey(toolUse, category)
-    const count = (this.failureCounts.get(key) ?? 0) + 1
-    this.failureCounts.set(key, count)
-    return {
-      category,
-      count,
-      limitReached: count >= testRunToolFailureRetryLimit,
-    }
-  }
 }
 
 export function extractObservedBundledScriptPaths(
@@ -702,7 +591,8 @@ export class TestRunService {
       executionSystemPrompt,
       requiredSkillConstraint,
       noSkillConstraint,
-      graderSystemPrompt,
+      assertionSystemPrompt,
+      scoreSystemPrompt,
     ] = await Promise.all([
       this.options.agentSessions.getSystemPrompt("test-run-execution"),
       this.options.agentSessions.getSystemPrompt(
@@ -711,7 +601,8 @@ export class TestRunService {
       this.options.agentSessions.getSystemPrompt(
         "test-run-execution-no-skill",
       ),
-      this.options.agentSessions.getSystemPrompt("test-run-grader"),
+      this.options.agentSessions.getSystemPrompt("test-run-assertion"),
+      this.options.agentSessions.getSystemPrompt("test-run-skill-score"),
     ])
     const executionPromptVersion = buildExecutionPromptProtocolVersion({
       systemPromptContent: executionSystemPrompt.content,
@@ -725,7 +616,10 @@ export class TestRunService {
         : ("target_then_no_skill_serial_v1" as const)
     const promptVersions = {
       executionPromptVersion,
-      graderProtocolVersion: graderSystemPrompt.version,
+      graderProtocolVersion: buildAgentChainProtocolVersion(
+        assertionSystemPrompt.version,
+        scoreSystemPrompt.version,
+      ),
     }
     const semanticConfigurationFingerprint =
       buildTestRunSemanticConfigurationFingerprint(settings, promptVersions)
@@ -749,7 +643,7 @@ export class TestRunService {
       sdkVersion: claudeAgentSdkVersion,
       protocolVersion: testRunProtocolVersion,
       executionPromptVersion,
-      graderProtocolVersion: graderSystemPrompt.version,
+      graderProtocolVersion: promptVersions.graderProtocolVersion,
       toolPermissionPolicyVersion: projectSettingsPermissionPolicyVersion,
     })
     const runInputFingerprint = stableHash({
@@ -826,7 +720,7 @@ export class TestRunService {
         comparabilityFingerprint,
         runInputFingerprint,
         executionPromptVersion,
-        graderProtocolVersion: graderSystemPrompt.version,
+        graderProtocolVersion: promptVersions.graderProtocolVersion,
         toolPermissionPolicyVersion: projectSettingsPermissionPolicyVersion,
       },
       idempotencyKey: input.idempotencyKey,
@@ -845,6 +739,10 @@ export class TestRunService {
 
   getDetail(runId: string): Promise<TestRunDetailView> {
     return this.options.repository.getDetail(runId)
+  }
+
+  getSkillScoreReportHtml(reportId: string): Promise<string> {
+    return this.options.repository.getSkillScoreReportHtml(reportId)
   }
 
   list(
@@ -1200,12 +1098,9 @@ export class TestRunService {
       await this.publishNewEvents(runId)
       return
     }
-    const detail = await this.options.repository.getDetail(runId)
-    const benchmark = calculateTestRunBenchmark(detail)
-    await this.options.repository.completeRun({
-      runId,
-      ...benchmark,
-    })
+    await this.scoreRun(runId, run)
+    await this.publishNewEvents(runId)
+    await this.options.repository.completeRun({ runId })
     await this.publishNewEvents(runId)
   }
 
@@ -1386,19 +1281,6 @@ export class TestRunService {
         await this.publishNewEvents(runId)
         return
       }
-      if (result.finalOutput.length > maxFinalOutputCharacters) {
-        await this.options.repository.failExecution({
-          caseId: runCase.id,
-          status: "FAILED",
-          code: "TEST_RUN_FINAL_OUTPUT_TOO_LARGE",
-          message:
-            "The Agent final output exceeded the supported test run limit.",
-          usage: result.usage,
-          observations: result.observations,
-        })
-        await this.publishNewEvents(runId)
-        return
-      }
       await this.options.agentSessions.assertWorkspaceConfigurationFingerprint(
         workspace.locator,
         run.configurationFingerprint,
@@ -1461,9 +1343,8 @@ export class TestRunService {
         runId,
         run,
         runCase,
-        workspace.gradingLocator,
+        workspace.assertionLocator,
         result.finalOutput,
-        artifacts,
         selection,
       )
     } catch (error) {
@@ -1520,10 +1401,10 @@ export class TestRunService {
         current.assessmentStatus === "RUNNING" &&
         runState.status !== "CANCELING"
       ) {
-        await this.options.repository.failAssessment({
+        await this.options.repository.failAssertion({
           caseId: runCase.id,
-          code: "TEST_RUN_GRADING_FAILED",
-          message: "The independent grader could not complete.",
+          code: "TEST_RUN_ASSERTION_FAILED",
+          message: "The assertion Agent could not complete.",
         })
         await this.publishNewEvents(runId)
       }
@@ -1544,9 +1425,8 @@ export class TestRunService {
     runId: string,
     run: Awaited<ReturnType<TestRunRepository["getRow"]>>,
     runCase: SkillTestRunCaseRow,
-    gradingLocator: string,
+    assertionLocator: string,
     finalOutput: string,
-    artifacts: Awaited<ReturnType<TestRunStorage["collectArtifacts"]>>,
     selection: FrozenTestRunSelection,
   ): Promise<void> {
     const runtimeEnvironment = this.runtimeEnvironments.get(runId)
@@ -1557,72 +1437,54 @@ export class TestRunService {
         kind: "precondition_failed",
       })
     }
-    const graderRuntimeEnvironment = forTestRunWorkspace(
+    const assertionRuntimeEnvironment = forTestRunWorkspace(
       runtimeEnvironment,
-      this.options.storage.getGradingPath(runId, runCase.id),
+      this.options.storage.getAssertionPath(runId, runCase.id),
     )
-    await this.options.repository.beginAssessment(runCase.id)
+    await this.options.repository.beginAssertion(runCase.id)
     await this.publishNewEvents(runId)
-    const evidence = await this.options.storage.readTextArtifactEvidence(
-      runId,
-      runCase.id,
-      artifacts,
-    )
-    const evidenceByPath = new Map(
-      evidence.map((item) => [item.relativePath, item]),
-    )
-    const rubric = await this.options.scorer.loadRubric()
-    const gradingTask = await this.options.storage.prepareGradingTask(
-      runId,
-      runCase.id,
-      {
-        rubric,
-        userPrompt: runCase.prompt,
-        expectedOutput: runCase.expectedOutput,
-        assertions: runCase.assertions,
-        finalOutput,
-        artifacts: artifacts.map((artifact) => ({
-          ...artifact,
-          content: evidenceByPath.get(artifact.relativePath)?.content ?? null,
-        })),
-      },
-    )
-    const graderSystemPrompt =
-      await this.options.agentSessions.getSystemPrompt("test-run-grader")
-    if (graderSystemPrompt.version !== run.graderProtocolVersion) {
+    const [assertionSystemPrompt, scoreSystemPrompt] = await Promise.all([
+      this.options.agentSessions.getSystemPrompt("test-run-assertion"),
+      this.options.agentSessions.getSystemPrompt("test-run-skill-score"),
+    ])
+    if (
+      buildAgentChainProtocolVersion(
+        assertionSystemPrompt.version,
+        scoreSystemPrompt.version,
+      ) !== run.graderProtocolVersion
+    ) {
       throw new DomainError({
-        code: "TEST_RUN_GRADER_PROMPT_CHANGED",
+        code: "TEST_RUN_AGENT_CHAIN_PROMPT_CHANGED",
         message:
-          "The test grader System Prompt changed after the run was frozen.",
+          "The test assertion or Skill score System Prompt changed after the run was frozen.",
         kind: "conflict",
       })
     }
     const session = await this.options.agentSessions.createInWorkspace({
       origin: {
-        type: "test_run_grader",
+        type: "test_run_assertion",
         runId,
         caseId: runCase.id,
         externalId: runCase.externalId,
         side: runCase.side,
-        phase: "grading",
+        phase: "assertion",
       },
-      prompt: buildGraderPrompt({ taskPath: gradingTask.taskPath }),
-      workspaceLocator: gradingLocator,
+      prompt: buildAssertionPrompt({
+        userTask: runCase.prompt,
+        assertions: runCase.assertions,
+        executionFinalResponse: finalOutput,
+      }),
+      workspaceLocator: assertionLocator,
       expectedConfigurationFingerprint: run.configurationFingerprint,
-      systemPromptRole: "test-run-grader",
-      expectedSystemPromptFingerprint: graderSystemPrompt.sha256,
-      environment: graderRuntimeEnvironment.values,
+      systemPromptRole: "test-run-assertion",
+      expectedSystemPromptFingerprint: assertionSystemPrompt.sha256,
+      environment: assertionRuntimeEnvironment.values,
       protectedEnvironmentNames:
-        graderRuntimeEnvironment.protectedNames,
+        assertionRuntimeEnvironment.protectedNames,
       additionalRedactedValues: [
-        gradingTask.absolutePath,
-        gradingTask.taskPath,
-        gradingTask.outputPath,
-        ...graderRuntimeEnvironment.sensitiveValues,
+        ...assertionRuntimeEnvironment.sensitiveValues,
       ],
     })
-    let graderProtocolStatus: "VALID" | "INVALID" | "NOT_APPLICABLE" =
-      "NOT_APPLICABLE"
     this.activeSessions.set(runId, session.id)
     try {
       const sessionRun = await this.options.repository.getRow(runId)
@@ -1632,12 +1494,12 @@ export class TestRunService {
         } catch (error) {
           this.options.logger.error(
             { runId, sessionId: session.id, error },
-            "New grader Agent Session could not be canceled",
+            "New assertion Agent Session could not be canceled",
           )
         }
         return
       }
-      await this.options.repository.bindGraderSession(
+      await this.options.repository.bindAssertionSession(
         runCase.id,
         session.id,
       )
@@ -1645,80 +1507,271 @@ export class TestRunService {
         runId,
         caseId: runCase.id,
         sessionId: session.id,
-        phase: "grading",
+        phase: "assertion",
         run,
         runCase,
         selection,
         timeoutMs: gradingLimits.timeoutMs,
       })
       if (result.status !== "COMPLETED") {
-        await this.options.repository.failAssessment({
+        await this.options.repository.failAssertion({
           caseId: runCase.id,
-          code: result.error?.code ?? "TEST_RUN_GRADER_FAILED",
+          code: result.error?.code ?? "TEST_RUN_ASSERTION_FAILED",
           message:
             result.error?.message ??
-            "The independent grader did not complete.",
-          gradingUsage: result.usage,
+            "The assertion Agent did not complete.",
+          usage: result.usage,
+          rawResponse: result.finalOutput,
         })
       } else {
+        let parsedJson: unknown | null = null
+        let parseError: string | null = null
         try {
-          const graderOutput = await this.options.storage.readGradingOutput(
-            runId,
-            runCase.id,
-          )
-          const parsed = this.options.scorer.parse(
-            graderOutput,
-            runCase.assertions,
-          )
-          graderProtocolStatus = "VALID"
-          const resolved = resolveEvidenceAnchors(
-            parsed,
-            finalOutput,
-            artifacts.map((artifact) => ({
-              relativePath: artifact.relativePath,
-              content:
-                evidenceByPath.get(artifact.relativePath)?.content ?? null,
-            })),
-          )
-          await this.options.repository.completeAssessment(
-            runCase.id,
-            resolved.map((item) => ({
-              id: randomUUID(),
-              assertionIndex: item.assertionIndex,
-              assertion:
-                runCase.assertions[item.assertionIndex] ??
-                `Assertion ${item.assertionIndex + 1}`,
-              status: item.status,
-              reason: item.reason,
-              evidence: item.evidence,
-            })),
-            result.usage,
-          )
+          parsedJson = JSON.parse(result.finalOutput) as unknown
         } catch (error) {
-          if (!(error instanceof TestRunGraderProtocolError)) {
-            throw error
-          }
-          graderProtocolStatus = "INVALID"
-          await this.options.repository.failAssessment({
-            caseId: runCase.id,
-            code: error.code,
-            message: error.message,
-            gradingUsage: result.usage,
-          })
+          parseError = error instanceof Error ? error.message : "Invalid JSON."
         }
+        await this.options.repository.completeAssertion({
+          caseId: runCase.id,
+          rawResponse: result.finalOutput,
+          parsedJson,
+          parseError,
+          usage: result.usage,
+        })
       }
       await this.publishNewEvents(runId)
     } finally {
-      await this.options.agentSessions
-        .annotateFinalOutputProtocol(session.id, graderProtocolStatus)
-        .catch((error) => {
-          this.options.logger.error(
-            { runId, caseId: runCase.id, sessionId: session.id, error },
-            "Grader native final-output protocol status could not be recorded",
-          )
-        })
       this.options.agentSessions.release(session.id)
       this.activeSessions.delete(runId)
+    }
+  }
+
+  private async scoreRun(
+    runId: string,
+    run: Awaited<ReturnType<TestRunRepository["getRow"]>>,
+  ): Promise<void> {
+    const runtimeEnvironment = this.runtimeEnvironments.get(runId)
+    if (!runtimeEnvironment) {
+      throw new DomainError({
+        code: "TEST_RUN_RUNTIME_ENVIRONMENT_UNAVAILABLE",
+        message: "The frozen test run runtime environment is unavailable.",
+        kind: "precondition_failed",
+      })
+    }
+    const report = await this.options.repository.beginSkillScoreReport(runId)
+    await this.publishNewEvents(runId)
+    const [assertionPrompt, scorePrompt] = await Promise.all([
+      this.options.agentSessions.getSystemPrompt("test-run-assertion"),
+      this.options.agentSessions.getSystemPrompt("test-run-skill-score"),
+    ])
+    if (
+      buildAgentChainProtocolVersion(
+        assertionPrompt.version,
+        scorePrompt.version,
+      ) !== run.graderProtocolVersion
+    ) {
+      await this.options.repository.failSkillScoreReport({
+        reportId: report.id,
+        code: "TEST_RUN_AGENT_CHAIN_PROMPT_CHANGED",
+        message:
+          "The test assertion or Skill score System Prompt changed after the run was frozen.",
+      })
+      return
+    }
+    const cases = await this.options.repository.listCaseRows(runId)
+    const scoreCases = [...new Set(cases.map((item) => item.externalId))].map(
+      (externalId) => {
+        const target = cases.find(
+          (item) => item.externalId === externalId && item.side === "TARGET",
+        )
+        const baseline = cases.find(
+          (item) => item.externalId === externalId && item.side === "BASELINE",
+        )
+        const source = target ?? baseline
+        return {
+          externalId,
+          name: source?.name ?? `Case ${externalId}`,
+          prompt: source?.prompt ?? "",
+          target: target
+            ? {
+                executionFinalResponse: target.finalOutput,
+                assertionAgentRawResponse: target.assertionAgentRawResponse,
+                assertionAgentJson: target.assertionAgentJson ?? null,
+                assertionJsonParseError: target.assertionJsonParseError,
+              }
+            : null,
+          baseline: baseline
+            ? {
+                executionFinalResponse: baseline.finalOutput,
+                assertionAgentRawResponse: baseline.assertionAgentRawResponse,
+                assertionAgentJson: baseline.assertionAgentJson ?? null,
+                assertionJsonParseError: baseline.assertionJsonParseError,
+              }
+            : null,
+        }
+      },
+    )
+    const sessionCase = cases[0]
+    if (!sessionCase) {
+      await this.options.repository.failSkillScoreReport({
+        reportId: report.id,
+        code: "TEST_RUN_SKILL_SCORE_INPUT_UNAVAILABLE",
+        message: "The test run has no Case data for the Skill score Agent.",
+      })
+      return
+    }
+    const scoreRuntimeEnvironment = forTestRunWorkspace(
+      runtimeEnvironment,
+      this.options.storage.getAssertionPath(runId, sessionCase.id),
+    )
+    const session = await this.options.agentSessions.createInWorkspace({
+      origin: {
+        type: "test_run_skill_score",
+        runId,
+        reportId: report.id,
+        phase: "skill-score",
+      },
+      prompt: buildSkillScorePrompt({ runId, cases: scoreCases }),
+      workspaceLocator: this.options.storage.getAssertionLocator(
+        runId,
+        sessionCase.id,
+      ),
+      expectedConfigurationFingerprint: run.configurationFingerprint,
+      systemPromptRole: "test-run-skill-score",
+      expectedSystemPromptFingerprint: scorePrompt.sha256,
+      environment: scoreRuntimeEnvironment.values,
+      protectedEnvironmentNames: scoreRuntimeEnvironment.protectedNames,
+      additionalRedactedValues: [...scoreRuntimeEnvironment.sensitiveValues],
+    })
+    this.activeSessions.set(runId, session.id)
+    try {
+      await this.options.repository.bindSkillScoreReportSession(report.id, session.id)
+      const result = await this.monitorSkillScoreSession({
+        runId,
+        sessionId: session.id,
+        timeoutMs: gradingLimits.timeoutMs,
+      })
+      if (result.status === "COMPLETED" && result.finalOutput.length > 0) {
+        await this.options.repository.completeSkillScoreReport(
+          report.id,
+          result.finalOutput,
+        )
+      } else {
+        await this.options.repository.failSkillScoreReport({
+          reportId: report.id,
+          code:
+            result.error?.code ??
+            (result.status === "COMPLETED"
+              ? "TEST_RUN_SKILL_SCORE_EMPTY"
+              : "TEST_RUN_SKILL_SCORE_FAILED"),
+          message:
+            result.error?.message ??
+            "The Skill score Agent did not return a final response.",
+        })
+      }
+    } catch (error) {
+      await this.options.repository
+        .failSkillScoreReport({
+          reportId: report.id,
+          code:
+            error instanceof DomainError
+              ? error.code
+              : "TEST_RUN_SKILL_SCORE_FAILED",
+          message:
+            error instanceof Error
+              ? error.message
+              : "The Skill score Agent could not complete.",
+        })
+        .catch((failureError) => {
+          this.options.logger.error(
+            { runId, reportId: report.id, error: failureError },
+            "Skill score failure could not be persisted",
+          )
+        })
+    } finally {
+      this.options.agentSessions.release(session.id)
+      this.activeSessions.delete(runId)
+    }
+  }
+
+  private async monitorSkillScoreSession(input: {
+    readonly runId: string
+    readonly sessionId: string
+    readonly timeoutMs: number
+  }): Promise<MonitoredScoreSessionResult> {
+    let finalOutput = ""
+    let usage: StoredTestRunUsage | null = null
+    const seen = new Set<number>()
+    let settled = false
+    let resolveResult: ((value: MonitoredScoreSessionResult) => void) | null = null
+    const completion = new Promise<MonitoredScoreSessionResult>((resolve) => {
+      resolveResult = resolve
+    })
+    const complete = (result: MonitoredScoreSessionResult): void => {
+      if (settled) return
+      settled = true
+      resolveResult?.(result)
+    }
+    const handle = (event: AgentSessionEvent): void => {
+      if (seen.has(event.sequence)) return
+      seen.add(event.sequence)
+      const text = assistantText(event)
+      if (text !== null) finalOutput = text
+      usage = usageFromEvent(event) ?? usage
+      if (event.type === "turn.completed") {
+        complete({ status: "COMPLETED", finalOutput, usage, error: null })
+      } else if (event.type === "turn.canceled") {
+        complete({
+          status: "CANCELED",
+          finalOutput,
+          usage,
+          error: eventError(event, "TEST_RUN_CANCELED", "The Skill score Agent was canceled."),
+        })
+      } else if (event.type === "turn.interrupted") {
+        complete({
+          status: "INTERRUPTED",
+          finalOutput,
+          usage,
+          error: eventError(event, "CLAUDE_RUNTIME_INTERRUPTED", "The Skill score Agent was interrupted."),
+        })
+      } else if (event.type === "turn.failed" || event.type === "session.failed") {
+        complete({
+          status: "FAILED",
+          finalOutput,
+          usage,
+          error: eventError(event, "CLAUDE_EXECUTION_FAILED", "The Skill score Agent failed."),
+        })
+      }
+    }
+    const unsubscribe = this.options.agentSessions.subscribe(input.sessionId, handle)
+    const timeout = setTimeout(() => {
+      void this.options.agentSessions.cancel(input.sessionId).catch((error) => {
+        this.options.logger.error(
+          { runId: input.runId, sessionId: input.sessionId, error },
+          "Skill score timeout cancellation failed",
+        )
+      })
+      complete({
+        status: "FAILED",
+        finalOutput,
+        usage,
+        error: {
+          code: "TEST_RUN_SKILL_SCORE_TIMEOUT",
+          message: "The Skill score Agent session exceeded its time limit.",
+        },
+      })
+    }, input.timeoutMs)
+    try {
+      for (const event of await this.options.agentSessions.listEvents(
+        input.sessionId,
+        0,
+      )) {
+        handle(event)
+      }
+      return await completion
+    } finally {
+      clearTimeout(timeout)
+      unsubscribe()
     }
   }
 
@@ -1726,7 +1779,7 @@ export class TestRunService {
     readonly runId: string
     readonly caseId: string
     readonly sessionId: string
-    readonly phase: "execution" | "grading"
+    readonly phase: "execution" | "assertion"
     readonly run: Awaited<ReturnType<TestRunRepository["getRow"]>>
     readonly runCase: SkillTestRunCaseRow
     readonly selection: FrozenTestRunSelection
@@ -1743,10 +1796,6 @@ export class TestRunService {
       ),
       input.selection.revision.skillName,
     )
-    let selectedSkillInvokedBeforeTaskWork = false
-    let taskWorkObservedBeforeSelectedSkill = false
-    const observedToolUses = new Map<string, ObservedToolUse>()
-    const toolFailureTracker = new TestRunToolFailureTracker()
     const bundledScripts = new Map<string, number[]>()
     const declaredBundledScripts = new Set(
       input.selection.skill.files
@@ -1755,7 +1804,7 @@ export class TestRunService {
     )
     const observation = (): ExecutionObservations => ({
       skillInvocationObserved:
-        input.phase === "grading" || skillPolicy.kind === "forbidden"
+        input.phase !== "execution" || skillPolicy.kind === "forbidden"
           ? "NOT_APPLICABLE"
           : selectedSkillToolEvidence.length > 0
             ? "OBSERVED"
@@ -1810,7 +1859,7 @@ export class TestRunService {
           code:
             input.phase === "execution"
               ? "TEST_RUN_EXECUTION_TIMEOUT"
-              : "TEST_RUN_GRADING_TIMEOUT",
+              : "TEST_RUN_ASSERTION_TIMEOUT",
           message: "The Skill test Agent session exceeded its time limit.",
         },
       })
@@ -1836,7 +1885,6 @@ export class TestRunService {
       if (mapped) this.eventBus.publish([mapped])
       if (input.phase === "execution" && mapped) {
         for (const toolUse of toolUsesFromEvent(event)) {
-          observedToolUses.set(toolUse.toolUseId, toolUse)
           if (toolUse.name === "Skill") {
             skillToolEvidence.push(mapped.sequence)
             if (
@@ -1844,21 +1892,7 @@ export class TestRunService {
               input.selection.revision.skillName
             ) {
               selectedSkillToolEvidence.push(mapped.sequence)
-              if (!taskWorkObservedBeforeSelectedSkill) {
-                selectedSkillInvokedBeforeTaskWork = true
-              }
-            } else if (
-              skillPolicy.kind === "required" &&
-              selectedSkillToolEvidence.length === 0
-            ) {
-              taskWorkObservedBeforeSelectedSkill = true
             }
-          } else if (
-            skillPolicy.kind === "required" &&
-            selectedSkillToolEvidence.length === 0 &&
-            toolUse.name !== "Read"
-          ) {
-            taskWorkObservedBeforeSelectedSkill = true
           }
           for (const relativePath of extractObservedBundledScriptPaths(
             toolUse.input,
@@ -1870,82 +1904,23 @@ export class TestRunService {
             bundledScripts.set(relativePath, evidence)
           }
         }
-        if (
-          event.type === "tool.completed" &&
-          event.payload.isError === true &&
-          typeof event.payload.toolUseId === "string"
-        ) {
-          const toolUse = observedToolUses.get(event.payload.toolUseId)
-          if (toolUse) {
-            const failure = toolFailureTracker.record(
-              toolUse,
-              event.payload.content,
-            )
-            if (failure.limitReached && !settled) {
-              settled = true
-              void this.options.agentSessions
-                .cancel(input.sessionId)
-                .catch((error) => {
-                  this.options.logger.error(
-                    {
-                      runId: input.runId,
-                      caseId: input.caseId,
-                      sessionId: input.sessionId,
-                      error,
-                    },
-                    "Test execution retry-limit cancellation failed",
-                  )
-                })
-              resolveResult?.({
-                status: "FAILED",
-                finalOutput,
-                usage,
-                observations: observation(),
-                error: {
-                  code: "TEST_RUN_TOOL_RETRY_LIMIT_EXCEEDED",
-                  message: `The test execution Agent reached the three-attempt limit for ${failure.category}.`,
-                },
-              })
-              return
-            }
-          }
-        }
       }
       const text = assistantText(event)
       if (text !== null) {
-        finalOutput = String(sanitizeTestRunPublicValue(text))
+        finalOutput = text
       }
       usage = usageFromEvent(event) ?? usage
       if (settled) return
 
       let terminal: MonitoredSessionResult | null = null
       if (event.type === "turn.completed") {
-        const skillPolicyFailure =
-          input.phase === "execution"
-            ? validateExecutionSkillPolicy({
-                policy: skillPolicy,
-                selectedSkillInvocationCount:
-                  selectedSkillToolEvidence.length,
-                totalSkillInvocationCount: skillToolEvidence.length,
-                invokedBeforeTaskWork:
-                  selectedSkillInvokedBeforeTaskWork,
-              })
-            : null
-        terminal = skillPolicyFailure
-          ? {
-              status: "FAILED",
-              finalOutput,
-              usage,
-              observations: observation(),
-              error: skillPolicyFailure,
-            }
-          : {
-              status: "COMPLETED",
-              finalOutput,
-              usage,
-              observations: observation(),
-              error: null,
-            }
+        terminal = {
+          status: "COMPLETED",
+          finalOutput,
+          usage,
+          observations: observation(),
+          error: null,
+        }
       } else if (event.type === "turn.canceled") {
         terminal = {
           status: "CANCELED",
