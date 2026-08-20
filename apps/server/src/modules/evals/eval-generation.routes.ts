@@ -2,7 +2,10 @@ import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox"
 import { Type } from "typebox"
 
 import { ErrorResponseSchema } from "../../core/http/error.contract.js"
-import type { EvalGenerationEvent } from "./eval-generation.domain.js"
+import type {
+  EvalGenerationEvent,
+  EvalGenerationTaskView,
+} from "./eval-generation.domain.js"
 import {
   EvalGenerationDraftSchema,
   EvalGenerationEventsHeaderSchema,
@@ -39,6 +42,13 @@ function serializeDraft(draft: EvalGenerationDraftView) {
   }
 }
 
+function serializeTask(task: EvalGenerationTaskView) {
+  return {
+    ...task,
+    attempts: [...task.attempts],
+  }
+}
+
 export const evalGenerationRoutes: FastifyPluginAsyncTypebox = async (
   application,
 ) => {
@@ -66,7 +76,7 @@ export const evalGenerationRoutes: FastifyPluginAsyncTypebox = async (
       )
       return reply
         .header("Cache-Control", "private, no-store")
-        .send({ ...result, items: [...result.items] })
+        .send({ ...result, items: result.items.map(serializeTask) })
     },
   )
 
@@ -92,15 +102,17 @@ export const evalGenerationRoutes: FastifyPluginAsyncTypebox = async (
     },
     async (request, reply) =>
       reply.code(202).send(
-        await service.start({
-          workspaceId: request.params.workspaceId,
-          target: request.body.target,
-          maxEvalCount: request.body.maxEvalCount,
-          ...(request.body.generationBrief !== undefined
-            ? { generationBrief: request.body.generationBrief }
-            : {}),
-          idempotencyKey: request.headers["idempotency-key"],
-        }),
+        serializeTask(
+          await service.start({
+            workspaceId: request.params.workspaceId,
+            target: request.body.target,
+            maxEvalCount: request.body.maxEvalCount,
+            ...(request.body.generationBrief !== undefined
+              ? { generationBrief: request.body.generationBrief }
+              : {}),
+            idempotencyKey: request.headers["idempotency-key"],
+          }),
+        ),
       ),
   )
 
@@ -139,7 +151,7 @@ export const evalGenerationRoutes: FastifyPluginAsyncTypebox = async (
     async (request, reply) =>
       reply
         .header("Cache-Control", "private, no-store")
-        .send(await service.get(request.params.taskId)),
+        .send(serializeTask(await service.get(request.params.taskId))),
   )
 
   application.post(
@@ -160,7 +172,7 @@ export const evalGenerationRoutes: FastifyPluginAsyncTypebox = async (
     async (request, reply) =>
       reply
         .code(202)
-        .send(await service.cancel(request.params.taskId)),
+        .send(serializeTask(await service.cancel(request.params.taskId))),
   )
 
   application.post(
@@ -183,7 +195,14 @@ export const evalGenerationRoutes: FastifyPluginAsyncTypebox = async (
     async (request, reply) =>
       reply
         .code(202)
-        .send(await service.retry(request.params.taskId, request.headers["idempotency-key"])),
+        .send(
+          serializeTask(
+            await service.retry(
+              request.params.taskId,
+              request.headers["idempotency-key"],
+            ),
+          ),
+        ),
   )
 
   application.get(
