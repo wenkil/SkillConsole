@@ -202,6 +202,33 @@ export const evalGenerationTasks = pgTable(
   ],
 )
 
+export const evalGenerationAttempts = pgTable(
+  "eval_generation_attempts",
+  {
+    id: uuid("id").primaryKey().default(sql`uuidv7()`),
+    taskId: uuid("task_id").notNull().references(() => evalGenerationTasks.id, { onDelete: "cascade" }),
+    attemptNumber: integer("attempt_number").notNull(),
+    requestIdempotencyKey: text("request_idempotency_key").notNull(),
+    agentSessionId: uuid("agent_session_id").references(() => agentSessions.id, { onDelete: "set null" }),
+    status: evalGenerationStatus("status").notNull(),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    errorDetails: jsonb("error_details").$type<Readonly<Record<string, unknown>>>(),
+    usage: jsonb("usage").$type<Readonly<Record<string, number>>>(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+    startedAt: timestamp("started_at", { mode: "date", withTimezone: true }),
+    completedAt: timestamp("completed_at", { mode: "date", withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("eval_generation_attempts_task_number_unique").on(table.taskId, table.attemptNumber),
+    uniqueIndex("eval_generation_attempts_task_request_unique").on(table.taskId, table.requestIdempotencyKey),
+    uniqueIndex("eval_generation_attempts_agent_session_unique").on(table.agentSessionId).where(sql`${table.agentSessionId} is not null`),
+    uniqueIndex("eval_generation_attempts_active_task_unique").on(table.taskId).where(sql`${table.status} in ('PREPARING', 'RUNNING', 'VALIDATING', 'CANCELING')`),
+    index("eval_generation_attempts_task_number_idx").on(table.taskId, table.attemptNumber),
+  ],
+)
+
 export const evalGenerationEvents = pgTable(
   "eval_generation_events",
   {
@@ -209,6 +236,7 @@ export const evalGenerationEvents = pgTable(
     taskId: uuid("task_id")
       .notNull()
       .references(() => evalGenerationTasks.id, { onDelete: "cascade" }),
+    attemptId: uuid("attempt_id").notNull().references(() => evalGenerationAttempts.id, { onDelete: "cascade" }),
     sequence: bigint("sequence", { mode: "number" }).notNull(),
     type: text("type").notNull(),
     payload: jsonb("payload")
@@ -234,7 +262,7 @@ export const evalGenerationEvents = pgTable(
       table.sequence,
     ),
     uniqueIndex("eval_generation_events_source_agent_unique")
-      .on(table.taskId, table.sourceAgentSequence)
+      .on(table.attemptId, table.sourceAgentSequence)
       .where(sql`${table.sourceAgentSequence} is not null`),
     index("eval_generation_events_task_occurred_idx").on(
       table.taskId,
@@ -459,6 +487,7 @@ export const evalRevisionFiles = pgTable(
 
 export type EvalSuiteRow = typeof evalSuites.$inferSelect
 export type EvalGenerationTaskRow = typeof evalGenerationTasks.$inferSelect
+export type EvalGenerationAttemptRow = typeof evalGenerationAttempts.$inferSelect
 export type EvalGenerationEventRow = typeof evalGenerationEvents.$inferSelect
 export type EvalGenerationDraftRow = typeof evalGenerationDrafts.$inferSelect
 export type EvalRevisionRow = typeof evalRevisions.$inferSelect

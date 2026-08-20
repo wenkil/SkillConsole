@@ -13,8 +13,15 @@
     "filters": { "status": "Report status", "all": "All report statuses" },
     "status": { "PENDING": "Pending", "RUNNING": "Running", "AVAILABLE": "Available", "FAILED": "Failed" },
     "events": "Report status events",
+    "progress": "Generation progress",
     "loadEarlier": "Load earlier events",
     "iframeTitle": "AI score report",
+    "viewDetail": "View details",
+    "backToList": "Back to AI score reports",
+    "empty": {
+      "title": "No AI score reports yet",
+      "description": "An AI score report is generated automatically when a test Run finishes."
+    },
     "emptySelection": "Select an AI score report from the list.",
     "loadError": "Could not load the AI score report."
   },

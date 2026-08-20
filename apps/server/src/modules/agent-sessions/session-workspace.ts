@@ -106,10 +106,16 @@ export class AgentSessionWorkspaceStore {
       segments.length === 3 &&
       segments[0] === "agent-sessions" &&
       segments[2] === "workspace"
-    const isEvalWorkspace =
+    const isLegacyEvalWorkspace =
       segments.length === 3 &&
       segments[0] === "eval-generations" &&
       segments[2] === "workspace"
+    const isAttemptEvalWorkspace =
+      segments.length === 5 &&
+      segments[0] === "eval-generations" &&
+      segments[2] === "attempts" &&
+      segments[4] === "workspace"
+    const isEvalWorkspace = isLegacyEvalWorkspace || isAttemptEvalWorkspace
     const isTestRunWorkspace =
       segments.length === 5 &&
       segments[0] === "test-runs" &&
@@ -132,6 +138,8 @@ export class AgentSessionWorkspaceStore {
         !isTestRunSkillScoreWorkspace &&
         !isTestReportAnalysisWorkspace) ||
       !internalIdPattern.test(segments[1] ?? "") ||
+      (isAttemptEvalWorkspace &&
+        !internalIdPattern.test(segments[3] ?? "")) ||
       (isTestRunWorkspace &&
         !internalIdPattern.test(segments[3] ?? ""))
     ) {

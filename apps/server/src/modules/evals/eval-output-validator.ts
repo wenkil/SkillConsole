@@ -106,11 +106,12 @@ export class EvalOutputValidator {
 
   async validate(input: {
     readonly generationId: string
+    readonly attemptId: string
     readonly skillName: string
     readonly provenance: EvalOutputProvenance
   }): Promise<ValidatedEvalOutput> {
     const evalsPath = this.storage.getGenerationEvalsJsonPath(
-      input.generationId,
+      input.generationId, input.attemptId,
     )
     let rawEvals: Buffer
     try {
@@ -136,7 +137,7 @@ export class EvalOutputValidator {
 
     const root = asRecord(parsed)
     const rawCases = Array.isArray(root?.evals) ? root.evals : []
-    const outputRoot = this.storage.getGenerationOutputPath(input.generationId)
+    const outputRoot = this.storage.getGenerationOutputPath(input.generationId, input.attemptId)
     let realOutputRoot: string | null = null
     try {
       realOutputRoot = await realpath(outputRoot)
@@ -173,6 +174,7 @@ export class EvalOutputValidator {
         if (!relativePath || caseFiles.includes(relativePath)) continue
         const file = await this.readDisplayableFile(
           input.generationId,
+          input.attemptId,
           relativePath,
           realOutputRoot,
         )
@@ -225,14 +227,14 @@ export class EvalOutputValidator {
 
   private async readDisplayableFile(
     generationId: string,
+    attemptId: string,
     relativePath: string,
     realOutputRoot: string | null,
   ): Promise<StoredEvalFile | null> {
     if (!realOutputRoot) return null
     try {
       const absolutePath = this.storage.getGenerationFilePath(
-        generationId,
-        relativePath,
+        generationId, relativePath, attemptId,
       )
       const stat = await lstat(absolutePath)
       if (!stat.isFile() || stat.isSymbolicLink()) return null

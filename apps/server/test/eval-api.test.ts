@@ -21,6 +21,16 @@ function createTask(
   taskId = randomUUID(),
 ): EvalGenerationTaskView {
   const now = new Date().toISOString()
+  const currentAttempt = {
+    id: randomUUID(),
+    attemptNumber: 1,
+    status: "RUNNING" as const,
+    error: null,
+    usage: null,
+    createdAt: now,
+    startedAt: now,
+    completedAt: null,
+  }
   return {
     id: taskId,
     suiteId: randomUUID(),
@@ -43,11 +53,14 @@ function createTask(
     evalCount: null,
     fileCount: null,
     revisionNumber: null,
+    attemptCount: 1,
+    currentAttempt,
+    attempts: [currentAttempt],
     createdAt: now,
     updatedAt: now,
     startedAt: now,
     completedAt: null,
-  }
+  } as EvalGenerationTaskView
 }
 
 test("Evals API enforces idempotency and hides runtime internals", async () => {
@@ -221,16 +234,30 @@ test("Evals draft and publish routes preserve review state and replay status", a
   }
 })
 
-test("Evals retry route starts a new task from a failed generation", async () => {
+test("Evals retry route restarts the same failed generation task", async () => {
   const failedTask = {
     ...createTask(randomUUID()),
     status: "FAILED" as const,
   }
-  const retriedTask = createTask(failedTask.workspaceId)
+  const retriedTask = {
+    ...createTask(failedTask.workspaceId, failedTask.id),
+    attemptCount: 2,
+    currentAttempt: {
+      id: randomUUID(),
+      attemptNumber: 2,
+      status: "PREPARING" as const,
+      error: null,
+      usage: null,
+      createdAt: new Date().toISOString(),
+      startedAt: null,
+      completedAt: null,
+    },
+  } as EvalGenerationTaskView
   let retriedTaskId: string | null = null
   const fakeService = {
-    retry: async (taskId: string) => {
+    retry: async (taskId: string, idempotencyKey: string) => {
       retriedTaskId = taskId
+      assert.equal(idempotencyKey, "retry-request-1")
       return retriedTask
     },
   } as unknown as EvalGenerationService
@@ -245,10 +272,11 @@ test("Evals retry route starts a new task from a failed generation", async () =>
     const response = await application.inject({
       method: "POST",
       url: `/api/eval-generations/${failedTask.id}/retry`,
+      headers: { "idempotency-key": "retry-request-1" },
     })
     assert.equal(response.statusCode, 202)
     assert.equal(retriedTaskId, failedTask.id)
-    assert.equal(response.json<{ id: string }>().id, retriedTask.id)
+    assert.equal(response.json<{ id: string }>().id, failedTask.id)
   } finally {
     await application.close()
   }

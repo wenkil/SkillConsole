@@ -65,18 +65,21 @@ export class EvalStorage {
     return generationRoot
   }
 
-  getGenerationWorkspaceLocator(generationId: string): string {
+  getGenerationWorkspaceLocator(generationId: string, attemptId?: string): string {
     assertInternalId(generationId)
+    if (attemptId) assertInternalId(attemptId)
     return path.posix.join(
       "eval-generations",
       generationId,
+      ...(attemptId ? ["attempts", attemptId] : []),
       "workspace",
     )
   }
 
-  getGenerationWorkspacePath(generationId: string): string {
+  getGenerationWorkspacePath(generationId: string, attemptId?: string): string {
     const workspace = path.join(
       this.getGenerationRoot(generationId),
+      ...(attemptId ? ["attempts", attemptId] : []),
       "workspace",
     )
     assertWithinRoot(this.generationsRoot, workspace)
@@ -86,9 +89,12 @@ export class EvalStorage {
   resolveGenerationWorkspaceLocator(locator: string): string {
     const segments = locator.split("/")
     if (
-      segments.length !== 3 ||
+      !(
+        segments.length === 3 ||
+        (segments.length === 5 && segments[2] === "attempts")
+      ) ||
       segments[0] !== "eval-generations" ||
-      segments[2] !== "workspace"
+      segments.at(-1) !== "workspace"
     ) {
       throw new Error("An Evals workspace locator is invalid.")
     }
@@ -96,47 +102,48 @@ export class EvalStorage {
     if (!generationId) {
       throw new Error("An Evals workspace locator is invalid.")
     }
-    const expectedLocator = this.getGenerationWorkspaceLocator(generationId)
+    const attemptId = segments.length === 5 ? segments[3] : undefined
+    const expectedLocator = this.getGenerationWorkspaceLocator(generationId, attemptId)
     if (locator !== expectedLocator) {
       throw new Error("An Evals workspace locator is invalid.")
     }
-    return this.getGenerationWorkspacePath(generationId)
+    return this.getGenerationWorkspacePath(generationId, attemptId)
   }
 
-  getGenerationOutputPath(generationId: string): string {
+  getGenerationOutputPath(generationId: string, attemptId?: string): string {
     const output = path.join(
-      this.getGenerationWorkspacePath(generationId),
+      this.getGenerationWorkspacePath(generationId, attemptId),
       "output",
     )
     assertWithinRoot(this.generationsRoot, output)
     return output
   }
 
-  getGenerationOutputLocator(generationId: string): string {
+  getGenerationOutputLocator(generationId: string, attemptId?: string): string {
     assertInternalId(generationId)
     return path.posix.join(
-      this.getGenerationWorkspaceLocator(generationId),
+      this.getGenerationWorkspaceLocator(generationId, attemptId),
       "output",
     )
   }
 
-  getGenerationEvalsJsonPath(generationId: string): string {
-    return path.join(this.getGenerationOutputPath(generationId), "evals.json")
+  getGenerationEvalsJsonPath(generationId: string, attemptId?: string): string {
+    return path.join(this.getGenerationOutputPath(generationId, attemptId), "evals.json")
   }
 
-  getGenerationFilesPath(generationId: string): string {
-    return path.join(this.getGenerationOutputPath(generationId), "files")
+  getGenerationFilesPath(generationId: string, attemptId?: string): string {
+    return path.join(this.getGenerationOutputPath(generationId, attemptId), "files")
   }
 
   getGenerationFilePath(
     generationId: string,
-    relativePath: string,
+    relativePath: string, attemptId?: string,
   ): string {
     assertEvalRelativePath(relativePath)
     if (!relativePath.startsWith("files/")) {
       throw new Error("An Evals generated file must be under files/.")
     }
-    const outputRoot = this.getGenerationOutputPath(generationId)
+    const outputRoot = this.getGenerationOutputPath(generationId, attemptId)
     const target = path.join(outputRoot, ...relativePath.split("/"))
     assertWithinRoot(outputRoot, target)
     return target

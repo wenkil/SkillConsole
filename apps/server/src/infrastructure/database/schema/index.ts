@@ -16,6 +16,7 @@ export {
 
 export {
   evalGenerationDrafts,
+  evalGenerationAttempts,
   evalGenerationDraftStatus,
   evalGenerationEvents,
   evalGenerationStatus,
@@ -26,6 +27,7 @@ export {
   evalSuites,
   evalTargetSourceKind,
   type EvalGenerationDraftRow,
+  type EvalGenerationAttemptRow,
   type EvalGenerationEventRow,
   type EvalGenerationTaskRow,
   type EvalGenerationStatus,

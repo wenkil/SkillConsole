@@ -8,12 +8,14 @@ import {
   gt,
   inArray,
   max,
+  ne,
   sql,
 } from "drizzle-orm"
 
 import { DomainError } from "../../core/errors/domain-error.js"
 import {
   evalGenerationDrafts,
+  evalGenerationAttempts,
   evalGenerationEvents,
   evalGenerationTasks,
   evalRevisions,
@@ -23,6 +25,7 @@ import {
   skillVersions,
   type Database,
   type EvalGenerationDraftRow,
+  type EvalGenerationAttemptRow,
   type EvalGenerationStatus,
   type EvalGenerationTaskRow,
   type StoredEvalCase,
@@ -32,6 +35,7 @@ import type { FrozenEvalTarget } from "../skill-workspaces/eval-target.domain.js
 import type {
   EvalGenerationDraftView,
   EvalGenerationEvent,
+  EvalGenerationAttemptView,
   EvalGenerationTaskPage,
   EvalGenerationTaskView,
 } from "./eval-generation.domain.js"
@@ -94,13 +98,28 @@ function mapDraft(row: EvalGenerationDraftRow): EvalGenerationDraftView {
   }
 }
 
+function mapAttempt(row: EvalGenerationAttemptRow): EvalGenerationAttemptView {
+  return {
+    id: row.id,
+    attemptNumber: row.attemptNumber,
+    status: row.status,
+    error: row.errorCode && row.errorMessage ? { code: row.errorCode, message: row.errorMessage, details: row.errorDetails ?? null } : null,
+    usage: row.usage,
+    createdAt: row.createdAt.toISOString(),
+    startedAt: row.startedAt?.toISOString() ?? null,
+    completedAt: row.completedAt?.toISOString() ?? null,
+  }
+}
+
 function mapEvent(
   row: typeof evalGenerationEvents.$inferSelect,
+  attemptNumber: number,
 ): EvalGenerationEvent {
   return {
     sequence: row.sequence,
     type: row.type,
     taskId: row.taskId,
+    attemptNumber,
     occurredAt: row.occurredAt.toISOString(),
     payload: row.payload,
   }
@@ -172,10 +191,21 @@ export class EvalGenerationRepository {
         if (!task) {
           throw new Error("Evals task creation returned no database row.")
         }
+        const [attempt] = await transaction
+          .insert(evalGenerationAttempts)
+          .values({
+            id: randomUUID(),
+            taskId: task.id,
+            attemptNumber: 1,
+            requestIdempotencyKey: input.idempotencyKey,
+            status: "PREPARING",
+          })
+          .returning()
+        if (!attempt) throw new Error("Evals attempt creation returned no database row.")
         await this.appendEvent(transaction, task.id, "task.created", {
           schemaVersion: 1,
           status: task.status,
-        })
+        }, null, attempt.id)
         return task.id
       })
       return this.get(taskId)
@@ -244,7 +274,7 @@ export class EvalGenerationRepository {
       .where(eq(evalGenerationTasks.id, taskId))
       .limit(1)
     if (!record) throw notFound(taskId)
-    return this.mapTask(record.task, record.workspaceId, record)
+    return this.mapTask(record.task, record.workspaceId, record, await this.getAttempts(taskId))
   }
 
   async list(
@@ -318,9 +348,32 @@ export class EvalGenerationRepository {
       .where(eq(evalSuites.workspaceId, workspaceId))
 
     const total = summary?.total ?? 0
+    const attemptsByTaskId = new Map<string, EvalGenerationAttemptRow[]>()
+    if (records.length > 0) {
+      const attempts = await this.database
+        .select()
+        .from(evalGenerationAttempts)
+        .where(
+          inArray(
+            evalGenerationAttempts.taskId,
+            records.map((record) => record.task.id),
+          ),
+        )
+        .orderBy(desc(evalGenerationAttempts.attemptNumber))
+      for (const attempt of attempts) {
+        const taskAttempts = attemptsByTaskId.get(attempt.taskId) ?? []
+        taskAttempts.push(attempt)
+        attemptsByTaskId.set(attempt.taskId, taskAttempts)
+      }
+    }
     return {
       items: records.map((record) =>
-        this.mapTask(record.task, record.workspaceId, record),
+        this.mapTask(
+          record.task,
+          record.workspaceId,
+          record,
+          attemptsByTaskId.get(record.task.id) ?? [],
+        ),
       ),
       pagination: {
         page,
@@ -346,6 +399,40 @@ export class EvalGenerationRepository {
       .limit(1)
     if (!task) throw notFound(taskId)
     return task
+  }
+
+  async getAttempts(taskId: string): Promise<readonly EvalGenerationAttemptRow[]> {
+    return this.database.select().from(evalGenerationAttempts)
+      .where(eq(evalGenerationAttempts.taskId, taskId))
+      .orderBy(desc(evalGenerationAttempts.attemptNumber))
+  }
+
+  async getCurrentAttempt(taskId: string): Promise<EvalGenerationAttemptRow> {
+    const [attempt] = await this.database.select().from(evalGenerationAttempts)
+      .where(eq(evalGenerationAttempts.taskId, taskId))
+      .orderBy(desc(evalGenerationAttempts.attemptNumber)).limit(1)
+    if (!attempt) throw new Error("Evals task is missing its execution attempt.")
+    return attempt
+  }
+
+  async findAttemptByRequestIdempotencyKey(
+    taskId: string,
+    requestIdempotencyKey: string,
+  ): Promise<EvalGenerationAttemptRow | null> {
+    const [attempt] = await this.database
+      .select()
+      .from(evalGenerationAttempts)
+      .where(
+        and(
+          eq(evalGenerationAttempts.taskId, taskId),
+          eq(
+            evalGenerationAttempts.requestIdempotencyKey,
+            requestIdempotencyKey,
+          ),
+        ),
+      )
+      .limit(1)
+    return attempt ?? null
   }
 
   async getRetryableGeneration(
@@ -419,6 +506,71 @@ export class EvalGenerationRepository {
     }
   }
 
+  async beginRetry(
+    taskId: string,
+    idempotencyKey: string,
+  ): Promise<EvalGenerationAttemptRow> {
+    return this.database.transaction(async (transaction) => {
+      const [task] = await transaction.select().from(evalGenerationTasks)
+        .where(eq(evalGenerationTasks.id, taskId)).for("update")
+      if (!task) throw notFound(taskId)
+      const [replay] = await transaction
+        .select()
+        .from(evalGenerationAttempts)
+        .where(
+          and(
+            eq(evalGenerationAttempts.taskId, taskId),
+            eq(evalGenerationAttempts.requestIdempotencyKey, idempotencyKey),
+          ),
+        )
+        .limit(1)
+      if (replay) return replay
+      if (task.status !== "FAILED") {
+        throw new DomainError({
+          code: "EVAL_GENERATION_RETRY_UNAVAILABLE",
+          message: "Only failed Evals generation tasks can be retried.",
+          kind: "conflict",
+          details: { taskId, status: task.status },
+        })
+      }
+      const [otherActiveTask] = await transaction
+        .select({ id: evalGenerationTasks.id })
+        .from(evalGenerationTasks)
+        .where(
+          and(
+            eq(evalGenerationTasks.suiteId, task.suiteId),
+            ne(evalGenerationTasks.id, taskId),
+            inArray(evalGenerationTasks.status, activeStatuses),
+          ),
+        )
+        .limit(1)
+      if (otherActiveTask) {
+        throw new DomainError({
+          code: "EVAL_GENERATION_ALREADY_ACTIVE",
+          message:
+            "This Skill workbench already has an active Evals generation task.",
+          kind: "conflict",
+        })
+      }
+      const [latest] = await transaction.select({ number: max(evalGenerationAttempts.attemptNumber) })
+        .from(evalGenerationAttempts).where(eq(evalGenerationAttempts.taskId, taskId))
+      const now = new Date()
+      const [attempt] = await transaction.insert(evalGenerationAttempts).values({
+        id: randomUUID(), taskId, attemptNumber: (latest?.number ?? 0) + 1,
+        requestIdempotencyKey: idempotencyKey, status: "PREPARING", createdAt: now, updatedAt: now,
+      }).returning()
+      if (!attempt) throw new Error("Evals retry attempt creation returned no row.")
+      await transaction.update(evalGenerationTasks).set({
+        status: "PREPARING", agentSessionId: null, errorCode: null, errorMessage: null,
+        errorDetails: null, usage: null, startedAt: null, completedAt: null, updatedAt: now,
+      }).where(eq(evalGenerationTasks.id, taskId))
+      await this.appendEvent(transaction, taskId, "task.retrying", {
+        schemaVersion: 1, attemptNumber: attempt.attemptNumber,
+      }, null, attempt.id)
+      return attempt
+    })
+  }
+
   async findByAgentSession(
     agentSessionId: string,
   ): Promise<EvalGenerationTaskRow | null> {
@@ -481,6 +633,7 @@ export class EvalGenerationRepository {
         })
       }
       const now = new Date()
+      const attempt = await this.getCurrentAttemptInTransaction(transaction, taskId)
       const [draft] = await transaction
         .insert(evalGenerationDrafts)
         .values({
@@ -511,6 +664,8 @@ export class EvalGenerationRepository {
           updatedAt: now,
         })
         .where(eq(evalGenerationTasks.id, taskId))
+      await transaction.update(evalGenerationAttempts).set({ status: "SUCCEEDED", completedAt: now, updatedAt: now })
+        .where(eq(evalGenerationAttempts.id, attempt.id))
       await this.appendEvent(transaction, taskId, "task.succeeded", {
         schemaVersion: 1,
         draftId: draft.id,
@@ -536,6 +691,7 @@ export class EvalGenerationRepository {
         })
       }
       const now = new Date()
+      const attempt = await this.getCurrentAttemptInTransaction(transaction, taskId)
       await transaction
         .update(evalGenerationTasks)
         .set({
@@ -544,6 +700,8 @@ export class EvalGenerationRepository {
           updatedAt: now,
         })
         .where(eq(evalGenerationTasks.id, taskId))
+      await transaction.update(evalGenerationAttempts).set({ status: "SUCCEEDED", completedAt: now, updatedAt: now })
+        .where(eq(evalGenerationAttempts.id, attempt.id))
       await this.appendEvent(transaction, taskId, "task.succeeded", {
         schemaVersion: 1,
         draftId: null,
@@ -569,6 +727,7 @@ export class EvalGenerationRepository {
       if (!task) throw notFound(taskId)
       if (!activeStatuses.includes(task.status)) return false
       const now = new Date()
+      const attempt = await this.getCurrentAttemptInTransaction(transaction, taskId)
       await transaction
         .update(evalGenerationTasks)
         .set({
@@ -580,6 +739,10 @@ export class EvalGenerationRepository {
           updatedAt: now,
         })
         .where(eq(evalGenerationTasks.id, taskId))
+      await transaction.update(evalGenerationAttempts).set({
+        status, errorCode: error.code, errorMessage: error.message,
+        errorDetails: error.details ?? null, completedAt: now, updatedAt: now,
+      }).where(eq(evalGenerationAttempts.id, attempt.id))
       await this.appendEvent(
         transaction,
         taskId,
@@ -600,12 +763,16 @@ export class EvalGenerationRepository {
     payload: Readonly<Record<string, unknown>>,
   ): Promise<EvalGenerationEvent | null> {
     return this.database.transaction(async (transaction) => {
+      const [attempt] = await transaction.select().from(evalGenerationAttempts)
+        .where(eq(evalGenerationAttempts.taskId, taskId))
+        .orderBy(desc(evalGenerationAttempts.attemptNumber)).limit(1)
+      if (!attempt) throw new Error("Evals task is missing its execution attempt.")
       const [duplicate] = await transaction
         .select({ id: evalGenerationEvents.id })
         .from(evalGenerationEvents)
         .where(
           and(
-            eq(evalGenerationEvents.taskId, taskId),
+            eq(evalGenerationEvents.attemptId, attempt.id),
             eq(
               evalGenerationEvents.sourceAgentSequence,
               sourceSequence,
@@ -625,6 +792,8 @@ export class EvalGenerationRepository {
           .update(evalGenerationTasks)
           .set({ usage, updatedAt: new Date() })
           .where(eq(evalGenerationTasks.id, taskId))
+        await transaction.update(evalGenerationAttempts).set({ usage, updatedAt: new Date() })
+          .where(eq(evalGenerationAttempts.id, attempt.id))
       }
       return this.appendEvent(
         transaction,
@@ -641,8 +810,7 @@ export class EvalGenerationRepository {
     afterSequence: number,
   ): Promise<readonly EvalGenerationEvent[]> {
     await this.getRow(taskId)
-    return (
-      await this.database
+    const events = await this.database
         .select()
         .from(evalGenerationEvents)
         .where(
@@ -652,7 +820,9 @@ export class EvalGenerationRepository {
           ),
         )
         .orderBy(evalGenerationEvents.sequence)
-    ).map(mapEvent)
+    const attempts = await this.getAttempts(taskId)
+    const numbers = new Map(attempts.map((attempt) => [attempt.id, attempt.attemptNumber]))
+    return events.map((event) => mapEvent(event, numbers.get(event.attemptId) ?? 0))
   }
 
   async getDraft(taskId: string): Promise<EvalGenerationDraftView> {
@@ -770,6 +940,13 @@ export class EvalGenerationRepository {
         )
         .returning({ id: evalGenerationTasks.id })
       if (!updated) return false
+      const attempt = await this.getCurrentAttemptInTransaction(transaction, taskId)
+      await transaction.update(evalGenerationAttempts).set({
+        status,
+        ...(values.agentSessionId ? { agentSessionId: values.agentSessionId } : {}),
+        ...(values.startedAt ? { startedAt: values.startedAt } : {}),
+        updatedAt: new Date(),
+      }).where(eq(evalGenerationAttempts.id, attempt.id))
       await this.appendEvent(
         transaction,
         taskId,
@@ -786,6 +963,7 @@ export class EvalGenerationRepository {
     type: string,
     payload: Readonly<Record<string, unknown>>,
     sourceAgentSequence: number | null = null,
+    requestedAttemptId?: string,
   ): Promise<EvalGenerationEvent> {
     const [task] = await transaction
       .select({ id: evalGenerationTasks.id })
@@ -793,6 +971,13 @@ export class EvalGenerationRepository {
       .where(eq(evalGenerationTasks.id, taskId))
       .for("update")
     if (!task) throw notFound(taskId)
+    const [attempt] = requestedAttemptId
+      ? await transaction.select().from(evalGenerationAttempts)
+          .where(eq(evalGenerationAttempts.id, requestedAttemptId)).limit(1)
+      : await transaction.select().from(evalGenerationAttempts)
+          .where(eq(evalGenerationAttempts.taskId, taskId))
+          .orderBy(desc(evalGenerationAttempts.attemptNumber)).limit(1)
+    if (!attempt) throw new Error("Evals event has no execution attempt.")
     const [sequence] = await transaction
       .select({ value: max(evalGenerationEvents.sequence) })
       .from(evalGenerationEvents)
@@ -802,6 +987,7 @@ export class EvalGenerationRepository {
       .values({
         id: randomUUID(),
         taskId,
+        attemptId: attempt.id,
         sequence: (sequence?.value ?? 0) + 1,
         type,
         payload,
@@ -811,7 +997,21 @@ export class EvalGenerationRepository {
     if (!event) {
       throw new Error("Evals event insertion returned no database row.")
     }
-    return mapEvent(event)
+    return mapEvent(event, attempt.attemptNumber)
+  }
+
+  private async getCurrentAttemptInTransaction(
+    transaction: Transaction,
+    taskId: string,
+  ): Promise<EvalGenerationAttemptRow> {
+    const [attempt] = await transaction
+      .select()
+      .from(evalGenerationAttempts)
+      .where(eq(evalGenerationAttempts.taskId, taskId))
+      .orderBy(desc(evalGenerationAttempts.attemptNumber))
+      .limit(1)
+    if (!attempt) throw new Error("Evals task is missing its execution attempt.")
+    return attempt
   }
 
   private mapTask(
@@ -826,7 +1026,12 @@ export class EvalGenerationRepository {
       readonly versionName: string | null
       readonly draftSourceRevision: number | null
     },
+    attempts: readonly EvalGenerationAttemptRow[],
   ): EvalGenerationTaskView {
+    const currentAttempt = attempts[0]
+    if (!currentAttempt) {
+      throw new Error("Evals task is missing its execution attempt.")
+    }
     return {
       id: task.id,
       suiteId: task.suiteId,
@@ -859,6 +1064,9 @@ export class EvalGenerationRepository {
       evalCount: related.evalCount,
       fileCount: related.fileCount,
       revisionNumber: related.revisionNumber,
+      attemptCount: attempts.length,
+      currentAttempt: mapAttempt(currentAttempt),
+      attempts: attempts.map(mapAttempt),
       createdAt: task.createdAt.toISOString(),
       updatedAt: task.updatedAt.toISOString(),
       startedAt: task.startedAt?.toISOString() ?? null,

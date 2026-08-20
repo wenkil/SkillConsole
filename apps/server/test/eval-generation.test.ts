@@ -50,13 +50,14 @@ test("injects the selected generation options into the Agent prompt", () => {
 test("reads recognizable cases from a JSON Evals document", async () => {
   await withTempRoot(async (root) => {
     const generationId = randomUUID()
+    const attemptId = randomUUID()
     const storage = new EvalStorage(root)
     await storage.initialize()
-    await mkdir(storage.getGenerationFilesPath(generationId), {
+    await mkdir(storage.getGenerationFilesPath(generationId, attemptId), {
       recursive: true,
     })
     await writeFile(
-      storage.getGenerationEvalsJsonPath(generationId),
+      storage.getGenerationEvalsJsonPath(generationId, attemptId),
       JSON.stringify({
         evals: [
           {
@@ -75,6 +76,7 @@ test("reads recognizable cases from a JSON Evals document", async () => {
       storage.getGenerationFilePath(
         generationId,
         "files/input.txt",
+        attemptId,
       ),
       "source",
       "utf8",
@@ -82,6 +84,7 @@ test("reads recognizable cases from a JSON Evals document", async () => {
 
     const result = await new EvalOutputValidator(storage).validate({
       generationId,
+      attemptId,
       skillName: "sample-skill",
       provenance,
     })
@@ -98,13 +101,14 @@ test("reads recognizable cases from a JSON Evals document", async () => {
 test("ignores generated files that are not referenced by an Eval", async () => {
   await withTempRoot(async (root) => {
     const generationId = randomUUID()
+    const attemptId = randomUUID()
     const storage = new EvalStorage(root)
     await storage.initialize()
-    await mkdir(storage.getGenerationFilesPath(generationId), {
+    await mkdir(storage.getGenerationFilesPath(generationId, attemptId), {
       recursive: true,
     })
     await writeFile(
-      storage.getGenerationEvalsJsonPath(generationId),
+      storage.getGenerationEvalsJsonPath(generationId, attemptId),
       JSON.stringify({
         evals: [
           {
@@ -120,13 +124,14 @@ test("ignores generated files that are not referenced by an Eval", async () => {
       "utf8",
     )
     await writeFile(
-      storage.getGenerationFilePath(generationId, "files/hidden.txt"),
+      storage.getGenerationFilePath(generationId, "files/hidden.txt", attemptId),
       "undeclared",
       "utf8",
     )
 
     const result = await new EvalOutputValidator(storage).validate({
       generationId,
+      attemptId,
       skillName: "sample-skill",
       provenance,
     })
@@ -137,19 +142,21 @@ test("ignores generated files that are not referenced by an Eval", async () => {
 test("accepts any parseable JSON and omits unrecognizable content", async () => {
   await withTempRoot(async (root) => {
     const generationId = randomUUID()
+    const attemptId = randomUUID()
     const storage = new EvalStorage(root)
     await storage.initialize()
-    await mkdir(path.dirname(storage.getGenerationEvalsJsonPath(generationId)), {
+    await mkdir(path.dirname(storage.getGenerationEvalsJsonPath(generationId, attemptId)), {
       recursive: true,
     })
     await writeFile(
-      storage.getGenerationEvalsJsonPath(generationId),
+      storage.getGenerationEvalsJsonPath(generationId, attemptId),
       JSON.stringify({ unexpected: { arbitrary: true } }),
       "utf8",
     )
 
     const result = await new EvalOutputValidator(storage).validate({
       generationId,
+      attemptId,
       skillName: "sample-skill",
       provenance,
     })
@@ -161,13 +168,14 @@ test("accepts any parseable JSON and omits unrecognizable content", async () => 
 test("omits unavailable input files without failing the JSON result", async () => {
   await withTempRoot(async (root) => {
     const generationId = randomUUID()
+    const attemptId = randomUUID()
     const storage = new EvalStorage(root)
     await storage.initialize()
-    await mkdir(storage.getGenerationFilesPath(generationId), {
+    await mkdir(storage.getGenerationFilesPath(generationId, attemptId), {
       recursive: true,
     })
     await writeFile(
-      storage.getGenerationEvalsJsonPath(generationId),
+      storage.getGenerationEvalsJsonPath(generationId, attemptId),
       JSON.stringify({
         evals: [
           {
@@ -185,6 +193,7 @@ test("omits unavailable input files without failing the JSON result", async () =
 
     const result = await new EvalOutputValidator(storage).validate({
       generationId,
+      attemptId,
       skillName: "sample-skill",
       provenance,
     })
@@ -205,6 +214,20 @@ test("accepts only server-controlled Agent workspace locators", async () => {
         `eval-generations/${generationId}/workspace`,
       ),
       path.join(root, "eval-generations", generationId, "workspace"),
+    )
+    const attemptId = randomUUID()
+    assert.equal(
+      store.resolve(
+        `eval-generations/${generationId}/attempts/${attemptId}/workspace`,
+      ),
+      path.join(
+        root,
+        "eval-generations",
+        generationId,
+        "attempts",
+        attemptId,
+        "workspace",
+      ),
     )
     assert.throws(() =>
       store.resolve(

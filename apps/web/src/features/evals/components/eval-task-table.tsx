@@ -140,6 +140,9 @@ export function EvalTaskTable({
                       <StatusIcon status={task.status} />
                       {t(`status.${task.status}`)}
                     </span>
+                    <span className="ui-meta">
+                      {t("table.attemptCount", { count: task.attemptCount })}
+                    </span>
                   </td>
                   <td className="px-4 py-3.5">
                     <strong className="block text-xs">

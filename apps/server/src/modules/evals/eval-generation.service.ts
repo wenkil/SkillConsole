@@ -97,9 +97,14 @@ export class EvalGenerationService {
     await this.repository.reconcileInterruptedTasks()
     const taskIds = await this.repository.listAllTaskIds()
     await Promise.all(
-      taskIds.map((taskId) =>
-        this.workspacePreparer.scrubSettings(taskId),
-      ),
+      taskIds.map(async (taskId) => {
+        const attempts = await this.repository.getAttempts(taskId)
+        await Promise.all(
+          attempts.map((attempt) =>
+            this.workspacePreparer.scrubSettings(taskId, attempt.id),
+          ),
+        )
+      }),
     )
   }
 
@@ -112,17 +117,38 @@ export class EvalGenerationService {
     )
   }
 
-  async retry(taskId: string): Promise<EvalGenerationTaskView> {
+  async retry(taskId: string, idempotencyKey: string): Promise<EvalGenerationTaskView> {
+    if (
+      await this.repository.findAttemptByRequestIdempotencyKey(
+        taskId,
+        idempotencyKey,
+      )
+    ) {
+      return this.repository.get(taskId)
+    }
     const source = await this.repository.getRetryableGeneration(taskId)
     const input = {
       workspaceId: source.workspaceId,
       maxEvalCount: source.maxEvalCount,
       generationBrief: source.generationBrief,
-      idempotencyKey: `retry:${taskId}`,
+      idempotencyKey,
     }
     return this.withStartLock(input.workspaceId, input.idempotencyKey, () =>
-      this.startFrozenTarget(input, source.target, { retryOf: taskId }),
+      this.retryFrozenTask(taskId, input, source.target),
     )
+  }
+
+  private async retryFrozenTask(
+    taskId: string,
+    input: { readonly workspaceId: string; readonly maxEvalCount: number; readonly generationBrief: string | null; readonly idempotencyKey: string },
+    target: FrozenEvalTarget,
+  ): Promise<EvalGenerationTaskView> {
+    const attempt = await this.repository.beginRetry(taskId, input.idempotencyKey)
+    await this.publishNewEvents(taskId)
+    if (attempt.status !== "PREPARING") return this.repository.get(taskId)
+    const provenance = await this.workspacePreparer.inspectProvenance()
+    const systemPrompt = await this.agentSessions.getSystemPrompt("eval-generation")
+    return this.launchTask(taskId, target, provenance, systemPrompt, input)
   }
 
   private async withStartLock<T>(
@@ -234,10 +260,24 @@ export class EvalGenerationService {
     await this.publishNewEvents(task.id)
     if (task.id !== taskId) return task
 
+    return this.launchTask(taskId, target, provenance, systemPrompt, input)
+  }
+
+  private async launchTask(
+    taskId: string,
+    target: FrozenEvalTarget,
+    provenance: Awaited<ReturnType<EvalWorkspacePreparer["inspectProvenance"]>>,
+    systemPrompt: Awaited<ReturnType<AgentSessionService["getSystemPrompt"]>>,
+    input: { readonly maxEvalCount: number; readonly generationBrief: string | null },
+  ): Promise<EvalGenerationTaskView> {
     let agentSessionId: string | null = null
+    let attemptId: string | null = null
     try {
+      const attempt = await this.repository.getCurrentAttempt(taskId)
+      attemptId = attempt.id
       const workspace = await this.workspacePreparer.prepare(
         taskId,
+        attempt.id,
         target,
         provenance,
         {
@@ -295,7 +335,9 @@ export class EvalGenerationService {
         this.toStoredError(error, "EVAL_GENERATION_START_FAILED"),
       )
       await this.publishNewEvents(taskId)
-      await this.workspacePreparer.scrubSettings(taskId)
+      if (attemptId) {
+        await this.workspacePreparer.scrubSettings(taskId, attemptId)
+      }
       return this.repository.get(taskId)
     }
   }
@@ -473,10 +515,12 @@ export class EvalGenerationService {
       if (!(await this.repository.markValidating(taskId))) return
       await this.publishNewEvents(taskId)
       const task = await this.repository.getRow(taskId)
+      const attempt = await this.repository.getCurrentAttempt(taskId)
       this.agentSessions.release(event.sessionId)
       try {
         const validated = await this.validator.validate({
           generationId: taskId,
+          attemptId: attempt.id,
           skillName: task.skillName,
           provenance: {
             taskId,
@@ -488,7 +532,7 @@ export class EvalGenerationService {
         })
         if (validated.cases.length > 0) {
           await this.repository.completeWithDraft(taskId, {
-            storageLocator: this.storage.getGenerationOutputLocator(taskId),
+            storageLocator: this.storage.getGenerationOutputLocator(taskId, attempt.id),
             ...validated,
           })
         } else {
@@ -559,7 +603,8 @@ export class EvalGenerationService {
     this.subscriptions.get(taskId)?.()
     this.subscriptions.delete(taskId)
     this.agentSessions.release(sessionId)
-    await this.workspacePreparer.scrubSettings(taskId)
+    const attempt = await this.repository.getCurrentAttempt(taskId)
+    await this.workspacePreparer.scrubSettings(taskId, attempt.id)
   }
 
   private publishEvent(event: EvalGenerationEvent): void {

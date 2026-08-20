@@ -8,7 +8,7 @@ import {
   MessageSquareText,
   ShieldCheck,
 } from "lucide-react"
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import type { TFunction } from "i18next"
 import { useTranslation } from "react-i18next"
 
@@ -146,11 +146,18 @@ export function EvalGenerationProgress({
               {t("progress.waiting")}
             </div>
           ) : (
-            traceEntries.map((entry) => (
-              <div
-                className="grid grid-cols-[3rem_minmax(0,1fr)] gap-3 border-b border-white/8 py-2 last:border-0"
-                key={entry.sequence}
-              >
+            traceEntries.map((entry, index) => (
+              <Fragment key={entry.sequence}>
+                {index === 0 ||
+                traceEntries[index - 1]?.event.attemptNumber !==
+                  entry.event.attemptNumber ? (
+                  <div className="border-b border-white/20 pb-1 pt-3 text-[9px] font-bold tracking-[0.12em] text-white/55 first:pt-0">
+                    {t("progress.attempt", {
+                      count: entry.event.attemptNumber,
+                    })}
+                  </div>
+                ) : null}
+                <div className="grid grid-cols-[3rem_minmax(0,1fr)] gap-3 border-b border-white/8 py-2 last:border-0">
                 <span className="text-white/35">
                   #{entry.sequence}
                 </span>
@@ -196,7 +203,8 @@ export function EvalGenerationProgress({
                 ) : (
                   <span>{eventSummary(entry.event, t)}</span>
                 )}
-              </div>
+                </div>
+              </Fragment>
             ))
           )}
         </div>

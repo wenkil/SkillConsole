@@ -34,6 +34,9 @@ export interface EvalGenerationTask {
   evalCount: number | null
   fileCount: number | null
   revisionNumber: number | null
+  attemptCount: number
+  currentAttempt: EvalGenerationAttempt
+  attempts: EvalGenerationAttempt[]
   createdAt: string
   updatedAt: string
   startedAt: string | null
@@ -109,8 +112,20 @@ export interface EvalGenerationEvent {
   sequence: number
   type: string
   taskId: string
+  attemptNumber: number
   occurredAt: string
   payload: Record<string, unknown>
+}
+
+export interface EvalGenerationAttempt {
+  id: string
+  attemptNumber: number
+  status: EvalGenerationStatus
+  error: EvalGenerationTask["error"]
+  usage: Record<string, number> | null
+  createdAt: string
+  startedAt: string | null
+  completedAt: string | null
 }
 
 export type EvalGenerationTarget =

@@ -112,6 +112,20 @@ const EvalGenerationErrorSchema = Type.Object(
   { additionalProperties: false },
 )
 
+const EvalGenerationAttemptSchema = Type.Object(
+  {
+    id: Type.String({ format: "uuid" }),
+    attemptNumber: Type.Integer({ minimum: 1 }),
+    status: EvalGenerationStatusSchema,
+    error: Type.Union([EvalGenerationErrorSchema, Type.Null()]),
+    usage: Type.Union([Type.Record(Type.String(), Type.Number({ minimum: 0 })), Type.Null()]),
+    createdAt: Type.String({ format: "date-time" }),
+    startedAt: Type.Union([Type.String({ format: "date-time" }), Type.Null()]),
+    completedAt: Type.Union([Type.String({ format: "date-time" }), Type.Null()]),
+  },
+  { additionalProperties: false },
+)
+
 export const EvalGenerationTaskSchema = Type.Object(
   {
     id: Type.String({ format: "uuid" }),
@@ -148,6 +162,9 @@ export const EvalGenerationTaskSchema = Type.Object(
       Type.Integer({ minimum: 1 }),
       Type.Null(),
     ]),
+    attemptCount: Type.Integer({ minimum: 1 }),
+    currentAttempt: EvalGenerationAttemptSchema,
+    attempts: Type.Array(EvalGenerationAttemptSchema, { minItems: 1 }),
     createdAt: Type.String({ format: "date-time" }),
     updatedAt: Type.String({ format: "date-time" }),
     startedAt: Type.Union([
@@ -282,6 +299,7 @@ export const EvalGenerationEventSchema = Type.Object(
     sequence: Type.Integer({ minimum: 1 }),
     type: Type.String({ minLength: 1, maxLength: 80 }),
     taskId: Type.String({ format: "uuid" }),
+    attemptNumber: Type.Integer({ minimum: 1 }),
     occurredAt: Type.String({ format: "date-time" }),
     payload: Type.Record(Type.String(), Type.Unknown()),
   },

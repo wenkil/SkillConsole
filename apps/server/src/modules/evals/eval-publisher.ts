@@ -130,8 +130,15 @@ export class EvalPublisher {
           .limit(1)
         const sequenceNumber = (latest?.sequenceNumber ?? 0) + 1
 
-        const sourceRoot = this.storage.getGenerationOutputPath(
-          record.task.id,
+        const outputSuffix = "/output"
+        if (!record.draft.storageLocator.endsWith(outputSuffix)) {
+          throw new DomainError({ code: "EVAL_DRAFT_CONTENT_CHANGED", message: "The generated Evals draft has an invalid source locator.", kind: "conflict" })
+        }
+        const sourceRoot = path.join(
+          this.storage.resolveGenerationWorkspaceLocator(
+            record.draft.storageLocator.slice(0, -outputSuffix.length),
+          ),
+          "output",
         )
         temporaryRoot = this.storage.getRevisionTemporaryRoot(
           suite.id,
@@ -174,10 +181,7 @@ export class EvalPublisher {
               kind: "conflict",
             })
           }
-          const source = this.storage.getGenerationFilePath(
-            record.task.id,
-            file.relativePath,
-          )
+          const source = path.join(sourceRoot, ...file.relativePath.split("/"))
           const content = await readFile(
             source,
           )

@@ -128,6 +128,7 @@ export class EvalWorkspacePreparer {
 
   async prepare(
     generationId: string,
+    attemptId: string,
     target: FrozenEvalTarget,
     expectedProvenance: EvalGenerationProvenance,
     taskInput: {
@@ -151,18 +152,18 @@ export class EvalWorkspacePreparer {
     }
     const generationRoot = this.storage.getGenerationRoot(generationId)
     const workspacePath =
-      this.storage.getGenerationWorkspacePath(generationId)
+      this.storage.getGenerationWorkspacePath(generationId, attemptId)
     const targetSkillPath = path.join(
       workspacePath,
       "target-skill",
       target.skillName,
     )
     const outputFilesPath =
-      this.storage.getGenerationFilesPath(generationId)
+      this.storage.getGenerationFilesPath(generationId, attemptId)
     const outputEvalsPath =
-      this.storage.getGenerationEvalsJsonPath(generationId)
+      this.storage.getGenerationEvalsJsonPath(generationId, attemptId)
     try {
-      await mkdir(generationRoot)
+      await mkdir(generationRoot, { recursive: true })
       await Promise.all([
         mkdir(targetSkillPath, { recursive: true }),
         mkdir(outputFilesPath, { recursive: true }),
@@ -203,7 +204,7 @@ export class EvalWorkspacePreparer {
 
       return {
         locator:
-          this.storage.getGenerationWorkspaceLocator(generationId),
+          this.storage.getGenerationWorkspaceLocator(generationId, attemptId),
         absolutePath: workspacePath,
         targetSkillPath,
         outputEvalsPath,
@@ -212,7 +213,7 @@ export class EvalWorkspacePreparer {
         configurationFingerprint,
       }
     } catch (error) {
-      await rm(generationRoot, { recursive: true, force: true }).catch(
+      await rm(workspacePath, { recursive: true, force: true }).catch(
         () => undefined,
       )
       throw new DomainError({
@@ -232,10 +233,10 @@ export class EvalWorkspacePreparer {
     }
   }
 
-  async scrubSettings(generationId: string): Promise<void> {
+  async scrubSettings(generationId: string, attemptId?: string): Promise<void> {
     await unlink(
       path.join(
-        this.storage.getGenerationWorkspacePath(generationId),
+        this.storage.getGenerationWorkspacePath(generationId, attemptId),
         ".claude",
         "settings.json",
       ),

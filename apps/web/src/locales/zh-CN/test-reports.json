@@ -13,8 +13,15 @@
     "filters": { "status": "报告状态", "all": "全部报告状态" },
     "status": { "PENDING": "等待评分", "RUNNING": "评分中", "AVAILABLE": "报告可用", "FAILED": "评分失败" },
     "events": "报告状态事件",
+    "progress": "生成进度",
     "loadEarlier": "加载更早事件",
     "iframeTitle": "AI 评分报告",
+    "viewDetail": "查看详情",
+    "backToList": "返回 AI 评分报告",
+    "empty": {
+      "title": "还没有 AI 评分报告",
+      "description": "测试任务完成后，系统会自动生成 AI 评分报告。"
+    },
     "emptySelection": "从左侧选择一份 AI 评分报告。",
     "loadError": "无法读取 AI 评分报告。"
   },

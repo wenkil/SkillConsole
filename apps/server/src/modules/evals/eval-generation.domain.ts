@@ -8,8 +8,20 @@ export interface EvalGenerationEvent {
   readonly sequence: number
   readonly type: string
   readonly taskId: string
+  readonly attemptNumber: number
   readonly occurredAt: string
   readonly payload: Readonly<Record<string, unknown>>
+}
+
+export interface EvalGenerationAttemptView {
+  readonly id: string
+  readonly attemptNumber: number
+  readonly status: EvalGenerationStatus
+  readonly error: EvalGenerationTaskView["error"]
+  readonly usage: Readonly<Record<string, number>> | null
+  readonly createdAt: string
+  readonly startedAt: string | null
+  readonly completedAt: string | null
 }
 
 export interface EvalGenerationTaskView {
@@ -38,6 +50,9 @@ export interface EvalGenerationTaskView {
   readonly evalCount: number | null
   readonly fileCount: number | null
   readonly revisionNumber: number | null
+  readonly attemptCount: number
+  readonly currentAttempt: EvalGenerationAttemptView
+  readonly attempts: readonly EvalGenerationAttemptView[]
   readonly createdAt: string
   readonly updatedAt: string
   readonly startedAt: string | null

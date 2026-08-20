@@ -12,6 +12,7 @@ import { createSnapshotManifest } from "../src/modules/skill-workspaces/snapshot
 import { parseSkillName } from "../src/modules/skill-workspaces/skill-metadata.js"
 
 const generationId = "01900000-0000-7000-8000-000000000001"
+const attemptId = "01900000-0000-7000-8000-000000000004"
 const suiteId = "01900000-0000-7000-8000-000000000002"
 const revisionId = "01900000-0000-7000-8000-000000000003"
 
@@ -52,6 +53,16 @@ test("keeps generation and revision paths inside controlled Evals roots", () => 
       `eval-generations/${generationId}/workspace`,
     ),
     storage.getGenerationWorkspacePath(generationId),
+  )
+  assert.equal(
+    storage.getGenerationWorkspaceLocator(generationId, attemptId),
+    `eval-generations/${generationId}/attempts/${attemptId}/workspace`,
+  )
+  assert.equal(
+    storage.resolveGenerationWorkspaceLocator(
+      `eval-generations/${generationId}/attempts/${attemptId}/workspace`,
+    ),
+    storage.getGenerationWorkspacePath(generationId, attemptId),
   )
   assert.equal(
     storage.getGenerationFilePath(generationId, "files/sample.pdf"),

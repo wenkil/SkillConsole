@@ -83,8 +83,12 @@ export function cancelEvalGeneration(
 
 export function retryEvalGeneration(
   taskId: string,
+  idempotencyKey: string,
 ): Promise<EvalGenerationTask> {
-  return readJson(`${taskBaseUrl(taskId)}/retry`, { method: "POST" })
+  return readJson(`${taskBaseUrl(taskId)}/retry`, {
+    method: "POST",
+    headers: { "Idempotency-Key": idempotencyKey },
+  })
 }
 
 export function discardEvalGenerationDraft(

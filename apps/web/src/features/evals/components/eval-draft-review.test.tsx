@@ -28,6 +28,29 @@ const succeededTask: EvalGenerationTask = {
   evalCount: 5,
   fileCount: 5,
   revisionNumber: 1,
+  attemptCount: 1,
+  currentAttempt: {
+    id: "01900000-0000-7000-8000-000000000007",
+    attemptNumber: 1,
+    status: "SUCCEEDED",
+    error: null,
+    usage: null,
+    createdAt: "2026-07-30T08:00:00.000Z",
+    startedAt: "2026-07-30T08:00:10.000Z",
+    completedAt: "2026-07-30T08:02:00.000Z",
+  },
+  attempts: [
+    {
+      id: "01900000-0000-7000-8000-000000000007",
+      attemptNumber: 1,
+      status: "SUCCEEDED",
+      error: null,
+      usage: null,
+      createdAt: "2026-07-30T08:00:00.000Z",
+      startedAt: "2026-07-30T08:00:10.000Z",
+      completedAt: "2026-07-30T08:02:00.000Z",
+    },
+  ],
   createdAt: "2026-07-30T08:00:00.000Z",
   updatedAt: "2026-07-30T08:02:00.000Z",
   startedAt: "2026-07-30T08:00:10.000Z",
@@ -98,5 +121,44 @@ describe("EvalGenerationProgress", () => {
 
     expect(screen.getByText("生成的测试用例文件不是可读取的 JSON。")).toBeInTheDocument()
     expect(screen.queryByText("EVAL_OUTPUT_JSON_INVALID")).toBeNull()
+  })
+
+  it("groups the trace by execution attempt", () => {
+    render(
+      <I18nextProvider i18n={i18n}>
+        <EvalGenerationProgress
+          events={[
+            {
+              sequence: 1,
+              type: "task.failed",
+              taskId: succeededTask.id,
+              attemptNumber: 1,
+              occurredAt: "2026-07-30T08:01:00.000Z",
+              payload: {},
+            },
+            {
+              sequence: 2,
+              type: "task.retrying",
+              taskId: succeededTask.id,
+              attemptNumber: 2,
+              occurredAt: "2026-07-30T08:02:00.000Z",
+              payload: {},
+            },
+          ]}
+          t={i18n.getFixedT("zh-CN", "evals")}
+          task={{
+            ...succeededTask,
+            attemptCount: 2,
+            currentAttempt: {
+              ...succeededTask.currentAttempt,
+              attemptNumber: 2,
+            },
+          }}
+        />
+      </I18nextProvider>,
+    )
+
+    expect(screen.getByText("第 1 次尝试")).toBeInTheDocument()
+    expect(screen.getByText("第 2 次尝试")).toBeInTheDocument()
   })
 })

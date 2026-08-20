@@ -62,6 +62,7 @@ export function useEvalsController(workspace: SkillWorkspace) {
     readonly signature: string
     readonly idempotencyKey: string
   } | null>(null)
+  const retryAttempts = useRef(new Map<string, string>())
 
   const tasksQuery = useQuery({
     queryKey: taskListKey(workspace.id, page, pageSize),
@@ -178,6 +179,7 @@ export function useEvalsController(workspace: SkillWorkspace) {
             "task.interrupted",
             "task.failed",
           ].includes(event.type)
+          && event.attemptNumber === selectedTask?.currentAttempt.attemptNumber
         ) {
           unsubscribe()
         }
@@ -189,7 +191,12 @@ export function useEvalsController(workspace: SkillWorkspace) {
       },
     )
     return unsubscribe
-  }, [queryClient, selectedTask?.id, workspace.id])
+  }, [
+    queryClient,
+    selectedTask?.currentAttempt.attemptNumber,
+    selectedTask?.id,
+    workspace.id,
+  ])
 
   const startMutation = useMutation({
     mutationFn: () => {
@@ -239,8 +246,13 @@ export function useEvalsController(workspace: SkillWorkspace) {
     },
   })
   const retryGenerationMutation = useMutation({
-    mutationFn: (taskId: string) => retryEvalGeneration(taskId),
+    mutationFn: (taskId: string) => {
+      const idempotencyKey = retryAttempts.current.get(taskId) ?? crypto.randomUUID()
+      retryAttempts.current.set(taskId, idempotencyKey)
+      return retryEvalGeneration(taskId, idempotencyKey)
+    },
     onSuccess: (task) => {
+      retryAttempts.current.delete(task.id)
       queryClient.setQueryData<EvalGenerationTask>(
         ["eval-generations", task.id],
         task,
