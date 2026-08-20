@@ -19,6 +19,7 @@ import {
   evalRevisions,
   evalSuites,
   skillDraftRevisions,
+  skillSnapshots,
   skillVersions,
   type Database,
   type EvalGenerationDraftRow,
@@ -52,6 +53,13 @@ interface CreateTaskInput {
   readonly configurationFingerprint: string
   readonly idempotencyKey: string
   readonly requestHash: string
+}
+
+export interface RetryableEvalGeneration {
+  readonly workspaceId: string
+  readonly maxEvalCount: number
+  readonly generationBrief: string | null
+  readonly target: FrozenEvalTarget
 }
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0]
@@ -338,6 +346,77 @@ export class EvalGenerationRepository {
       .limit(1)
     if (!task) throw notFound(taskId)
     return task
+  }
+
+  async getRetryableGeneration(
+    taskId: string,
+  ): Promise<RetryableEvalGeneration> {
+    const [record] = await this.database
+      .select({
+        task: evalGenerationTasks,
+        workspaceId: evalSuites.workspaceId,
+        snapshot: skillSnapshots,
+      })
+      .from(evalGenerationTasks)
+      .innerJoin(evalSuites, eq(evalSuites.id, evalGenerationTasks.suiteId))
+      .innerJoin(
+        skillSnapshots,
+        eq(skillSnapshots.id, evalGenerationTasks.targetSnapshotId),
+      )
+      .where(eq(evalGenerationTasks.id, taskId))
+      .limit(1)
+    if (!record) throw notFound(taskId)
+    if (record.task.status !== "FAILED") {
+      throw new DomainError({
+        code: "EVAL_GENERATION_RETRY_UNAVAILABLE",
+        message: "Only failed Evals generation tasks can be retried.",
+        kind: "conflict",
+        details: { taskId, status: record.task.status },
+      })
+    }
+    if (record.snapshot.state !== "READY") {
+      throw new DomainError({
+        code: "EVAL_TARGET_SNAPSHOT_UNAVAILABLE",
+        message: "The failed task's frozen Skill Snapshot is unavailable.",
+        kind: "conflict",
+        details: { taskId, snapshotId: record.snapshot.id },
+      })
+    }
+    const target =
+      record.task.targetSourceKind === "SKILL_VERSION" &&
+      record.task.targetVersionId
+        ? {
+            sourceKind: "SKILL_VERSION" as const,
+            versionId: record.task.targetVersionId,
+            draftRevisionId: null,
+            snapshotId: record.snapshot.id,
+            skillName: record.task.skillName,
+            manifestHash: record.snapshot.manifestHash,
+            fileCount: record.snapshot.fileCount,
+            totalBytes: record.snapshot.totalBytes,
+          }
+        : record.task.targetSourceKind === "DRAFT_REVISION" &&
+            record.task.targetDraftRevisionId
+          ? {
+              sourceKind: "DRAFT_REVISION" as const,
+              versionId: null,
+              draftRevisionId: record.task.targetDraftRevisionId,
+              snapshotId: record.snapshot.id,
+              skillName: record.task.skillName,
+              manifestHash: record.snapshot.manifestHash,
+              fileCount: record.snapshot.fileCount,
+              totalBytes: record.snapshot.totalBytes,
+            }
+          : null
+    if (!target) {
+      throw new Error("The failed Evals task has an invalid frozen target.")
+    }
+    return {
+      workspaceId: record.workspaceId,
+      maxEvalCount: record.task.maxEvalCount,
+      generationBrief: record.task.generationBrief,
+      target,
+    }
   }
 
   async findByAgentSession(

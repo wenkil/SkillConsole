@@ -81,6 +81,12 @@ export function cancelEvalGeneration(
   return readJson(`${taskBaseUrl(taskId)}/cancel`, { method: "POST" })
 }
 
+export function retryEvalGeneration(
+  taskId: string,
+): Promise<EvalGenerationTask> {
+  return readJson(`${taskBaseUrl(taskId)}/retry`, { method: "POST" })
+}
+
 export function discardEvalGenerationDraft(
   taskId: string,
 ): Promise<EvalGenerationDraft> {

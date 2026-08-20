@@ -12,6 +12,7 @@ import {
   getEvalGenerationDraft,
   listEvalGenerations,
   listEvalRevisions,
+  retryEvalGeneration,
   saveEvalGeneration,
   startEvalGeneration,
   subscribeToEvalGeneration,
@@ -237,6 +238,21 @@ export function useEvalsController(workspace: SkillWorkspace) {
       })
     },
   })
+  const retryGenerationMutation = useMutation({
+    mutationFn: (taskId: string) => retryEvalGeneration(taskId),
+    onSuccess: (task) => {
+      queryClient.setQueryData<EvalGenerationTask>(
+        ["eval-generations", task.id],
+        task,
+      )
+      setPage(1)
+      setRequestedTaskId(task.id)
+      setEventState({ taskId: task.id, events: [] })
+      void queryClient.invalidateQueries({
+        queryKey: taskListRootKey(workspace.id),
+      })
+    },
+  })
   const saveMutation = useMutation({
     mutationFn: (taskId: string) => saveEvalGeneration(taskId),
     onSuccess: (result, taskId) => {
@@ -356,6 +372,7 @@ export function useEvalsController(workspace: SkillWorkspace) {
   const mutationError =
     startMutation.error ??
     cancelMutation.error ??
+    retryGenerationMutation.error ??
     saveMutation.error ??
     discardMutation.error
 
@@ -395,6 +412,7 @@ export function useEvalsController(workspace: SkillWorkspace) {
     mutationPending:
       startMutation.isPending ||
       cancelMutation.isPending ||
+      retryGenerationMutation.isPending ||
       saveMutation.isPending ||
       discardMutation.isPending,
     draftLoading: draftQuery.isPending && Boolean(selectedTask?.draftId),
@@ -412,6 +430,8 @@ export function useEvalsController(workspace: SkillWorkspace) {
       setGenerationBrief,
       start: () => startMutation.mutateAsync(),
       cancel: (taskId: string) => cancelMutation.mutateAsync(taskId),
+      retryGeneration: (taskId: string) =>
+        retryGenerationMutation.mutateAsync(taskId),
       save: (taskId: string) => saveMutation.mutateAsync(taskId),
       discard: (taskId: string) => discardMutation.mutateAsync(taskId),
       retry: () => {
@@ -424,6 +444,7 @@ export function useEvalsController(workspace: SkillWorkspace) {
       clearMutationError: () => {
         startMutation.reset()
         cancelMutation.reset()
+        retryGenerationMutation.reset()
         saveMutation.reset()
         discardMutation.reset()
       },

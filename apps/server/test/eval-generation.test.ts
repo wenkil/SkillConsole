@@ -42,9 +42,9 @@ test("injects the selected generation options into the Agent prompt", () => {
 
   assert.match(prompt, new RegExp(taskPath))
   assert.doesNotMatch(prompt, /所有路径都是相对于/)
-  assert.match(prompt, /目标 Skill：\{sample-skill\}/)
-  assert.match(prompt, /目标用例数：\{3\}/)
-  assert.match(prompt, /补充要求：\{覆盖文件输入场景\}/)
+  assert.match(prompt, /Target Skill: \{sample-skill\}/)
+  assert.match(prompt, /Target case count: \{3\}/)
+  assert.match(prompt, /Additional requirements: \{覆盖文件输入场景\}/)
 })
 
 test("reads recognizable cases from a JSON Evals document", async () => {

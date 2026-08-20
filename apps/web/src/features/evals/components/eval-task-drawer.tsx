@@ -4,6 +4,7 @@ import {
   FileCheck2,
   LockKeyhole,
   Play,
+  RotateCcw,
   Square,
 } from "lucide-react"
 import type { TFunction } from "i18next"
@@ -175,6 +176,7 @@ export function EvalTaskDrawer({
   onBriefChange,
   onStart,
   onCancel,
+  onRetry,
   onSave,
   onDiscard,
   t,
@@ -201,6 +203,7 @@ export function EvalTaskDrawer({
   onBriefChange: (brief: string) => void
   onStart: () => Promise<unknown>
   onCancel: (taskId: string) => Promise<unknown>
+  onRetry: (taskId: string) => Promise<unknown>
   onSave: (taskId: string) => Promise<unknown>
   onDiscard: (taskId: string) => Promise<unknown>
   t: TFunction<"evals">
@@ -362,6 +365,20 @@ export function EvalTaskDrawer({
                   >
                     <Square data-icon="inline-start" />
                     {t("controls.cancel")}
+                  </Button>
+                ) : null}
+                {task.status === "FAILED" ? (
+                  <Button
+                    className="rounded-none"
+                    disabled={pending || generationBlocked}
+                    onClick={() => {
+                      void onRetry(task.id).catch(() => undefined)
+                    }}
+                    type="button"
+                    variant="outline"
+                  >
+                    <RotateCcw data-icon="inline-start" />
+                    {t("controls.retry")}
                   </Button>
                 ) : null}
                 {tab === "result" && draft?.status === "READY" ? (

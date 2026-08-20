@@ -221,6 +221,39 @@ test("Evals draft and publish routes preserve review state and replay status", a
   }
 })
 
+test("Evals retry route starts a new task from a failed generation", async () => {
+  const failedTask = {
+    ...createTask(randomUUID()),
+    status: "FAILED" as const,
+  }
+  const retriedTask = createTask(failedTask.workspaceId)
+  let retriedTaskId: string | null = null
+  const fakeService = {
+    retry: async (taskId: string) => {
+      retriedTaskId = taskId
+      return retriedTask
+    },
+  } as unknown as EvalGenerationService
+  const application = Fastify({
+    logger: false,
+  }).withTypeProvider<TypeBoxTypeProvider>()
+  application.decorate("evalGenerationService", fakeService)
+  registerErrorHandling(application)
+  await application.register(evalGenerationRoutes)
+
+  try {
+    const response = await application.inject({
+      method: "POST",
+      url: `/api/eval-generations/${failedTask.id}/retry`,
+    })
+    assert.equal(response.statusCode, 202)
+    assert.equal(retriedTaskId, failedTask.id)
+    assert.equal(response.json<{ id: string }>().id, retriedTask.id)
+  } finally {
+    await application.close()
+  }
+})
+
 test("Evals SSE rejects unsafe Last-Event-ID values before opening a stream", async () => {
   const task = createTask(randomUUID())
   const fakeService = {

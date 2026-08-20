@@ -1,21 +1,25 @@
 # Agent System Prompts
 
-这个目录集中保存 SkillConsole 所有 Agent Session 使用的 System Prompt。服务会在每次创建 Session 时按角色重新读取对应文件；修改文件后，不需要重新构建应用，但只会影响修改后新建的任务或 Revision。
+This directory centrally stores all System Prompts used by SkillConsole Agent Sessions. The service re-reads the corresponding file per role each time a Session is created. Modifying these files does not require rebuilding the application, but changes only affect tasks or Revisions created after the modification.
 
-| Session 角色 | System Prompt 文件 | 工作区任务入口 |
+| Session Role | System Prompt File | Workspace Task Entrypoint |
 | --- | --- | --- |
-| 通用 Agent | `generic-agent.system.md` | 用户消息 |
-| 测试用例生成 | `eval-generation.system.md` | 启动 Prompt 注入的绝对 `taskPath` |
-| 测试任务执行 | `test-run-execution.system.md` | 启动 Prompt 注入的绝对 `taskPath` |
-| 测试结果评分 | `test-run-grader.system.md` | 启动 Prompt 注入的绝对 `taskPath` |
-| 测试报告分析 | `test-report-analyzer.system.md` | 启动 Prompt 注入的绝对 `taskPath` |
+| Generic Agent | `generic-agent.system.md` | User message |
+| Eval Generation | `eval-generation.system.md` | Absolute `taskPath` injected via startup prompt |
+| Test Run Execution | `test-run-execution.system.md` | Absolute `taskPath` injected via startup prompt |
+| Test Run Execution (Required Skill Mode) | `test-run-execution-required-skill.system.md` | Absolute `taskPath` injected via startup prompt |
+| Test Run Execution (No Skill Mode) | `test-run-execution-no-skill.system.md` | Absolute `taskPath` injected via startup prompt |
+| Test Run Assertion | `test-run-assertion.system.md` | Absolute `taskPath` injected via startup prompt |
+| Test Run Skill Score | `test-run-skill-score.system.md` | Absolute `taskPath` injected via startup prompt |
+| Test Run Grading | `test-run-grader.system.md` | Absolute `taskPath` injected via startup prompt |
+| Test Report Analysis | `test-report-analyzer.system.md` | Absolute `taskPath` injected via startup prompt |
 
-任务上下文、事实报告、证据、Rubric 和输出路径均由服务写入 Session 工作区文件，不会拼接成大型启动 Prompt。服务在启动 Prompt 中注入经过解析和边界校验的绝对 `taskPath`；任务清单中供工具实际读写的物理路径同样使用后端生成的绝对路径。每个 System Prompt 应明确要求 Agent 原样使用这些路径，不得替换、重新解析或猜测其他路径。
+Task context, factual reports, evidence, rubrics, and output paths are written by the service into Session workspace files instead of being concatenated into a large startup prompt. The service injects a validated, boundary-checked absolute `taskPath` into the startup prompt; the physical paths in the task manifest used by tools for actual read/write operations are also backend-generated absolute paths. Each System Prompt must explicitly require Agents to use these paths as-is, without replacing, re-parsing, or guessing alternative paths.
 
-Evals 的 `files` 和评分证据的 `reference` 等业务协议字段仍使用逻辑相对路径；它们不是直接传给文件工具的物理路径。
+Business protocol fields such as `files` in Evals and `reference` in grading evidence still use logical relative paths; they are not physical paths passed directly to file tools.
 
-所有角色使用同一份项目 `settings.json` 作为 Claude Agent SDK 的项目设置和能力来源。工具、Skill、MCP 和命令权限请统一在 `settings.json` 中配置；角色行为、读取顺序和可写范围要求写在对应的 System Prompt 中。
+All roles share the same project `settings.json` as the source of project settings and capabilities for the Claude Agent SDK. Permissions for tools, Skills, MCPs, and commands must be configured uniformly in `settings.json`; role behavior, reading order, and writable scope requirements are specified in the corresponding System Prompts.
 
-服务会记录 Prompt 文件名与 SHA-256 版本。任务创建后，如果对应 Prompt 在执行前发生变化，该任务会失败并要求创建新任务或 Revision，避免同一任务在不同 Prompt 下继续执行。
+The service records the prompt filename along with its SHA-256 version. After a task is created, if the corresponding prompt changes before execution, the task will fail and require the creation of a new task or Revision, preventing the same task from continuing under different prompts.
 
-可通过 `SKILLCONSOLE_AGENT_PROMPTS_ROOT` 修改目录位置。Docker Compose 默认将宿主机 `./agent-prompts` 只读挂载到容器 `/workspace/agent-prompts`，因此用户仍可直接在宿主机编辑，而运行中的 Agent 不能反向修改这些 System Prompt。
+The directory location can be overridden via `SKILLCONSOLE_AGENT_PROMPTS_ROOT`. Docker Compose mounts the host `./agent-prompts` directory read-only into the container at `/workspace/agent-prompts` by default, so users can still edit these files directly on the host, while running Agents cannot modify these System Prompts back.

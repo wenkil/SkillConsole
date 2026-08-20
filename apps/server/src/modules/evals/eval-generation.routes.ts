@@ -163,6 +163,28 @@ export const evalGenerationRoutes: FastifyPluginAsyncTypebox = async (
         .send(await service.cancel(request.params.taskId)),
   )
 
+  application.post(
+    "/api/eval-generations/:taskId/retry",
+    {
+      schema: {
+        tags: ["evals"],
+        summary:
+          "Retry a failed Evals generation task with its frozen Skill target",
+        params: EvalGenerationParamsSchema,
+        response: {
+          202: EvalGenerationTaskSchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+          500: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) =>
+      reply
+        .code(202)
+        .send(await service.retry(request.params.taskId)),
+  )
+
   application.get(
     "/api/eval-generations/:taskId/draft",
     {

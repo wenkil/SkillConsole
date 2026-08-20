@@ -141,7 +141,8 @@
     "briefPlaceholder": "例如：重点覆盖扫描件、字段缺失和多币种边界；不需要重复正常路径。",
     "freezeHint": "启动时会冻结当前目标，并把 Skill 与 Claude 配置复制到隔离工作区。源文件不会被写回。",
     "start": "生成 Evals 草稿",
-    "cancel": "取消当前生成"
+    "cancel": "取消当前生成",
+    "retry": "重试生成"
   },
   "save": {
     "eyebrow": "HUMAN CONFIRMATION GATE",

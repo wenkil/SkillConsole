@@ -4,7 +4,10 @@ import { DomainError } from "../../core/errors/domain-error.js"
 import type { Database } from "../../infrastructure/database/index.js"
 import type { AgentSessionEvent } from "../agent-sessions/agent-session.domain.js"
 import type { AgentSessionService } from "../agent-sessions/agent-session.service.js"
-import type { EvalTargetInput } from "../skill-workspaces/eval-target.domain.js"
+import type {
+  EvalTargetInput,
+  FrozenEvalTarget,
+} from "../skill-workspaces/eval-target.domain.js"
 import { EvalTargetService } from "../skill-workspaces/eval-target.service.js"
 import type {
   EvalGenerationDraftView,
@@ -27,10 +30,9 @@ type EvalEventListener = (event: EvalGenerationEvent) => void
 
 const evalGenerationRuntimePolicy = {
   permissionMode: "dontAsk" as const,
-  tools: ["Read", "Glob", "Grep", "Write", "Edit"] as const,
-  allowedTools: ["Read", "Glob", "Grep", "Write", "Edit"] as const,
+  tools: ["Read", "Glob", "Grep", "Write", "Edit", "Bash"] as const,
+  allowedTools: ["Read", "Glob", "Grep", "Write", "Edit", "Bash"] as const,
   disallowedTools: [
-    "Bash",
     "Agent",
     "WebSearch",
     "WebFetch",
@@ -105,7 +107,30 @@ export class EvalGenerationService {
     rawInput: StartEvalGenerationInput,
   ): Promise<EvalGenerationTaskView> {
     const input = this.validateStartInput(rawInput)
-    const lockKey = `${input.workspaceId}\u0000${input.idempotencyKey}`
+    return this.withStartLock(input.workspaceId, input.idempotencyKey, () =>
+      this.startValidated(input),
+    )
+  }
+
+  async retry(taskId: string): Promise<EvalGenerationTaskView> {
+    const source = await this.repository.getRetryableGeneration(taskId)
+    const input = {
+      workspaceId: source.workspaceId,
+      maxEvalCount: source.maxEvalCount,
+      generationBrief: source.generationBrief,
+      idempotencyKey: `retry:${taskId}`,
+    }
+    return this.withStartLock(input.workspaceId, input.idempotencyKey, () =>
+      this.startFrozenTarget(input, source.target, { retryOf: taskId }),
+    )
+  }
+
+  private async withStartLock<T>(
+    workspaceId: string,
+    idempotencyKey: string,
+    start: () => Promise<T>,
+  ): Promise<T> {
+    const lockKey = `${workspaceId}\u0000${idempotencyKey}`
     const previous = this.startLocks.get(lockKey) ?? Promise.resolve()
     let release: () => void = () => undefined
     const current = new Promise<void>((resolve) => {
@@ -115,7 +140,7 @@ export class EvalGenerationService {
     this.startLocks.set(lockKey, chain)
     await previous
     try {
-      return await this.startValidated(input)
+      return await start()
     } finally {
       release()
       if (this.startLocks.get(lockKey) === chain) {
@@ -129,15 +154,50 @@ export class EvalGenerationService {
       readonly generationBrief: string | null
     },
   ): Promise<EvalGenerationTaskView> {
+    const request = {
+      workspaceId: input.workspaceId,
+      target: input.target,
+      maxEvalCount: input.maxEvalCount,
+      generationBrief: input.generationBrief,
+    }
     const requestHash = createHash("sha256")
-      .update(
-        JSON.stringify({
-          workspaceId: input.workspaceId,
-          target: input.target,
-          maxEvalCount: input.maxEvalCount,
-          generationBrief: input.generationBrief,
-        }),
-      )
+      .update(JSON.stringify(request))
+      .digest("hex")
+    const suiteId = await this.repository.ensureSuite(input.workspaceId)
+    const existing = await this.repository.findByIdempotencyKey(
+      suiteId,
+      input.idempotencyKey,
+    )
+    if (existing) {
+      if (existing.requestHash !== requestHash) {
+        throw new DomainError({
+          code: "EVAL_IDEMPOTENCY_CONFLICT",
+          message:
+            "The idempotency key was already used with a different request.",
+          kind: "conflict",
+        })
+      }
+      return this.repository.get(existing.id)
+    }
+    const target = await this.targetService.freeze(
+      input.workspaceId,
+      input.target,
+    )
+    return this.startFrozenTarget(input, target, request)
+  }
+
+  private async startFrozenTarget(
+    input: {
+      readonly workspaceId: string
+      readonly maxEvalCount: number
+      readonly generationBrief: string | null
+      readonly idempotencyKey: string
+    },
+    target: FrozenEvalTarget,
+    request: Readonly<Record<string, unknown>>,
+  ): Promise<EvalGenerationTaskView> {
+    const requestHash = createHash("sha256")
+      .update(JSON.stringify(request))
       .digest("hex")
     const suiteId = await this.repository.ensureSuite(input.workspaceId)
     const existing = await this.repository.findByIdempotencyKey(
@@ -156,10 +216,6 @@ export class EvalGenerationService {
       return this.repository.get(existing.id)
     }
 
-    const target = await this.targetService.freeze(
-      input.workspaceId,
-      input.target,
-    )
     const provenance = await this.workspacePreparer.inspectProvenance()
     const systemPrompt =
       await this.agentSessions.getSystemPrompt("eval-generation")

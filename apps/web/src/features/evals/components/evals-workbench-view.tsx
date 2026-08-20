@@ -162,6 +162,7 @@ export function EvalsWorkbenchView({
         onCountChange={controller.actions.setMaxEvalCount}
         onDiscard={controller.actions.discard}
         onOpenChange={setDrawerOpen}
+        onRetry={controller.actions.retryGeneration}
         onSave={controller.actions.save}
         onStart={async () => {
           const task = await controller.actions.start()

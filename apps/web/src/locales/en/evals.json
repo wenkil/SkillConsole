@@ -141,7 +141,8 @@
     "briefPlaceholder": "For example: prioritize scanned documents, missing fields, and multi-currency boundaries.",
     "freezeHint": "Starting freezes the selected target and copies the Skill and Claude settings into an isolated workspace. Source files are never written back.",
     "start": "Generate Evals draft",
-    "cancel": "Cancel generation"
+    "cancel": "Cancel generation",
+    "retry": "Retry generation"
   },
   "save": {
     "eyebrow": "HUMAN CONFIRMATION GATE",
