@@ -59,14 +59,14 @@ export function VersionBrowserView({
   if (controller.error || !selectedTarget) {
     return (
       <main className="flex h-full min-h-0 min-w-0 items-center justify-center overflow-hidden px-10 py-9">
-        <div className="max-w-md border border-destructive/50 bg-paper-raised p-7 text-center">
+        <div className="max-w-md rounded-2xl border border-destructive/30 bg-destructive/5 p-7 text-center shadow-[var(--surface-shadow)]">
           <PackageOpen className="mx-auto mb-3 size-8 text-destructive" />
           <strong className="block">{copy.loadError}</strong>
           <p className="mt-2 text-sm text-muted-foreground">
             {copy.workspaceUnavailable}
           </p>
           <Button
-            className="mt-4 rounded-none"
+            className="mt-4 rounded-xl"
             onClick={controller.actions.retry}
             type="button"
             variant="outline"
@@ -81,7 +81,7 @@ export function VersionBrowserView({
 
   return (
     <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-border-strong bg-background px-6 py-5">
+      <header className="shrink-0 border-b border-border bg-background px-6 py-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="min-w-0">
             <div className="ui-label mb-1.5 flex items-center gap-2 text-signal-dark">
@@ -97,7 +97,7 @@ export function VersionBrowserView({
                 ? copy.initialCandidate
                 : selectedTarget.name}
             </div>
-            <h1 className="truncate text-[clamp(2rem,3vw,2.75rem)] leading-[1.08] font-[780] tracking-[-0.04em]">
+            <h1 className="font-display truncate text-[clamp(2rem,3vw,2.75rem)] leading-[1.08] font-semibold tracking-[-0.035em]">
               {workspace.name}
             </h1>
           </div>
@@ -106,7 +106,7 @@ export function VersionBrowserView({
             <label className="ui-label grid gap-1">
               {copy.versionPicker}
               <select
-                className="h-10 min-w-48 border border-border-default bg-paper-raised px-3 font-mono text-sm outline-none focus:border-focus-ring"
+                className="h-10 min-w-48 rounded-[10px] border border-border-default bg-paper-raised px-3 font-mono text-sm outline-none transition-colors focus:border-focus-ring focus:ring-2 focus:ring-ring/15"
                 onChange={(event) => {
                   const target = controller.targets.find(
                     (item) =>
@@ -129,7 +129,7 @@ export function VersionBrowserView({
               </select>
             </label>
             {controller.versions.length >= 2 ? (
-              <Button asChild className="h-9 rounded-none" variant="outline">
+              <Button asChild className="h-9 rounded-xl" variant="outline">
                 <Link to={`/workbenches/${workspace.id}/versions/compare`}>
                   <GitCompareArrows data-icon="inline-start" />
                   {copy.compareVersions}
@@ -154,7 +154,7 @@ export function VersionBrowserView({
                   version={selectedTarget}
                 />
                 <Button
-                  className="h-9 rounded-none"
+                  className="h-9 rounded-xl"
                   disabled={controller.mutationPending}
                   onClick={() => {
                     void controller.actions
@@ -177,7 +177,7 @@ export function VersionBrowserView({
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border border-technical/55 bg-technical/5 px-3.5 py-3 text-sm">
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-technical/25 bg-technical/5 px-3.5 py-3 text-sm">
           {selectedTarget.kind === "draft" ? (
             <PencilLine className="size-4 shrink-0 text-technical" />
           ) : (
@@ -202,7 +202,7 @@ export function VersionBrowserView({
                 )}
           </span>
           {selectedTarget.kind === "version" && selectedTarget.isOnline ? (
-            <span className="ml-auto border border-technical/50 bg-technical/10 px-2 py-1 font-mono text-xs font-bold text-technical-foreground">
+            <span className="ml-auto rounded-lg border border-technical/30 bg-technical/10 px-2 py-1 font-mono text-xs font-bold text-technical-foreground">
               {copy.currentOnlineBadge}
             </span>
           ) : null}

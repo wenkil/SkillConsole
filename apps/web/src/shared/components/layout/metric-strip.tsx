@@ -25,19 +25,16 @@ export function MetricStrip({
   ariaLabel?: string
   className?: string
 }) {
-  const columns = items.length <= 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2 xl:grid-cols-4"
-
   return (
     <section
       aria-label={ariaLabel}
       className={cn(
-        "grid gap-px border border-border-strong bg-border-default",
-        columns,
+        "flex flex-wrap items-stretch gap-0 border-y border-border",
         className,
       )}
     >
       {items.map((item, index) => (
-        <div className="min-w-0 bg-background px-4 py-3" key={index}>
+        <div className="relative min-w-[10rem] flex-1 bg-background px-4 py-3 first:pl-0 after:absolute after:top-3 after:right-0 after:h-8 after:w-px after:bg-border last:after:hidden" key={index}>
           <span className="ui-label block">{item.label}</span>
           <strong
             className={cn(

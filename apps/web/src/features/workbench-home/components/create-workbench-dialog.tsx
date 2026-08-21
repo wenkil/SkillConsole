@@ -143,16 +143,11 @@ export function CreateWorkbenchDialog({
     >
       <DialogContent
         aria-busy={interactionLocked}
-        className="gap-0 rounded-none border-border-strong bg-paper-raised p-0 shadow-[12px_12px_0_rgb(16_24_32/18%)] sm:max-w-3xl"
+        className="gap-0 overflow-hidden rounded-[20px] border-border bg-card p-0 shadow-[var(--dialog-shadow)] sm:max-w-3xl"
         showCloseButton={!interactionLocked}
       >
-        <DialogHeader className="border-b border-border-strong px-6 py-5">
-          <div className="ui-label mb-2 flex items-center gap-2 text-signal-dark">
-            <span>01</span>
-            <span>/</span>
-            <span>{copy.initialCandidate}</span>
-          </div>
-          <DialogTitle className="flex items-center gap-2.5 font-mono text-base">
+        <DialogHeader className="border-b border-border px-6 py-5">
+          <DialogTitle className="flex items-center gap-2.5 font-display text-xl font-bold">
             <FolderPlus aria-hidden="true" className="size-5 text-primary" />
             {copy.createDialogTitle}
           </DialogTitle>
@@ -166,7 +161,7 @@ export function CreateWorkbenchDialog({
             <Label htmlFor="workbench-name">{copy.workbenchName}</Label>
             <Input
               aria-invalid={Boolean(errors.name)}
-              className="h-10 rounded-none bg-white/45 shadow-none"
+              className="h-10 bg-card shadow-none"
               disabled={interactionLocked}
               id="workbench-name"
               maxLength={120}
@@ -205,7 +200,7 @@ export function CreateWorkbenchDialog({
                 const Icon = sourceIcons[sourceKind]
                 return (
                   <ToggleGroupItem
-                    className="h-auto min-h-24 w-full max-w-full shrink items-start justify-start gap-3 overflow-hidden rounded-none border border-border-default px-4 py-3 text-left whitespace-normal data-[state=on]:border-primary data-[state=on]:bg-accent"
+                    className="h-auto min-h-24 w-full max-w-full shrink items-start justify-start gap-3 overflow-hidden rounded-xl border border-border-default px-4 py-3 text-left whitespace-normal data-[state=on]:border-primary data-[state=on]:bg-accent"
                     key={sourceKind}
                     value={sourceKind}
                   >
@@ -250,7 +245,7 @@ export function CreateWorkbenchDialog({
           <Label
             className={cn(
               buttonVariants({ variant: "outline" }),
-              "flex h-28 w-full flex-col gap-1.5 rounded-none border-dashed border-rule bg-background text-muted-foreground shadow-none hover:border-primary hover:bg-accent hover:text-signal-dark",
+              "flex h-28 w-full flex-col gap-1.5 rounded-xl border-dashed border-rule bg-background text-muted-foreground shadow-none hover:border-primary hover:bg-accent hover:text-accent-foreground",
               (interactionLocked || folderPolicyBlocked) &&
                 "pointer-events-none opacity-60",
             )}
@@ -291,7 +286,7 @@ export function CreateWorkbenchDialog({
           {draft.source && !interactionLocked && (
             <section
               aria-label={copy.importSummary}
-              className="border border-technical bg-white/35"
+              className="overflow-hidden rounded-xl border border-technical/35 bg-technical/5"
             >
               <div className="flex items-center justify-between border-b border-technical/45 px-4 py-3">
                 <div className="flex min-w-0 items-center gap-2">
@@ -367,17 +362,17 @@ export function CreateWorkbenchDialog({
           )}
 
           {errors.upload && !interactionLocked && (
-            <div className="border-l-4 border-destructive bg-destructive/8 px-4 py-3 text-sm text-destructive">
+            <div className="rounded-xl border border-destructive/35 bg-destructive/8 px-4 py-3 text-sm text-destructive">
               <strong className="block">{copy.createFailed}</strong>
               <span className="mt-1 block text-xs">{errors.upload}</span>
             </div>
           )}
         </div>
 
-        <DialogFooter className="border-t border-foreground px-5 py-4">
+        <DialogFooter className="border-t border-border bg-muted/55 px-5 py-4">
           <DialogClose asChild>
             <Button
-              className="rounded-none border-foreground shadow-none"
+              className="border-border shadow-none"
               disabled={interactionLocked}
               type="button"
               variant="outline"
@@ -386,7 +381,7 @@ export function CreateWorkbenchDialog({
             </Button>
           </DialogClose>
           <Button
-            className="min-w-44 rounded-none font-bold shadow-none"
+            className="min-w-44 rounded-xl font-bold shadow-none"
             disabled={interactionLocked}
             onClick={onSubmit}
             type="button"

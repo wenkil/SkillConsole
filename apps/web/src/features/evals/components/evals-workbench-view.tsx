@@ -42,7 +42,7 @@ export function EvalsWorkbenchView({
   if (controller.error) {
     return (
       <main className="flex h-full items-center justify-center px-8">
-        <div className="max-w-md border border-destructive/50 bg-paper-raised p-7 text-center">
+        <div className="max-w-md rounded-2xl border border-destructive/30 bg-destructive/5 p-7 text-center shadow-[var(--surface-shadow)]">
           <AlertTriangle className="mx-auto size-8 text-destructive" />
           <h1 className="mt-3 text-lg font-[760]">
             {t("states.loadError")}
@@ -51,7 +51,7 @@ export function EvalsWorkbenchView({
             {t("states.loadErrorDescription")}
           </p>
           <Button
-            className="mt-4 rounded-none"
+            className="mt-4 rounded-xl"
             onClick={controller.actions.retry}
             type="button"
             variant="outline"
@@ -181,7 +181,7 @@ export function EvalsWorkbenchView({
         onTabChange={setDrawerTab}
       />
 
-      <footer className="ui-meta flex h-9 shrink-0 items-center justify-between border-t border-border-strong bg-surface-muted px-5 uppercase">
+      <footer className="ui-meta flex h-9 shrink-0 items-center justify-between border-t border-border bg-surface-muted px-5">
         <span className="flex items-center gap-1.5">
           <Layers3 className="size-3.5" />
           {t("footer.snapshotBoundary")}

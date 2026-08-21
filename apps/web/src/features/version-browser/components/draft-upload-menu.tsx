@@ -89,7 +89,7 @@ export function DraftUploadMenu({
         <DropdownMenu.Trigger asChild>
           <Button
             aria-label={t("upload.menuLabel")}
-            className="h-8 rounded-none px-2.5"
+            className="h-8 rounded-xl px-2.5"
             disabled={pending}
             size="sm"
             type="button"
@@ -103,7 +103,7 @@ export function DraftUploadMenu({
         <DropdownMenu.Portal>
           <DropdownMenu.Content
             align="end"
-            className="z-50 min-w-64 border border-border-strong bg-paper-raised p-1 shadow-[6px_6px_0_var(--rule-soft)]"
+            className="z-50 min-w-64 rounded-xl border border-border bg-paper-raised p-1 shadow-[var(--surface-shadow)]"
             sideOffset={5}
           >
             <DropdownMenu.Item
@@ -180,10 +180,10 @@ export function DraftUploadMenu({
         open={mode !== null}
       >
         <DialogContent
-          className="max-h-[88vh] gap-0 overflow-hidden rounded-none border-border-strong bg-paper-raised p-0 sm:max-w-2xl"
+          className="max-h-[88vh] gap-0 overflow-hidden rounded-[20px] border-border bg-card p-0 sm:max-w-2xl"
           showCloseButton={!pending}
         >
-          <DialogHeader className="border-b border-border-strong px-5 py-4">
+          <DialogHeader className="border-b border-border px-5 py-4">
             <DialogTitle className="font-mono text-base">
               {mode === "single"
                 ? t("upload.singleDialogTitle")
@@ -209,7 +209,7 @@ export function DraftUploadMenu({
               <label className="grid gap-1.5 text-sm font-semibold">
                 {t("draft.uploadPath")}
                 <Input
-                  className="h-10 rounded-none font-mono text-sm"
+                  className="h-10 rounded-xl font-mono text-sm"
                   disabled={pending}
                   onChange={(event) => setSinglePath(event.target.value)}
                   placeholder={t("draft.uploadPathPlaceholder")}
@@ -284,9 +284,9 @@ export function DraftUploadMenu({
             </div>
           )}
 
-          <DialogFooter className="border-t border-border-strong px-5 py-4">
+          <DialogFooter className="border-t border-border bg-surface-muted px-5 py-4">
             <Button
-              className="rounded-none"
+              className="rounded-xl"
               disabled={pending}
               onClick={resetDialog}
               type="button"
@@ -296,7 +296,7 @@ export function DraftUploadMenu({
             </Button>
             {mode === "single" ? (
               <Button
-                className="rounded-none"
+                className="rounded-xl"
                 disabled={!singleFile || !singlePath.trim() || pending}
                 onClick={() => {
                   if (!singleFile) return
@@ -321,7 +321,7 @@ export function DraftUploadMenu({
               </Button>
             ) : !folderPreview ? (
               <Button
-                className="rounded-none"
+                className="rounded-xl"
                 disabled={folderFiles.length === 0 || pending}
                 onClick={() => {
                   void onPreviewFolder(
@@ -345,7 +345,7 @@ export function DraftUploadMenu({
               </Button>
             ) : (
               <Button
-                className="rounded-none"
+                className="rounded-xl"
                 disabled={
                   !folderPreview.committable ||
                   pending

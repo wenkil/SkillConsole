@@ -32,17 +32,17 @@ export function TestRunStatusBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 border px-2 py-1 font-mono text-xs leading-4 font-bold",
+        "inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 font-mono text-xs leading-4 font-bold",
         isActiveTestRun(status) &&
-          "border-status-running/55 text-status-running",
+          "border-status-running/25 bg-status-running/10 text-status-running",
         status === "COMPLETED" &&
-          "border-status-passed/55 text-status-passed",
+          "border-status-passed/25 bg-status-passed/10 text-status-passed",
         status === "FAILED" &&
-          "border-status-failed/55 text-status-failed",
+          "border-status-failed/25 bg-status-failed/10 text-status-failed",
         status === "INTERRUPTED" &&
-          "border-status-blocked/55 text-status-blocked",
+          "border-status-blocked/25 bg-status-blocked/10 text-status-blocked",
         status === "CANCELED" &&
-          "border-status-cancelled/55 text-status-cancelled",
+          "border-status-cancelled/25 bg-status-cancelled/10 text-status-cancelled",
       )}
     >
       <Icon

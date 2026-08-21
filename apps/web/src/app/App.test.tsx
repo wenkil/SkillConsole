@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { I18nextProvider } from "react-i18next"
 import { MemoryRouter } from "react-router-dom"
@@ -191,17 +191,15 @@ describe("workspace routes", () => {
     ).toHaveAttribute("aria-current", "page")
   })
 
-  it("renders the datasets placeholder without fake actions", () => {
+  it("keeps the unimplemented datasets module out of the visible workspace", async () => {
     renderRoute(`/workbenches/${workspace.id}/datasets`)
 
-    const main = screen.getByRole("main")
     expect(
-      within(main).getByRole("heading", { name: "数据集" }),
+      await screen.findByRole("heading", {
+        name: new RegExp(workspace.name),
+      }),
     ).toBeInTheDocument()
-    expect(
-      within(main).getByText("将在后续迭代实现"),
-    ).toBeInTheDocument()
-    expect(within(main).queryByRole("button")).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: "数据集" })).not.toBeInTheDocument()
   })
 
   it.each([

@@ -84,7 +84,7 @@ function GenerationSetup({
           <label className="grid gap-1.5 text-sm font-semibold">
             {t("controls.target")}
             <select
-              className="h-10 w-full border border-border-default bg-background px-3 font-mono text-sm outline-none focus:border-focus-ring"
+              className="h-10 w-full rounded-[10px] border border-border-default bg-background px-3 font-mono text-sm outline-none transition-colors focus:border-focus-ring focus:ring-2 focus:ring-ring/15"
               disabled={generationBlocked || pending}
               onChange={(event) => onTargetChange(event.target.value)}
               value={selectedTargetKey}
@@ -101,7 +101,7 @@ function GenerationSetup({
           <label className="grid gap-1.5 text-sm font-semibold">
             {t("controls.count")}
             <input
-              className="h-10 w-full border border-border-default bg-background px-3 font-mono text-sm outline-none focus:border-focus-ring"
+              className="h-10 w-full rounded-[10px] border border-border-default bg-background px-3 font-mono text-sm outline-none transition-colors focus:border-focus-ring focus:ring-2 focus:ring-ring/15"
               disabled={generationBlocked || pending}
               max={20}
               min={1}
@@ -131,7 +131,7 @@ function GenerationSetup({
       </div>
       <div className="sticky bottom-0 mx-auto mt-7 flex max-w-2xl justify-end border-t border-border-default bg-background py-4">
         <Button
-          className="min-w-44 rounded-none"
+          className="min-w-44 rounded-xl"
           disabled={
             generationBlocked ||
             pending ||
@@ -218,10 +218,10 @@ export function EvalTaskDrawer({
     <>
       <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent
-        className="top-0 right-0 bottom-0 left-auto flex h-dvh w-[min(62rem,92vw)] max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-y-0 border-r-0 border-l border-border-strong bg-background p-0 shadow-2xl sm:max-w-none"
+        className="top-0 right-0 bottom-0 left-auto flex h-dvh w-[min(62rem,92vw)] max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-tl-[20px] rounded-bl-[20px] border-y-0 border-r-0 border-l border-border bg-background p-0 shadow-[var(--dialog-shadow)] sm:max-w-none"
         showCloseButton
       >
-        <DialogHeader className="shrink-0 border-b border-border-strong px-7 py-5 pr-14">
+        <DialogHeader className="shrink-0 border-b border-border px-7 py-5 pr-14">
           <div className="ui-label text-signal-dark">
             {creating ? t("drawer.createEyebrow") : t("drawer.detailEyebrow")}
           </div>
@@ -266,7 +266,7 @@ export function EvalTaskDrawer({
           <>
             <div
               aria-label={t("drawer.tabsLabel")}
-              className="flex shrink-0 border-b border-border-strong bg-paper-muted px-5"
+              className="flex shrink-0 border-b border-border bg-paper-muted px-5"
               role="tablist"
             >
               {(["process", "result"] as const).map((item) => {
@@ -291,7 +291,7 @@ export function EvalTaskDrawer({
                   >
                     {t(`drawer.tabs.${item}`)}
                     {item === "result" && task.draftStatus ? (
-                      <span className="ml-2 border border-status-passed/50 px-1.5 py-0.5 text-[11px] leading-4 text-status-passed">
+                      <span className="ml-2 rounded-lg border border-status-passed/25 bg-status-passed/10 px-1.5 py-0.5 text-[11px] leading-4 text-status-passed">
                         {t(`table.reviewStatus.${task.draftStatus}`)}
                       </span>
                     ) : null}
@@ -322,7 +322,7 @@ export function EvalTaskDrawer({
               )}
             </div>
 
-            <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border-strong bg-surface-muted px-6 py-3">
+            <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border bg-surface-muted px-6 py-3">
               <div className="text-sm text-muted-foreground">
                 {draft?.status === "PUBLISHED" ? (
                   <span className="flex items-center gap-2 font-semibold text-status-passed">
@@ -344,7 +344,7 @@ export function EvalTaskDrawer({
               <div className="flex gap-2">
                 {draft?.status === "PUBLISHED" &&
                 savedRevisionId ? (
-                  <Button asChild className="rounded-none">
+                  <Button asChild className="rounded-xl">
                     <Link
                       to={`/workbenches/${workspaceId}/runs?evalRevisionId=${encodeURIComponent(savedRevisionId)}`}
                     >
@@ -355,7 +355,7 @@ export function EvalTaskDrawer({
                 ) : null}
                 {active ? (
                   <Button
-                    className="rounded-none"
+                    className="rounded-xl"
                     disabled={pending}
                     onClick={() => {
                       void onCancel(task.id).catch(() => undefined)
@@ -369,7 +369,7 @@ export function EvalTaskDrawer({
                 ) : null}
                 {task.status === "FAILED" ? (
                   <Button
-                    className="rounded-none"
+                    className="rounded-xl"
                     disabled={pending || generationBlocked}
                     onClick={() => {
                       void onRetry(task.id).catch(() => undefined)
@@ -384,7 +384,7 @@ export function EvalTaskDrawer({
                 {tab === "result" && draft?.status === "READY" ? (
                   <>
                     <Button
-                      className="rounded-none"
+                      className="rounded-xl"
                       disabled={pending}
                       onClick={() => {
                         setConfirmation({
@@ -402,7 +402,7 @@ export function EvalTaskDrawer({
                       {t("save.discard")}
                     </Button>
                     <Button
-                      className="rounded-none"
+                      className="rounded-xl"
                       disabled={pending}
                       onClick={() => {
                         setConfirmation({

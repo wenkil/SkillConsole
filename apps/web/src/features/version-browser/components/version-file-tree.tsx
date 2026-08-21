@@ -164,7 +164,7 @@ export function VersionFileTree({
           />
           <Input
             aria-label={copy.searchFiles}
-            className="h-9 rounded-none border-border-default bg-background pl-8 font-mono text-sm shadow-none"
+            className="h-9 rounded-xl border-border-default bg-background pl-8 font-mono text-sm shadow-none"
             onChange={(event) => onSearchTermChange(event.target.value)}
             placeholder={copy.searchFiles}
             type="search"

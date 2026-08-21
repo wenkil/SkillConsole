@@ -33,7 +33,7 @@ export function WorkbenchSidebar({
   onRetry,
 }: WorkbenchSidebarProps) {
   return (
-    <aside className="relative flex h-full min-h-0 flex-col overflow-hidden border-r border-border-strong bg-sidebar">
+    <aside className="relative flex h-full min-h-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar">
       <TechnicalRuler orientation="vertical" />
 
       <div className="flex h-full min-h-0 flex-1 flex-col px-5 pt-6 pb-5 pl-9">
@@ -44,7 +44,7 @@ export function WorkbenchSidebar({
           </span>
         </div>
 
-        <div className="ui-label mb-2 flex items-center gap-2 border-b border-border-subtle pb-2.5">
+        <div className="ui-label mb-2 flex items-center gap-2 pb-2.5">
           <Layers3 aria-hidden="true" className="size-3.5" />
           {copy.workbenchList}
         </div>
@@ -54,12 +54,12 @@ export function WorkbenchSidebar({
           className="min-h-0 flex-1 overflow-y-auto pr-1"
         >
           {loading ? (
-            <div className="mt-2 flex items-center justify-center gap-2 border border-dashed border-border-default px-3 py-8 font-mono text-xs text-muted-foreground uppercase">
+            <div className="mt-2 flex items-center justify-center gap-2 rounded-xl border border-dashed border-border px-3 py-8 text-xs text-muted-foreground">
               <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
               {copy.loadingWorkbenches}
             </div>
           ) : error ? (
-            <div className="mt-2 border border-destructive/55 bg-destructive/5 px-3 py-5 text-center">
+            <div className="mt-2 rounded-xl border border-destructive/35 bg-destructive/5 px-3 py-5 text-center">
               <AlertTriangle
                 aria-hidden="true"
                 className="mx-auto mb-2 size-6 text-destructive"
@@ -69,7 +69,7 @@ export function WorkbenchSidebar({
                 {copy.listErrorDescription}
               </span>
               <Button
-                className="mt-3 h-8 rounded-none text-xs shadow-none"
+                className="mt-3 h-8 rounded-xl text-xs shadow-none"
                 onClick={onRetry}
                 type="button"
                 variant="outline"
@@ -79,7 +79,7 @@ export function WorkbenchSidebar({
               </Button>
             </div>
           ) : workspaces.length === 0 ? (
-            <div className="mt-2 border border-dashed border-rule px-3 py-7 text-center text-muted-foreground">
+            <div className="mt-2 rounded-xl border border-dashed border-rule px-3 py-7 text-center text-muted-foreground">
               <Folder
                 aria-hidden="true"
                 className="mx-auto mb-2 size-7"
@@ -97,9 +97,9 @@ export function WorkbenchSidebar({
               {workspaces.map((workspace) => (
                 <button
                   className={cn(
-                    "w-full border border-border-subtle px-3 py-3 text-left transition-colors hover:border-primary hover:bg-accent",
+                    "w-full rounded-xl border border-transparent px-3 py-3 text-left transition-colors hover:bg-accent",
                     activeWorkspaceId === workspace.id &&
-                      "border-primary bg-accent shadow-[inset_3px_0_0_var(--primary)]",
+                      "bg-accent text-accent-foreground",
                   )}
                   key={workspace.id}
                   onClick={() => onWorkspaceSelect(workspace.id)}

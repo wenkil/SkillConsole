@@ -73,7 +73,7 @@ export function WorkspaceShellRoute() {
     return (
       <ApplicationFrame>
         <main className="flex h-full min-h-0 items-center justify-center px-8">
-          <div className="max-w-md border border-destructive/50 bg-paper-raised p-7 text-center">
+          <div className="max-w-md rounded-2xl border border-destructive/30 bg-destructive/5 p-7 text-center shadow-[var(--surface-shadow)]">
             <PackageOpen
               aria-hidden="true"
               className="mx-auto mb-3 size-8 text-destructive"
@@ -85,7 +85,7 @@ export function WorkspaceShellRoute() {
               {t("workspaceShell.loadErrorDescription")}
             </p>
             <Button
-              className="mt-4 rounded-none"
+              className="mt-4 rounded-xl"
               onClick={controller.actions.retryWorkspaceList}
               type="button"
               variant="outline"

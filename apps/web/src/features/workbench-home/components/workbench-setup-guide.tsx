@@ -27,12 +27,10 @@ export function WorkbenchSetupGuide({ copy }: WorkbenchSetupGuideProps) {
   return (
     <section aria-labelledby="workbench-initialization" className="mt-8">
       <h2
-        className="flex items-center gap-2.5 border-b border-border-default pb-3 text-base leading-6 font-semibold"
+        className="border-b border-border pb-3 text-base leading-6 font-semibold"
         id="workbench-initialization"
       >
-        <span className="font-mono text-sm font-extrabold text-primary">00</span>
-        <span className="font-mono text-muted-foreground">/</span>
-        <span>{copy.initialization}</span>
+        {copy.initialization}
       </h2>
 
       <p className="my-4 text-sm leading-relaxed text-muted-foreground">
@@ -48,10 +46,10 @@ export function WorkbenchSetupGuide({ copy }: WorkbenchSetupGuideProps) {
 
             return (
               <article
-                className="relative min-h-56 border-r border-dotted border-border-default px-5 py-6 last:border-r-0"
+                className="relative min-h-56 border-r border-border-subtle px-5 py-6 last:border-r-0"
                 key={step.title}
               >
-                <span className="font-mono text-[17px] font-extrabold text-primary">
+                <span className="text-sm font-extrabold text-primary">
                   {String(index + 1).padStart(2, "0")}
                 </span>
                 <h3 className="mt-1.5 text-sm leading-5 font-semibold">
@@ -69,7 +67,7 @@ export function WorkbenchSetupGuide({ copy }: WorkbenchSetupGuideProps) {
                   {step.description}
                 </p>
                 {index < copy.steps.length - 1 && (
-                  <span className="absolute top-[5.8rem] -right-2 z-10 hidden size-4 place-items-center bg-paper-raised xl:grid">
+                  <span className="absolute top-[5.8rem] -right-2 z-10 hidden size-4 place-items-center rounded-full bg-paper-raised xl:grid">
                     <ArrowRight aria-hidden="true" className="size-3" />
                   </span>
                 )}
@@ -79,7 +77,7 @@ export function WorkbenchSetupGuide({ copy }: WorkbenchSetupGuideProps) {
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-[auto_1fr] items-center gap-4 border border-border-strong bg-surface-muted px-5 py-4">
+      <div className="mt-4 grid grid-cols-[auto_1fr] items-center gap-4 rounded-2xl bg-technical/8 px-5 py-4">
         <ShieldCheck
           aria-hidden="true"
           className="size-8 text-technical"

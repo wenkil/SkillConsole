@@ -1,8 +1,8 @@
 import {
   Activity,
+  ArrowRight,
   CircleDashed,
   FileChartColumn,
-  Files,
   FlaskConical,
   GitCompareArrows,
   PencilLine,
@@ -23,28 +23,37 @@ interface WorkbenchOverviewProps {
   locale: string
 }
 
-function TodoPanel({
+function ModuleEntry({
   icon: Icon,
   title,
   description,
+  to,
 }: {
   icon: LucideIcon
   title: string
   description: string
+  to: string
 }) {
   return (
-    <article className="border border-border-default bg-paper-raised p-5">
-      <div className="flex items-center justify-between gap-4">
-        <Icon className="size-5 text-technical" />
-        <span className="ui-label border border-border-default bg-surface-muted px-2 py-1">
-          TODO
+    <Link
+      aria-label={title}
+      className="group grid grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center gap-4 px-5 py-4 transition-colors hover:bg-accent/55 focus-visible:bg-accent/55"
+      to={to}
+    >
+      <span className="grid size-11 place-items-center rounded-2xl bg-technical/10 text-technical">
+        <Icon aria-hidden="true" className="size-5" strokeWidth={1.7} />
+      </span>
+      <span className="min-w-0">
+        <strong className="block text-[15px] leading-5">{title}</strong>
+        <span className="mt-1 block text-[13px] leading-5 text-muted-foreground">
+          {description}
         </span>
-      </div>
-      <strong className="mt-4 block text-[15px] leading-5">{title}</strong>
-      <p className="mt-2 text-[13px] leading-5 text-muted-foreground">
-        {description}
-      </p>
-    </article>
+      </span>
+      <ArrowRight
+        aria-hidden="true"
+        className="size-4 text-muted-foreground group-hover:text-primary"
+      />
+    </Link>
   )
 }
 
@@ -72,7 +81,16 @@ export function WorkbenchOverview({
       <WorkbenchPageHeader
         actions={
           <>
-            <Button asChild className="h-10 rounded-none">
+            {online ? (
+              <span className="rounded-full bg-technical/10 px-3 py-1.5 text-xs font-bold leading-5 text-technical-foreground">
+                {dashboard.publishedVersion(online.name)}
+              </span>
+            ) : (
+              <span className="rounded-full bg-surface-muted px-3 py-1.5 text-xs font-medium leading-5 text-muted-foreground">
+                {dashboard.noPublishedVersion}
+              </span>
+            )}
+            <Button asChild className="h-10">
               <Link to={`/workbenches/${workspace.id}/versions`}>
                 <PencilLine data-icon="inline-start" />
                 {draft
@@ -81,7 +99,7 @@ export function WorkbenchOverview({
               </Link>
             </Button>
             {workspace.versionCount >= 2 ? (
-              <Button asChild className="h-10 rounded-none" variant="outline">
+              <Button asChild className="h-10" variant="outline">
                 <Link to={`/workbenches/${workspace.id}/versions/compare`}>
                   <GitCompareArrows data-icon="inline-start" />
                   {dashboard.compareVersions}
@@ -123,56 +141,38 @@ export function WorkbenchOverview({
             />
           </div>
         }
-        title={
-          <span className="flex flex-wrap items-center gap-3">
-            <span>{workspace.name}</span>
-            {online ? (
-              <span className="border border-technical/50 bg-technical/8 px-3 py-1.5 font-mono text-xs font-bold leading-5 text-technical-foreground">
-                {dashboard.publishedVersion(online.name)}
-              </span>
-            ) : (
-              <span className="border border-border-default bg-surface-muted px-3 py-1.5 font-mono text-xs font-normal leading-5 text-muted-foreground">
-                {dashboard.noPublishedVersion}
-              </span>
-            )}
-          </span>
-        }
+        title={workspace.name}
       />
 
-      <section className="mt-6">
-        <div className="mb-3 flex items-center justify-between gap-4">
-          <h2 className="ui-label">
+      <section className="mt-6 overflow-hidden rounded-[var(--surface-radius)] border border-border bg-card shadow-[var(--surface-shadow-soft)]">
+        <div className="border-b border-border px-5 py-4">
+          <h2 className="text-base font-semibold">
             {dashboard.evidenceWorkspace}
           </h2>
-          <span className="ui-meta">
-            {dashboard.futureIteration}
-          </span>
         </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <TodoPanel
+        <div className="divide-y divide-border-subtle">
+          <ModuleEntry
             description={dashboard.cards.testCases.description}
             icon={FlaskConical}
             title={dashboard.cards.testCases.title}
+            to={`/workbenches/${workspace.id}/test-cases`}
           />
-          <TodoPanel
-            description={dashboard.cards.datasets.description}
-            icon={Files}
-            title={dashboard.cards.datasets.title}
-          />
-          <TodoPanel
+          <ModuleEntry
             description={dashboard.cards.testRuns.description}
             icon={Activity}
             title={dashboard.cards.testRuns.title}
+            to={`/workbenches/${workspace.id}/runs`}
           />
-          <TodoPanel
+          <ModuleEntry
             description={dashboard.cards.comparisonReports.description}
             icon={FileChartColumn}
             title={dashboard.cards.comparisonReports.title}
+            to={`/workbenches/${workspace.id}/reports`}
           />
         </div>
       </section>
 
-      <section className="mt-6 border border-border-default bg-surface-muted p-5">
+      <section className="mt-6 rounded-2xl bg-surface-muted p-5">
         <div className="flex items-start gap-3">
           <Tags className="mt-0.5 size-5 text-technical" />
           <div>

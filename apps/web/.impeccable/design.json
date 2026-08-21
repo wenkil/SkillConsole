@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-20T23:26:12.0895642+08:00",
+  "title": "Design System: SkillConsole Field Laboratory",
+  "extensions": {
+    "colorMeta": {
+      "primary-cobalt": { "role": "primary", "displayName": "可信钴蓝", "canonical": "#245fd4", "tonalRamp": ["#0d1e42", "#16356f", "#1e50b8", "#245fd4", "#5f8ae3", "#9db8ee", "#cfe0ff", "#f1f5ff"] },
+      "active-teal": { "role": "secondary", "displayName": "实验青", "canonical": "#138f96", "tonalRamp": ["#082f32", "#0b4e52", "#0d7075", "#138f96", "#50abb0", "#8bc8cb", "#c4e5e5", "#effafa"] },
+      "canvas-cold-white": { "role": "neutral", "displayName": "冷白画布", "canonical": "#fbfcfc", "tonalRamp": ["#182024", "#344047", "#647079", "#9aa5ac", "#cbd2d6", "#e5e9eb", "#f5f7f8", "#fbfcfc"] },
+      "ink-blue-black": { "role": "neutral", "displayName": "蓝黑墨色", "canonical": "#16233a", "tonalRamp": ["#101725", "#16233a", "#2b3d59", "#536581", "#8290a5", "#b5bfcd", "#dfe5ec", "#f4f7fa"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "研究标题", "purpose": "页面级主标题，提供克制的实验记录感。" },
+      "body": { "displayName": "工作台正文", "purpose": "导航、说明、表格和交互文案。" },
+      "data": { "displayName": "证据数据", "purpose": "ID、哈希、版本、数值和日志。" }
+    },
+    "shadows": [
+      { "name": "surface", "value": "0 12px 28px rgb(40 57 83 / 7%)", "purpose": "独立卡片和控制面板。" },
+      { "name": "surface-soft", "value": "0 8px 24px rgb(40 57 83 / 5%)", "purpose": "低层级概览容器。" },
+      { "name": "dialog", "value": "0 22px 70px rgb(16 34 65 / 20%)", "purpose": "模态弹窗与侧滑工作面板。" }
+    ],
+    "motion": [],
+    "breakpoints": [
+      { "name": "desktop-min", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "每个视图唯一的高优先级操作。",
+      "html": "<button class=\"ds-btn-primary\">开始测试</button>",
+      "css": ".ds-btn-primary{height:36px;padding:8px 16px;border:0;border-radius:10px;background:var(--primary);color:var(--primary-foreground);font:600 14px/1.25 var(--font-sans);box-shadow:0 7px 18px rgb(36 95 212 / 18%);cursor:pointer}.ds-btn-primary:hover{background:#1e54bf}.ds-btn-primary:focus-visible{outline:3px solid rgb(36 95 212 / 24%);outline-offset:2px}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "编辑工作台名称、版本名称与筛选条件。",
+      "html": "<input class=\"ds-input\" value=\"V2 candidate\" aria-label=\"Version name\" />",
+      "css": ".ds-input{height:40px;padding:8px 12px;border:1px solid var(--input);border-radius:10px;background:var(--card);color:var(--foreground);font:400 14px/1.5 var(--font-sans);outline:none}.ds-input:hover{border-color:var(--border-strong)}.ds-input:focus-visible{border-color:var(--focus-ring);box-shadow:0 0 0 3px rgb(36 95 212 / 15%)}"
+    },
+    {
+      "name": "Active Navigation Item",
+      "kind": "nav",
+      "description": "工作区侧栏当前模块。",
+      "html": "<a class=\"ds-nav-active\" href=\"#\">测试任务 <span>02</span></a>",
+      "css": ".ds-nav-active{display:flex;align-items:center;justify-content:space-between;min-height:40px;padding:8px 12px;border-radius:10px;background:var(--sidebar-accent);color:var(--sidebar-accent-foreground);font:600 14px/1.25 var(--font-sans);text-decoration:none}.ds-nav-active:hover{background:#dfe8ff}.ds-nav-active:focus-visible{outline:3px solid rgb(36 95 212 / 20%);outline-offset:1px}.ds-nav-active span{font:600 11px/1 var(--font-mono)}"
+    },
+    {
+      "name": "Evidence Card",
+      "kind": "card",
+      "refersTo": "card-default",
+      "description": "承载摘要、模块入口和控制面板的白色表面。",
+      "html": "<section class=\"ds-card\"><strong>实验记录</strong><p>查看版本、测试任务与报告证据。</p></section>",
+      "css": ".ds-card{padding:20px;border:1px solid var(--border);border-radius:18px;background:var(--card);color:var(--foreground);box-shadow:0 8px 24px rgb(40 57 83 / 5%);font-family:var(--font-sans)}.ds-card strong{font-size:16px}.ds-card p{margin:8px 0 0;color:var(--muted-foreground);font-size:13px;line-height:1.6}"
+    },
+    {
+      "name": "Running Status",
+      "kind": "chip",
+      "description": "表示真实运行中的低噪声状态标签。",
+      "html": "<span class=\"ds-chip-running\">运行中</span>",
+      "css": ".ds-chip-running{display:inline-flex;align-items:center;padding:4px 8px;border:1px solid rgb(19 143 150 / 25%);border-radius:8px;background:rgb(19 143 150 / 10%);color:var(--technical-foreground);font:600 12px/1.3 var(--font-mono)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "田野实验室",
+    "overview": "SkillConsole 是一张长期运行的实验工作台，而不是营销页或装饰性的未来科技界面。界面以冷白画布、可信的蓝色操作信号、青绿色运行状态和克制的测量细节建立实验室感；唯一允许作为显性装饰的测量符号是尺子品牌图形。视觉层级优先回答我在哪里、当前是什么状态、下一步做什么，随后才暴露运行证据、日志、Token 和成本。",
+    "keyCharacteristics": ["冷静、清晰、可信，像有秩序的实验记录台。", "圆润但不软萌，以 10px 控件和 18–20px 容器形成自然边界。", "蓝色表示操作，青绿色表示运行与技术上下文，语义色只表达真实状态。", "不使用粒子、网络连线、装饰性扫描线或背景动效争夺主视觉。"],
+    "rules": [
+      { "name": "The Semantic Color Rule", "body": "红色只表示失败、危险或破坏性操作；琥珀色只表示警告和待处理，不能作为品牌装饰色。", "section": "colors" },
+      { "name": "The One Action Voice Rule", "body": "同一视图只让一个主要操作使用实心钴蓝，其余操作使用描边或幽灵样式。", "section": "colors" },
+      { "name": "The Honest Mono Rule", "body": "只有机器生成或需要逐字符比较的内容使用等宽字体；产品标题、按钮与普通标签禁止用等宽字体伪装技术感。", "section": "typography" },
+      { "name": "The Flat Evidence Rule", "body": "日志、表格和证据视图在默认状态保持平面；只有浮层和明确的容器边界获得抬升。", "section": "elevation" }
+    ],
+    "dos": ["Do 让页面先表达状态、核心结果与下一步操作，再提供证据深钻。", "Do 复用全局令牌和共享按钮、输入、弹窗、状态条组件。", "Do 同时使用图标、文字和颜色表达状态，保证语义不依赖颜色。", "Do 保留尺子作为唯一显性测量识别，并保持低干扰。"],
+    "donts": ["Don't 把红色或琥珀色用于品牌按钮、普通边框或装饰背景。", "Don't 恢复米黄纸张底、深黑硬边框、硬偏移阴影和全直角卡片。", "Don't 添加粒子网络、连接点、扫描线、漂浮光斑或其他背景动效。", "Don't 在未实现模块上展示 TODO 卡片、虚假数据或不可用主操作。", "Don't 默认展开 Token、成本、哈希和完整日志；它们属于详情与证据视图。"]
+  }
+}

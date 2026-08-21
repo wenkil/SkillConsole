@@ -8,7 +8,6 @@ import {
 import { AppLayoutRoute } from "@/routes/app-layout-route"
 import { WorkbenchHomeRoute } from "@/routes/workbench-home-route"
 import {
-  ModulePlaceholderRoute,
   EvalsWorkbenchRoute,
   TestRunDetailRoute,
   TestReportsWorkbenchRoute,
@@ -43,7 +42,7 @@ export function AppRoutes() {
             path="test-cases"
           />
           <Route
-            element={<ModulePlaceholderRoute module="datasets" />}
+            element={<Navigate replace relative="path" to=".." />}
             path="datasets"
           />
           <Route

@@ -61,7 +61,20 @@ describe("WorkbenchOverview", () => {
     expect(screen.getByText("当前上线 · V1")).toBeInTheDocument()
     expect(screen.getByText("当前上线版本")).toBeInTheDocument()
     expect(screen.getByText("已保存版本")).toBeInTheDocument()
-    expect(screen.getAllByText(/TODO/).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/TODO/)).not.toBeInTheDocument()
+    expect(screen.queryByText("数据集")).not.toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "测试用例" })).toHaveAttribute(
+      "href",
+      `/workbenches/${workspace.id}/test-cases`,
+    )
+    expect(screen.getByRole("link", { name: "测试任务" })).toHaveAttribute(
+      "href",
+      `/workbenches/${workspace.id}/runs`,
+    )
+    expect(screen.getByRole("link", { name: "测试报告" })).toHaveAttribute(
+      "href",
+      `/workbenches/${workspace.id}/reports`,
+    )
     expect(screen.queryByText("已通过")).not.toBeInTheDocument()
     expect(screen.queryByText(/sha256:/)).not.toBeInTheDocument()
   })

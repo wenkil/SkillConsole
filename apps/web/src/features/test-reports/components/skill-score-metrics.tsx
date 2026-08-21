@@ -26,10 +26,10 @@ ChartJS.register(
   Tooltip,
 )
 
-const subjectColors = ["#16847f", "#ef4b35"] as const
-const subjectBorderColors = ["#0f615d", "#a93425"] as const
-const gridColor = "rgba(164, 156, 141, 0.35)"
-const textColor = "#39434b"
+const subjectColors = ["#245fd4", "#138f96"] as const
+const subjectBorderColors = ["#1e50b8", "#0d7075"] as const
+const gridColor = "rgba(203, 215, 224, 0.62)"
+const textColor = "#64738c"
 
 function createBarOptions({
   axisFormatter,
@@ -45,7 +45,7 @@ function createBarOptions({
   return {
     responsive: true,
     maintainAspectRatio: false,
-    animation: { duration: 260 },
+    animation: { duration: 0 },
     interaction: {
       axis: "x",
       intersect: false,
@@ -269,8 +269,8 @@ export function SkillScoreMetricsComparison({
   ]
 
   return (
-    <section aria-labelledby="skill-score-metrics-title" className="border border-border-strong bg-paper-raised">
-      <header className="border-b border-border-strong px-5 py-4">
+    <section aria-labelledby="skill-score-metrics-title" className="overflow-hidden rounded-2xl border border-border bg-paper-raised shadow-[var(--surface-shadow)]">
+      <header className="border-b border-border px-5 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-base font-bold" id="skill-score-metrics-title">
@@ -280,7 +280,7 @@ export function SkillScoreMetricsComparison({
               {t("skillScore.metrics.description")}
             </p>
           </div>
-          <span className="border border-border-default bg-paper-muted px-2 py-1 font-mono text-[11px] font-bold">
+          <span className="rounded-lg border border-border-default bg-paper-muted px-2 py-1 font-mono text-[11px] font-bold text-muted-foreground">
             {t(statusTranslationKey[metrics.status])}
           </span>
         </div>

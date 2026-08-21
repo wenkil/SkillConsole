@@ -15,13 +15,13 @@ export function WorkbenchHomeView({
 }: WorkbenchHomeViewProps) {
   return (
     <main className="h-full min-h-0 min-w-0 overflow-y-auto px-6 py-6 lg:px-8 lg:py-8">
-      <section className="border-b border-border-strong pb-7">
-        <div className="ui-label mb-2.5 flex items-center gap-2 text-signal-dark">
+      <section className="border-b border-border pb-7">
+        <div className="mb-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
           <Gauge aria-hidden="true" className="size-3.5" />
           {copy.eyebrow}
         </div>
 
-        <h1 className="text-[clamp(2rem,3vw,2.75rem)] leading-[1.08] font-[780] tracking-[-0.04em]">
+        <h1 className="max-w-4xl font-display text-[clamp(2.25rem,4vw,3.5rem)] leading-[1.08] font-bold tracking-[-0.035em]">
           {copy.heroTitle}
         </h1>
 
@@ -30,7 +30,7 @@ export function WorkbenchHomeView({
             {copy.heroDescription}
           </p>
           <Button
-            className="h-10 shrink-0 rounded-none px-5 font-bold shadow-none"
+            className="h-10 shrink-0 px-5"
             onClick={onCreateWorkbench}
             type="button"
           >

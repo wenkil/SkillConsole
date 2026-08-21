@@ -15,13 +15,13 @@ export function AppHeader({
   onLocaleChange,
 }: AppHeaderProps) {
   return (
-    <header className="sticky top-0 z-30 flex h-[var(--app-header-height)] min-w-0 items-center justify-between border border-border-strong bg-paper-raised px-5">
+    <header className="sticky top-0 z-30 flex h-[var(--app-header-height)] min-w-0 items-center justify-between border-b border-border bg-card px-5">
       <BrandLockup />
 
       <div className="flex items-center gap-2.5">
         <ToggleGroup
           aria-label="Language"
-          className="border border-rule"
+          className="rounded-[10px] border border-border bg-muted p-0.5"
           onValueChange={(value) => {
             if (value === "en" || value === "zh-CN") {
               onLocaleChange(value)
@@ -33,14 +33,14 @@ export function AppHeader({
         >
           <ToggleGroupItem
             aria-label="English"
-            className="h-9 rounded-none border-0 px-3 font-mono text-xs data-[state=on]:bg-foreground data-[state=on]:text-background"
+            className="h-8 rounded-lg border-0 px-3 text-xs data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-sm"
             value="en"
           >
             EN
           </ToggleGroupItem>
           <ToggleGroupItem
             aria-label="简体中文"
-            className="h-9 rounded-none border-0 px-3 font-mono text-xs data-[state=on]:bg-foreground data-[state=on]:text-background"
+            className="h-8 rounded-lg border-0 px-3 text-xs data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-sm"
             value="zh-CN"
           >
             中文

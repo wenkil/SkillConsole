@@ -24,7 +24,7 @@ export function EmptyState({
       )}
     >
       <div className="max-w-md">
-        <div className="mx-auto flex size-12 items-center justify-center border border-border-default bg-surface-muted text-technical">
+        <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-technical/10 text-technical">
           <Icon aria-hidden="true" className="size-6" strokeWidth={1.7} />
         </div>
         <h2 className="mt-4 text-lg leading-6 font-semibold">{title}</h2>
