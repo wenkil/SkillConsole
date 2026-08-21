@@ -10,7 +10,6 @@ export const agentSystemPromptRoles = [
   "test-run-execution-no-skill",
   "test-run-assertion",
   "test-run-skill-score",
-  "test-report-analyzer",
 ] as const
 
 export type AgentSystemPromptRole =
@@ -26,7 +25,6 @@ const promptFileNames: Readonly<Record<AgentSystemPromptRole, string>> = {
     "test-run-execution-no-skill.system.md",
   "test-run-assertion": "test-run-assertion.system.md",
   "test-run-skill-score": "test-run-skill-score.system.md",
-  "test-report-analyzer": "test-report-analyzer.system.md",
 }
 
 export interface AgentSystemPrompt {

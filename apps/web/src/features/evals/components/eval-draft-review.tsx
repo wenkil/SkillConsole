@@ -88,7 +88,7 @@ export function EvalGenerationProgress({
         </p>
       </div>
 
-      <ol className="mt-3 grid grid-cols-3 border border-foreground bg-paper-raised">
+      <ol className="mt-3 grid grid-cols-3 overflow-hidden rounded-2xl border border-border bg-paper-raised">
         {stages.map((stage, index) => (
           <li
             className={cn(
@@ -122,7 +122,7 @@ export function EvalGenerationProgress({
       ) : null}
 
       {task.error ? (
-        <div className="mt-5 border border-destructive/60 bg-destructive/5 p-4">
+        <div className="mt-5 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
           <div className="flex items-center gap-2 font-semibold text-destructive">
             <AlertTriangle className="size-4" />
             {failureMessage(task.error.code, t, commonT)}
@@ -130,7 +130,7 @@ export function EvalGenerationProgress({
         </div>
       ) : null}
 
-      <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden border border-foreground bg-trace text-trace-foreground">
+      <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border-strong bg-trace text-trace-foreground">
         <div className="flex shrink-0 items-center justify-between border-b border-white/15 px-4 py-2.5">
           <span className="technical-heading text-[10px]">
             {t("progress.trace")}
@@ -222,7 +222,7 @@ function CaseDetail({
 }) {
   return (
     <article className="min-w-0 overflow-y-auto px-6 py-5">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-foreground pb-4">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
         <div>
         <div className="ui-label text-signal-dark">
             Eval {String(evalCase.externalId).padStart(2, "0")}
@@ -385,7 +385,7 @@ export function EvalDraftReview({
               className={cn(
                 "mb-1.5 w-full border px-3 py-2.5 text-left",
                 selectedCase?.externalId === evalCase.externalId
-                  ? "border-primary bg-paper-raised shadow-[inset_3px_0_0_var(--primary)]"
+                  ? "border-primary bg-paper-raised shadow-none"
                   : "border-transparent hover:border-rule hover:bg-paper-raised",
               )}
               key={evalCase.externalId}

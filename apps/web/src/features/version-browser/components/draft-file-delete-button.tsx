@@ -34,7 +34,7 @@ export function DraftFileDeleteButton({
   return (
     <>
       <Button
-        className="h-8 rounded-none text-destructive hover:text-destructive"
+        className="h-8 rounded-xl text-destructive hover:text-destructive"
         disabled={pending}
         onClick={() => setOpen(true)}
         size="sm"
@@ -52,10 +52,10 @@ export function DraftFileDeleteButton({
         open={open}
       >
         <DialogContent
-          className="gap-0 rounded-none border-foreground bg-paper-raised p-0 sm:max-w-lg"
+          className="gap-0 overflow-hidden rounded-[20px] border-border bg-card p-0 sm:max-w-lg"
           showCloseButton={!pending}
         >
-          <DialogHeader className="border-b border-foreground px-5 py-4">
+          <DialogHeader className="border-b border-border px-5 py-4">
             <DialogTitle className="font-mono text-base">
               {t("fileActions.deleteTitle")}
             </DialogTitle>
@@ -67,14 +67,14 @@ export function DraftFileDeleteButton({
           </DialogHeader>
 
           <div className="px-5 py-5">
-            <div className="border border-destructive/50 bg-destructive/5 px-4 py-3 text-xs leading-relaxed text-destructive">
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-xs leading-relaxed text-destructive">
               {t("fileActions.deleteWarning")}
             </div>
           </div>
 
-          <DialogFooter className="border-t border-foreground px-5 py-4">
+          <DialogFooter className="border-t border-border bg-surface-muted px-5 py-4">
             <Button
-              className="rounded-none"
+              className="rounded-xl"
               disabled={pending}
               onClick={closeDialog}
               type="button"
@@ -83,7 +83,7 @@ export function DraftFileDeleteButton({
               {t("draft.cancel")}
             </Button>
             <Button
-              className="rounded-none"
+              className="rounded-xl"
               disabled={pending}
               onClick={() => {
                 void onDeleteFile()

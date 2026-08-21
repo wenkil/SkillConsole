@@ -51,7 +51,7 @@ export function ConfirmationDialog({
       open={open}
     >
       <DialogContent
-        className="gap-0 rounded-none border-border-strong bg-paper-raised p-0 sm:max-w-md"
+        className="gap-0 overflow-hidden rounded-[20px] border-border bg-card p-0 sm:max-w-md"
         showCloseButton={false}
       >
         <DialogHeader className="border-b border-border-subtle px-5 py-4 pr-12">

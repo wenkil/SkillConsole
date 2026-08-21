@@ -5,55 +5,61 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #f6f2e8;
-  --foreground: #101820;
-  --card: #fbf8ef;
-  --card-foreground: #101820;
-  --popover: #fbf8ef;
-  --popover-foreground: #101820;
-  --primary: #ef4b35;
+  --background: #fbfcfc;
+  --foreground: #16233a;
+  --card: #ffffff;
+  --card-foreground: #16233a;
+  --popover: #ffffff;
+  --popover-foreground: #16233a;
+  --primary: #245fd4;
   --primary-foreground: #ffffff;
-  --secondary: #eee8da;
-  --secondary-foreground: #101820;
-  --muted: #eee8da;
-  --muted-foreground: #52606b;
-  --accent: #fff9ef;
-  --accent-foreground: #c83424;
-  --destructive: #c83424;
-  --border: #a49c8d;
-  --input: #a49c8d;
-  --ring: #2563eb;
-  --radius: 0.25rem;
-  --sidebar: #fbf8ef;
-  --sidebar-foreground: #101820;
-  --sidebar-primary: #ef4b35;
+  --secondary: #f5f8fa;
+  --secondary-foreground: #16233a;
+  --muted: #f5f8fa;
+  --muted-foreground: #64738c;
+  --accent: #eaf0ff;
+  --accent-foreground: #1e50b8;
+  --destructive: #be3b3b;
+  --border: #dee6ec;
+  --input: #cbd7e0;
+  --ring: #245fd4;
+  --radius: 0.625rem;
+  --sidebar: #fcfdfd;
+  --sidebar-foreground: #16233a;
+  --sidebar-primary: #245fd4;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #fff9ef;
-  --sidebar-accent-foreground: #c83424;
-  --sidebar-border: #a49c8d;
-  --sidebar-ring: #2563eb;
-  --paper-raised: #fbf8ef;
-  --paper-muted: #eee8da;
-  --rule: #a49c8d;
-  --rule-soft: #d2cabb;
-  --signal-dark: #c83424;
-  --technical: #16847f;
-  --technical-foreground: #0f514e;
-  --trace: #0b1220;
-  --trace-foreground: #d7e0ea;
-  --border-strong: #101820;
-  --border-default: #a49c8d;
-  --border-subtle: #d2cabb;
-  --surface-muted: #eee8da;
-  --focus-ring: #2563eb;
-  --status-passed: #15803d;
-  --status-failed: #dc2626;
-  --status-blocked: #b45309;
-  --status-running: #2563eb;
-  --status-cancelled: #64748b;
+  --sidebar-accent: #eaf0ff;
+  --sidebar-accent-foreground: #1e50b8;
+  --sidebar-border: #dee6ec;
+  --sidebar-ring: #245fd4;
+  --paper-raised: #ffffff;
+  --paper-muted: #f5f8fa;
+  --rule: #cbd7e0;
+  --rule-soft: #dee6ec;
+  --signal-dark: #245fd4;
+  --technical: #138f96;
+  --technical-foreground: #0d7075;
+  --trace: #142034;
+  --trace-foreground: #e6edf7;
+  --border-strong: #cbd7e0;
+  --border-default: #dee6ec;
+  --border-subtle: #edf1f4;
+  --surface-muted: #f5f8fa;
+  --focus-ring: #245fd4;
+  --status-passed: #2f8a62;
+  --status-failed: #be3b3b;
+  --status-blocked: #a96f18;
+  --status-running: #138f96;
+  --status-cancelled: #64738c;
+  --status-draft: #596fcb;
+  --status-draft-soft: #eef0ff;
+  --surface-shadow: 0 12px 28px rgb(40 57 83 / 7%);
+  --surface-shadow-soft: 0 8px 24px rgb(40 57 83 / 5%);
+  --dialog-shadow: 0 22px 70px rgb(16 34 65 / 20%);
+  --surface-radius: 1.125rem;
   --app-header-height: 4rem;
   --app-min-width: 64rem;
-  --workbench-sidebar-width: 15rem;
+  --workbench-sidebar-width: 15.5rem;
   --workspace-nav-collapsed-width: 3.5rem;
 }
 
@@ -61,6 +67,7 @@
   --font-sans: "Geist Variable", "Microsoft YaHei UI", ui-sans-serif, system-ui,
     sans-serif;
   --font-mono: "Geist Mono Variable", "Cascadia Mono", ui-monospace, monospace;
+  --font-display: "Noto Serif SC", "Songti SC", "STSong", ui-serif, serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -136,6 +143,7 @@
     line-height: 1.5;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
   }
 
   #root {
@@ -156,6 +164,28 @@
     font: inherit;
   }
 
+  ::selection {
+    background: #cfe0ff;
+    color: var(--foreground);
+  }
+
+  * {
+    scrollbar-color: #c7d2df transparent;
+    scrollbar-width: thin;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background: #c7d2df;
+    background-clip: padding-box;
+  }
+
   :where(button, a, input, select, textarea, summary, [tabindex]):not(:disabled):focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
@@ -164,20 +194,18 @@
 
 @layer components {
   .technical-heading {
-    font-family: var(--font-mono);
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    font-family: var(--font-sans);
+    font-weight: 750;
+    letter-spacing: -0.015em;
   }
 
   .ui-label {
     color: var(--muted-foreground);
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-size: 0.6875rem;
     font-weight: 700;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.02em;
     line-height: 1rem;
-    text-transform: uppercase;
   }
 
   .ui-meta {
@@ -188,8 +216,10 @@
   }
 
   .technical-panel {
-    border: 1px solid var(--foreground);
+    border: 1px solid var(--border);
+    border-radius: var(--surface-radius);
     background: var(--paper-raised);
+    box-shadow: var(--surface-shadow-soft);
   }
 
   .skill-markdown {
@@ -214,7 +244,7 @@
   }
 
   .skill-markdown h1 {
-    border-bottom: 1px solid var(--foreground);
+    border-bottom: 1px solid var(--rule-soft);
     padding-bottom: 0.45em;
     font-size: 1.9rem;
   }
@@ -252,7 +282,7 @@
   }
 
   .skill-markdown a {
-    color: var(--signal-dark);
+    color: var(--primary);
     font-weight: 650;
     text-decoration: underline;
     text-underline-offset: 0.18em;
@@ -267,6 +297,7 @@
 
   .skill-markdown code {
     border: 1px solid var(--rule-soft);
+    border-radius: 0.35rem;
     background: var(--paper-muted);
     padding: 0.1rem 0.3rem;
     font-family: var(--font-mono);
@@ -275,7 +306,8 @@
 
   .skill-markdown pre {
     overflow: auto;
-    border: 1px solid var(--foreground);
+    border: 1px solid #26344b;
+    border-radius: 0.75rem;
     background: var(--trace);
     padding: 1rem;
     color: var(--trace-foreground);
@@ -296,14 +328,14 @@
 
   .skill-markdown th,
   .skill-markdown td {
-    border: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule-soft);
     padding: 0.5rem 0.65rem;
     text-align: left;
   }
 
   .skill-markdown th {
     background: var(--paper-muted);
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-size: 0.72rem;
     letter-spacing: 0.03em;
     text-transform: uppercase;

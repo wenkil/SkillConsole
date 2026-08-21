@@ -77,7 +77,7 @@ export function EvalTaskRail({
                 className={cn(
                   "w-full border px-3 py-3 text-left transition-colors",
                   selectedTaskId === task.id
-                    ? "border-primary bg-accent shadow-[inset_3px_0_0_var(--primary)]"
+                    ? "border-primary bg-accent shadow-none"
                     : "border-transparent hover:border-rule hover:bg-paper-raised",
                 )}
                 key={task.id}

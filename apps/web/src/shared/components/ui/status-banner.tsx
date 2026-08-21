@@ -25,7 +25,7 @@ export function StatusBanner({
   return (
     <div
       className={cn(
-        "flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border px-5 py-3 text-sm",
+        "mx-5 mt-4 flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border px-4 py-3 text-sm",
         variantClasses[variant],
         className,
       )}

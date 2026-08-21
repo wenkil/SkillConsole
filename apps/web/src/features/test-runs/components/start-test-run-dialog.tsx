@@ -109,8 +109,8 @@ export function StartTestRunDialog({
       }}
       open={open}
     >
-      <DialogContent className="max-h-[92dvh] max-w-3xl overflow-y-auto rounded-none border-border-strong p-0">
-        <DialogHeader className="border-b border-border-strong px-6 py-5 pr-14">
+      <DialogContent className="max-h-[92dvh] max-w-3xl overflow-y-auto rounded-[20px] border-border p-0">
+        <DialogHeader className="border-b border-border px-6 py-5 pr-14">
           <div className="ui-label text-signal-dark">
             {t("start.eyebrow")}
           </div>
@@ -214,7 +214,7 @@ export function StartTestRunDialog({
               <label className="grid gap-1.5 text-sm font-semibold">
                 {t("start.baselineVersion")}
                 <select
-                  className="h-10 border border-border-default bg-background px-3 font-mono text-sm outline-none focus:border-focus-ring"
+                  className="h-10 rounded-[10px] border border-border-default bg-background px-3 font-mono text-sm outline-none focus:border-focus-ring focus:ring-2 focus:ring-ring/15"
                   disabled={!comparisonAvailable || blocked || pending}
                   onChange={(event) => {
                     resetConfirmation()
@@ -240,7 +240,7 @@ export function StartTestRunDialog({
               <label className="grid gap-1.5 text-sm font-semibold">
                 {t("start.candidateVersion")}
                 <select
-                  className="h-10 border border-border-default bg-background px-3 font-mono text-sm outline-none focus:border-focus-ring"
+                  className="h-10 rounded-[10px] border border-border-default bg-background px-3 font-mono text-sm outline-none focus:border-focus-ring focus:ring-2 focus:ring-ring/15"
                   disabled={!comparisonAvailable || blocked || pending}
                   onChange={(event) => {
                     resetConfirmation()
@@ -266,7 +266,7 @@ export function StartTestRunDialog({
           <label className="grid gap-1.5 text-sm font-semibold">
             {t("start.evalRevision")}
             <select
-              className="h-10 border border-border-default bg-background px-3 font-mono text-sm outline-none focus:border-focus-ring"
+              className="h-10 rounded-[10px] border border-border-default bg-background px-3 font-mono text-sm outline-none focus:border-focus-ring focus:ring-2 focus:ring-ring/15"
               disabled={blocked || pending}
               onChange={(event) => {
                 resetConfirmation()
@@ -285,7 +285,7 @@ export function StartTestRunDialog({
           </label>
 
           {validSelection && selectedRevision ? (
-            <div className="grid grid-cols-3 gap-px border border-foreground bg-rule">
+            <div className="grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-border bg-rule">
               <div className="bg-background p-3">
                 <span className="ui-label">
                   {t("start.baselineSubject")}
@@ -402,16 +402,16 @@ export function StartTestRunDialog({
           </label>
 
           {blocked ? (
-            <div className="flex gap-2 border border-status-running/50 px-4 py-3 text-sm text-status-running">
+            <div className="flex gap-2 rounded-xl border border-status-running/25 bg-status-running/5 px-4 py-3 text-sm text-status-running">
               <LockKeyhole className="size-4 shrink-0" />
               {t("start.activeRunBlocked")}
             </div>
           ) : null}
         </div>
 
-        <DialogFooter className="border-t border-border-strong bg-surface-muted px-6 py-4">
+        <DialogFooter className="border-t border-border bg-surface-muted px-6 py-4">
           <Button
-            className="rounded-none"
+            className="rounded-xl"
             disabled={
               blocked ||
               pending ||

@@ -79,7 +79,7 @@ export function TestRunsWorkbenchView({
   if (controller.error) {
     return (
       <main className="flex h-full items-center justify-center px-8">
-        <div className="max-w-md border border-destructive/50 bg-paper-raised p-7 text-center">
+        <div className="max-w-md rounded-2xl border border-destructive/30 bg-destructive/5 p-7 text-center shadow-[var(--surface-shadow)]">
           <AlertTriangle className="mx-auto size-8 text-destructive" />
           <h1 className="mt-3 text-lg font-[760]">
             {t("states.loadError")}
@@ -88,7 +88,7 @@ export function TestRunsWorkbenchView({
             {t("states.loadErrorDescription")}
           </p>
           <Button
-            className="mt-4 rounded-none"
+            className="mt-4 rounded-xl"
             onClick={controller.actions.retry}
             type="button"
             variant="outline"
@@ -145,7 +145,7 @@ export function TestRunsWorkbenchView({
       ) : null}
 
       <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="flex shrink-0 items-center justify-between border-b border-border-strong px-5 py-3.5">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-3.5">
           <div>
             <div className="ui-label">
               {t("list.eyebrow")}
@@ -153,7 +153,7 @@ export function TestRunsWorkbenchView({
             <h2 className="mt-1 text-base font-[760]">{t("list.title")}</h2>
           </div>
           <Button
-            className="rounded-none"
+            className="rounded-xl"
             onClick={() => setDialogOpen(true)}
             type="button"
           >
@@ -170,18 +170,15 @@ export function TestRunsWorkbenchView({
           />
         ) : (
           <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full min-w-[64rem] border-collapse text-left">
+            <table className="w-full min-w-[52rem] border-collapse text-left">
               <thead className="sticky top-0 z-10 bg-paper-muted">
                 <tr className="border-b border-border-strong">
                   {(
                     [
                       "status",
-                      "mode",
                       "selection",
                       "progress",
                       "comparison",
-                      "usage",
-                      "duration",
                       "createdAt",
                       "actions",
                     ] as const
@@ -215,15 +212,13 @@ export function TestRunsWorkbenchView({
                       <TestRunStatusBadge status={run.status} t={t} />
                     </td>
                     <td className="px-4 py-3.5">
-                      <span className="inline-flex border border-border-default px-2 py-1 font-mono text-[11px] leading-4 font-bold">
+                      <span className="mb-2 inline-flex rounded-lg border border-border-default bg-surface-muted px-2 py-1 font-mono text-[11px] leading-4 font-bold text-muted-foreground">
                         {t(
                           run.mode === "version_vs_version"
                             ? "list.versionComparisonMode"
                             : "list.skillEffectMode",
                         )}
                       </span>
-                    </td>
-                    <td className="px-4 py-3.5">
                       <strong className="block text-xs">
                         {run.mode === "version_vs_version" &&
                         run.baseline.kind === "skill_version"
@@ -295,48 +290,6 @@ export function TestRunsWorkbenchView({
                         </span>
                       ) : null}
                     </td>
-                    <td className="px-4 py-3.5 font-mono text-xs">
-                      <strong className="block">
-                        {run.benchmark
-                          ? t("list.tokens", {
-                              count:
-                                run.benchmark.target.inputTokens +
-                                run.benchmark.target.outputTokens +
-                                run.benchmark.target.gradingInputTokens +
-                                run.benchmark.target.gradingOutputTokens +
-                                run.benchmark.baseline.inputTokens +
-                                run.benchmark.baseline.outputTokens +
-                                run.benchmark.baseline.gradingInputTokens +
-                                run.benchmark.baseline.gradingOutputTokens,
-                            })
-                          : "—"}
-                      </strong>
-                      <span className="ui-meta mt-1 block">
-                        {run.benchmark
-                          ? t("list.cost", {
-                              value: (
-                                run.benchmark.target.totalCostUsd +
-                                run.benchmark.target.gradingTotalCostUsd +
-                                run.benchmark.baseline.totalCostUsd +
-                                run.benchmark.baseline.gradingTotalCostUsd
-                              ).toFixed(4),
-                            })
-                          : "—"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 font-mono text-xs">
-                      {run.startedAt
-                        ? formatDuration(
-                            Math.max(
-                              0,
-                              new Date(
-                                run.completedAt ?? run.updatedAt,
-                              ).getTime() -
-                                new Date(run.startedAt).getTime(),
-                            ),
-                          )
-                        : "—"}
-                    </td>
                     <td className="px-4 py-3.5">
                       <time className="font-mono text-xs">
                         {new Intl.DateTimeFormat(locale, {
@@ -347,11 +300,22 @@ export function TestRunsWorkbenchView({
                           minute: "2-digit",
                         }).format(new Date(run.createdAt))}
                       </time>
+                      <span className="ui-meta mt-1 block">
+                        {run.startedAt
+                          ? formatDuration(
+                              Math.max(
+                                0,
+                                new Date(run.completedAt ?? run.updatedAt).getTime() -
+                                  new Date(run.startedAt).getTime(),
+                              ),
+                            )
+                          : "—"}
+                      </span>
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2">
                       <Button
-                        className="rounded-none"
+                        className="rounded-xl"
                         onClick={() =>
                           navigate(
                             `/workbenches/${workspace.id}/runs/${run.id}`,
@@ -374,12 +338,12 @@ export function TestRunsWorkbenchView({
           </div>
         )}
 
-        <footer className="flex shrink-0 items-center justify-between border-t border-border-strong bg-surface-muted px-5 py-3">
+        <footer className="flex shrink-0 items-center justify-between border-t border-border bg-surface-muted px-5 py-3">
           <div className="ui-meta flex items-center gap-3">
             <span>{t("list.total", { count: controller.pagination.total })}</span>
             <select
               aria-label={t("list.pageSize")}
-              className="h-8 border border-border-default bg-background px-2 text-xs"
+              className="h-8 rounded-lg border border-border-default bg-background px-2 text-xs"
               onChange={(event) =>
                 controller.actions.setPageSize(Number(event.target.value))
               }
@@ -395,7 +359,7 @@ export function TestRunsWorkbenchView({
           <div className="flex items-center gap-2">
             <Button
               aria-label={t("list.previous")}
-              className="rounded-none"
+              className="rounded-xl"
               disabled={controller.pagination.page <= 1}
               onClick={() =>
                 controller.actions.setPage(controller.pagination.page - 1)
@@ -417,7 +381,7 @@ export function TestRunsWorkbenchView({
             </span>
             <Button
               aria-label={t("list.next")}
-              className="rounded-none"
+              className="rounded-xl"
               disabled={
                 controller.pagination.pageCount === 0 ||
                 controller.pagination.page >=

@@ -1,7 +1,6 @@
 import {
   Activity,
   ArrowLeft,
-  Database,
   FileChartColumn,
   FlaskConical,
   FolderOpen,
@@ -68,7 +67,7 @@ function CollapsedTooltip({
       <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
       <Tooltip.Portal>
         <Tooltip.Content
-          className="z-50 border border-border-strong bg-foreground px-3 py-2 text-xs font-semibold text-background shadow-sm"
+          className="z-50 rounded-lg border border-border bg-foreground px-3 py-2 text-xs font-semibold text-background shadow-lg"
           side="right"
           sideOffset={8}
         >
@@ -109,12 +108,6 @@ export function WorkspaceNavigation({
       icon: FlaskConical,
     },
     {
-      module: "datasets",
-      label: t("workspaceShell.navigation.datasets"),
-      path: `${basePath}/datasets`,
-      icon: Database,
-    },
-    {
       module: "runs",
       label: t("workspaceShell.navigation.runs"),
       path: `${basePath}/runs`,
@@ -139,7 +132,7 @@ export function WorkspaceNavigation({
 
   return (
     <Tooltip.Provider>
-      <aside className="flex h-full min-h-0 flex-col overflow-hidden border-r border-border-strong bg-sidebar">
+      <aside className="flex h-full min-h-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar">
         <div
           className={cn(
             "shrink-0 border-b border-border-subtle",
@@ -150,7 +143,7 @@ export function WorkspaceNavigation({
             <CollapsedTooltip label={workspace.name}>
               <div
                 aria-label={`${workspace.name} · ${workspaceState}`}
-                className="flex h-11 items-center justify-center border border-border-default bg-paper-raised"
+                className="flex h-11 items-center justify-center rounded-xl border border-border bg-card"
                 role="img"
               >
                 <FolderOpen
@@ -160,7 +153,7 @@ export function WorkspaceNavigation({
               </div>
             </CollapsedTooltip>
           ) : (
-            <div className="border border-border-default bg-paper-raised px-3.5 py-3.5">
+            <div className="rounded-xl border border-border bg-card px-3.5 py-3.5 shadow-[var(--surface-shadow-soft)]">
               <div className="flex min-w-0 items-center gap-2.5">
                 <FolderOpen
                   aria-hidden="true"
@@ -170,7 +163,7 @@ export function WorkspaceNavigation({
                   {workspace.name}
                 </strong>
               </div>
-              <span className="mt-1.5 block truncate pl-7.5 font-mono text-xs leading-5 text-muted-foreground">
+              <span className="mt-1.5 block truncate pl-7.5 text-xs leading-5 text-muted-foreground">
                 {workspaceState}
               </span>
             </div>
@@ -185,7 +178,7 @@ export function WorkspaceNavigation({
           )}
         >
           {!collapsed ? (
-            <div className="ui-label mb-3 border-b border-border-subtle px-2 pb-2">
+            <div className="ui-label mb-2 px-2 pb-2">
               {t("workspaceShell.navigation.label")}
             </div>
           ) : null}
@@ -198,12 +191,12 @@ export function WorkspaceNavigation({
                   aria-label={item.label}
                   className={({ isActive }) =>
                     cn(
-                      "relative flex h-11 items-center border border-transparent text-sm font-semibold transition-colors hover:border-border-default hover:bg-accent",
+                      "relative flex h-11 items-center rounded-xl border border-transparent text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
                       collapsed
                         ? "justify-center px-0"
                         : "gap-3 px-3",
                       (isActive || activeModule === item.module) &&
-                        "border-primary bg-accent text-signal-dark shadow-[inset_3px_0_0_var(--primary)]",
+                        "bg-accent font-semibold text-accent-foreground",
                     )
                   }
                   {...(item.end ? { end: true } : {})}
@@ -215,7 +208,7 @@ export function WorkspaceNavigation({
                       "size-[18px] shrink-0",
                       activeModule === item.module
                         ? "text-primary"
-                        : "text-foreground",
+                        : "text-muted-foreground",
                     )}
                   />
                   {!collapsed ? <span>{item.label}</span> : null}
@@ -243,7 +236,7 @@ export function WorkspaceNavigation({
             <CollapsedTooltip label={t("workspaceShell.backToList")}>
               <NavLink
                 aria-label={t("workspaceShell.backToList")}
-                className="flex h-10 items-center justify-center border border-transparent hover:border-border-default hover:bg-accent"
+                className="flex h-10 items-center justify-center rounded-xl border border-transparent hover:bg-accent"
                 to="/"
               >
                 <ArrowLeft aria-hidden="true" className="size-[18px]" />
@@ -251,7 +244,7 @@ export function WorkspaceNavigation({
             </CollapsedTooltip>
           ) : (
             <NavLink
-              className="flex h-10 items-center gap-2.5 px-3 text-sm font-semibold text-muted-foreground hover:bg-accent hover:text-foreground"
+              className="flex h-10 items-center gap-2.5 rounded-xl px-3 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               to="/"
             >
               <ArrowLeft aria-hidden="true" className="size-4" />
@@ -267,7 +260,7 @@ export function WorkspaceNavigation({
                 : t("workspaceShell.collapseSidebar")
             }
             className={cn(
-              "mt-2 h-10 rounded-none border-border-default bg-paper-raised shadow-none",
+              "mt-2 h-10 rounded-xl border-border bg-card shadow-none",
               collapsed ? "w-full px-0" : "w-full justify-start px-3",
             )}
             onClick={() => onCollapsedChange(!collapsed)}

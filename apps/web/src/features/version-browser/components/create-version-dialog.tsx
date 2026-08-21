@@ -60,12 +60,12 @@ export function CreateVersionDialog({
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogTrigger asChild>
-        <Button className="h-9 rounded-none" type="button">
+        <Button className="h-9 rounded-xl" type="button">
           <GitCommitVertical aria-hidden="true" data-icon="inline-start" />
           {copy.saveAsVersion}
         </Button>
       </DialogTrigger>
-      <DialogContent className="gap-0 rounded-none border-foreground bg-paper-raised p-0 sm:max-w-lg">
+      <DialogContent className="gap-0 overflow-hidden rounded-[20px] border-border bg-card p-0 sm:max-w-lg">
         <DialogHeader className="border-b border-rule px-6 py-5">
           <DialogTitle>保存当前工作副本为版本</DialogTitle>
           <DialogDescription>
@@ -80,7 +80,7 @@ export function CreateVersionDialog({
                 nameError ? "create-version-name-error" : undefined
               }
               aria-invalid={Boolean(nameError)}
-              className="rounded-none"
+              className="rounded-xl"
               id="create-version-name"
               maxLength={120}
               onChange={(event) => {
@@ -115,7 +115,7 @@ export function CreateVersionDialog({
               标签（逗号分隔）
             </span>
             <Input
-              className="rounded-none"
+              className="rounded-xl"
               onChange={(event) => setLabels(event.target.value)}
               placeholder="例如：候选、实验-A"
               value={labels}
@@ -144,14 +144,14 @@ export function CreateVersionDialog({
             </div>
           ) : null}
         </div>
-        <DialogFooter className="border-t border-rule px-6 py-4">
+        <DialogFooter className="border-t border-rule bg-surface-muted px-6 py-4">
           <DialogClose asChild>
-            <Button className="rounded-none" type="button" variant="outline">
+            <Button className="rounded-xl" type="button" variant="outline">
               取消
             </Button>
           </DialogClose>
           <Button
-            className="rounded-none"
+            className="rounded-xl"
             disabled={!name.trim() || pending}
             onClick={() => {
               setNameError(null)

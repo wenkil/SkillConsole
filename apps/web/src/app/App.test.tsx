@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { I18nextProvider } from "react-i18next"
 import { MemoryRouter } from "react-router-dom"
@@ -147,18 +147,6 @@ vi.mock(
   }),
 )
 
-vi.mock(
-  "@/features/test-reports/components/test-report-detail-view",
-  () => ({
-    TestReportDetailView: ({ reportId }: { reportId: string }) => (
-      <main>静态报告详情 {reportId}</main>
-    ),
-    TestReportByRunRedirect: ({ runId }: { runId: string }) => (
-      <main>按任务查找报告 {runId}</main>
-    ),
-  }),
-)
-
 function renderRoute(path: string) {
   return render(
     <I18nextProvider i18n={i18n}>
@@ -179,7 +167,7 @@ describe("workspace routes", () => {
     renderRoute(`/workbenches/${workspace.id}`)
 
     expect(
-      screen.getByRole("heading", { name: workspace.name }),
+      screen.getByRole("heading", { name: new RegExp(workspace.name) }),
     ).toBeInTheDocument()
     expect(
       screen.getByRole("link", { name: "工作台概览" }),
@@ -203,17 +191,15 @@ describe("workspace routes", () => {
     ).toHaveAttribute("aria-current", "page")
   })
 
-  it("renders the datasets placeholder without fake actions", () => {
+  it("keeps the unimplemented datasets module out of the visible workspace", async () => {
     renderRoute(`/workbenches/${workspace.id}/datasets`)
 
-    const main = screen.getByRole("main")
     expect(
-      within(main).getByRole("heading", { name: "数据集" }),
+      await screen.findByRole("heading", {
+        name: new RegExp(workspace.name),
+      }),
     ).toBeInTheDocument()
-    expect(
-      within(main).getByText("将在后续迭代实现"),
-    ).toBeInTheDocument()
-    expect(within(main).queryByRole("button")).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: "数据集" })).not.toBeInTheDocument()
   })
 
   it.each([
@@ -225,15 +211,24 @@ describe("workspace routes", () => {
     expect(screen.getByRole("heading", { name: title })).toBeInTheDocument()
   })
 
-  it.each([
-    ["runs/run-1", "测试任务详情 run-1"],
-    ["reports/report-1", "静态报告详情 report-1"],
-    ["reports/by-run/run-1", "按任务查找报告 run-1"],
-  ])("routes %s to its concrete detail view", (path, text) => {
-    renderRoute(`/workbenches/${workspace.id}/${path}`)
+  it("routes a test Run ID to its concrete detail view", () => {
+    renderRoute(`/workbenches/${workspace.id}/runs/run-1`)
 
-    expect(screen.getByRole("main")).toHaveTextContent(text)
+    expect(screen.getByRole("main")).toHaveTextContent("测试任务详情 run-1")
   })
+
+  it.each(["reports/report-1", "reports/by-run/run-1"])(
+    "redirects the removed report route %s to the workspace overview",
+    async (path) => {
+      renderRoute(`/workbenches/${workspace.id}/${path}`)
+
+      expect(
+        await screen.findByRole("heading", {
+          name: new RegExp(workspace.name),
+        }),
+      ).toBeInTheDocument()
+    },
+  )
 
   it("opens the Evals generation workbench from test cases", () => {
     renderRoute(`/workbenches/${workspace.id}/test-cases`)
@@ -252,7 +247,9 @@ describe("workspace routes", () => {
       renderRoute(`/workbenches/${workspace.id}/${path}`)
 
       expect(
-        await screen.findByRole("heading", { name: workspace.name }),
+        await screen.findByRole("heading", {
+          name: new RegExp(workspace.name),
+        }),
       ).toBeInTheDocument()
       expect(
         screen.getByRole("link", { name: "工作台概览" }),

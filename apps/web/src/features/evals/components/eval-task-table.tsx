@@ -94,14 +94,14 @@ export function EvalTaskTable({
 }) {
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
-      <div className="flex shrink-0 items-center justify-between gap-4 border-b border-border-strong px-5 py-3.5">
+      <div className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-5 py-3.5">
         <div>
           <div className="ui-label">
             {t("tasks.eyebrow")}
           </div>
           <h2 className="mt-1 text-base font-[760]">{t("tasks.title")}</h2>
         </div>
-        <Button className="rounded-none" onClick={onGenerate} type="button">
+        <Button className="rounded-xl" onClick={onGenerate} type="button">
           <Plus data-icon="inline-start" />
           {t("table.generate")}
         </Button>
@@ -117,7 +117,7 @@ export function EvalTaskTable({
         <div className="min-h-0 flex-1 overflow-auto">
           <table className="w-full min-w-[48rem] border-collapse text-left">
             <thead className="sticky top-0 z-10 bg-paper-muted">
-              <tr className="border-b border-border-strong">
+              <tr className="border-b border-border">
                 {tableColumns.map((column) => (
                   <th
                     className="px-4 py-3 font-mono text-[11px] leading-4 font-bold tracking-[0.06em] text-muted-foreground uppercase"
@@ -182,13 +182,13 @@ export function EvalTaskTable({
                   <td className="px-4 py-3.5">
                     <span
                       className={cn(
-                        "inline-flex border px-2 py-1 font-mono text-[11px] leading-4 font-bold",
+                        "inline-flex rounded-lg border px-2 py-1 font-mono text-[11px] leading-4 font-bold",
                         task.draftStatus === "PUBLISHED" &&
-                          "border-status-passed/55 text-status-passed",
+                          "border-status-passed/25 bg-status-passed/10 text-status-passed",
                         task.draftStatus === "READY" &&
-                          "border-status-running/55 text-status-running",
+                          "border-status-running/25 bg-status-running/10 text-status-running",
                         task.draftStatus === "DISCARDED" &&
-                          "border-status-cancelled/55 text-status-cancelled",
+                          "border-status-cancelled/25 bg-status-cancelled/10 text-status-cancelled",
                       )}
                     >
                       {reviewLabel(task, t)}
@@ -196,7 +196,7 @@ export function EvalTaskTable({
                   </td>
                   <td className="px-4 py-3.5">
                     <Button
-                      className="rounded-none"
+                      className="rounded-xl"
                       onClick={() => onOpen(task.id)}
                       size="sm"
                       type="button"
@@ -213,13 +213,13 @@ export function EvalTaskTable({
         </div>
       )}
 
-      <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border-strong bg-surface-muted px-5 py-3">
+      <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border bg-surface-muted px-5 py-3">
         <div className="ui-meta flex items-center gap-3">
           <span>{t("table.total", { count: total })}</span>
           <label className="flex items-center gap-2">
             {t("table.pageSize")}
             <select
-              className="h-8 border border-border-default bg-background px-2 text-xs outline-none focus:border-focus-ring"
+              className="h-8 rounded-lg border border-border-default bg-background px-2 text-xs outline-none focus:border-focus-ring focus:ring-2 focus:ring-ring/15"
               onChange={(event) => onPageSizeChange(Number(event.target.value))}
               value={pageSize}
             >
@@ -234,7 +234,7 @@ export function EvalTaskTable({
         <div className="flex items-center gap-2">
           <Button
             aria-label={t("table.previous")}
-            className="rounded-none"
+            className="rounded-xl"
             disabled={page <= 1}
             onClick={() => onPageChange(page - 1)}
             size="icon-sm"
@@ -251,7 +251,7 @@ export function EvalTaskTable({
           </span>
           <Button
             aria-label={t("table.next")}
-            className="rounded-none"
+            className="rounded-xl"
             disabled={pageCount === 0 || page >= pageCount}
             onClick={() => onPageChange(page + 1)}
             size="icon-sm"

@@ -57,12 +57,12 @@ export function VersionMetadataDialog({
   return (
     <Dialog onOpenChange={setOpen} open={open}>
       <DialogTrigger asChild>
-        <Button className="h-9 rounded-none" type="button" variant="outline">
+        <Button className="h-9 rounded-xl" type="button" variant="outline">
           <PencilLine data-icon="inline-start" />
           编辑版本信息
         </Button>
       </DialogTrigger>
-      <DialogContent className="gap-0 rounded-none border-foreground bg-paper-raised p-0 sm:max-w-lg">
+      <DialogContent className="gap-0 overflow-hidden rounded-[20px] border-border bg-card p-0 sm:max-w-lg">
         <DialogHeader className="border-b border-rule px-6 py-5">
           <DialogTitle>编辑版本信息</DialogTitle>
           <DialogDescription>
@@ -77,7 +77,7 @@ export function VersionMetadataDialog({
                 nameError ? "edit-version-name-error" : undefined
               }
               aria-invalid={Boolean(nameError)}
-              className="rounded-none"
+              className="rounded-xl"
               id="edit-version-name"
               maxLength={120}
               onChange={(event) => {
@@ -109,7 +109,7 @@ export function VersionMetadataDialog({
           <label className="grid gap-1.5 text-xs font-semibold">
             标签（逗号分隔）
             <Input
-              className="rounded-none"
+              className="rounded-xl"
               onChange={(event) => setLabels(event.target.value)}
               value={labels}
             />
@@ -123,14 +123,14 @@ export function VersionMetadataDialog({
             </div>
           ) : null}
         </div>
-        <DialogFooter className="border-t border-rule px-6 py-4">
+        <DialogFooter className="border-t border-rule bg-surface-muted px-6 py-4">
           <DialogClose asChild>
-            <Button className="rounded-none" type="button" variant="outline">
+            <Button className="rounded-xl" type="button" variant="outline">
               取消
             </Button>
           </DialogClose>
           <Button
-            className="rounded-none"
+            className="rounded-xl"
             disabled={!name.trim() || pending}
             onClick={() => {
               setNameError(null)

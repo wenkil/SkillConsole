@@ -22,11 +22,11 @@ export function ModulePlaceholder({
   return (
     <main className="h-full min-h-0 min-w-0 overflow-y-auto px-8 py-8 lg:px-10">
       <div className="mx-auto max-w-4xl">
-        <header className="border-b border-border-strong pb-6">
+        <header className="border-b border-border pb-6">
           <div className="ui-label text-signal-dark">
             {eyebrow}
           </div>
-          <h1 className="mt-2 text-[clamp(2rem,3vw,2.8rem)] leading-none font-[780] tracking-[-0.04em]">
+          <h1 className="font-display mt-2 text-[clamp(2rem,3vw,2.8rem)] leading-none font-semibold tracking-[-0.035em]">
             {title}
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
@@ -34,7 +34,7 @@ export function ModulePlaceholder({
           </p>
         </header>
 
-        <section className="mt-7 border border-border-strong bg-paper-raised p-7">
+        <section className="mt-7 rounded-2xl border border-border bg-paper-raised p-7 shadow-[var(--surface-shadow)]">
           <Icon
             aria-hidden="true"
             className="size-9 text-technical"

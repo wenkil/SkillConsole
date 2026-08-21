@@ -204,8 +204,8 @@ export function VersionCompareView({
 
   return (
     <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-border-strong bg-background px-6 py-5">
-        <Button asChild className="mb-3 h-8 rounded-none" variant="ghost">
+      <header className="shrink-0 border-b border-border bg-background px-6 py-5">
+        <Button asChild className="mb-3 h-8 rounded-xl" variant="ghost">
           <Link to={`/workbenches/${workspace.id}/versions`}>
             <ArrowLeft data-icon="inline-start" />
             返回版本
@@ -217,7 +217,7 @@ export function VersionCompareView({
               <GitCompareArrows className="size-3.5" />
               目录与文件对比
             </div>
-            <h1 className="text-[clamp(2rem,3vw,2.75rem)] leading-[1.08] font-[780] tracking-[-0.04em]">
+            <h1 className="font-display text-[clamp(2rem,3vw,2.75rem)] leading-[1.08] font-semibold tracking-[-0.035em]">
               {workspace.name}
             </h1>
           </div>
@@ -229,7 +229,7 @@ export function VersionCompareView({
               >
                 {side === "left" ? "左侧版本" : "右侧版本"}
                 <select
-                  className="h-10 min-w-44 border border-border-default bg-paper-raised px-3 font-mono text-sm outline-none focus:border-focus-ring"
+                  className="h-10 min-w-44 rounded-[10px] border border-border-default bg-paper-raised px-3 font-mono text-sm outline-none transition-colors focus:border-focus-ring focus:ring-2 focus:ring-ring/15"
                   onChange={(event) =>
                     updateSelection({
                       [side]: event.target.value,
@@ -253,16 +253,16 @@ export function VersionCompareView({
         </div>
         {comparison ? (
           <div className="mt-4 flex flex-wrap gap-2 font-mono text-xs">
-            <span className="border border-border-default px-2 py-1">
+            <span className="rounded-lg border border-border-default bg-paper-raised px-2 py-1">
               新增 {comparison.summary.added}
             </span>
-            <span className="border border-border-default px-2 py-1">
+            <span className="rounded-lg border border-border-default bg-paper-raised px-2 py-1">
               修改 {comparison.summary.modified}
             </span>
-            <span className="border border-border-default px-2 py-1">
+            <span className="rounded-lg border border-border-default bg-paper-raised px-2 py-1">
               删除 {comparison.summary.deleted}
             </span>
-            <span className="border border-border-default px-2 py-1 text-muted-foreground">
+            <span className="rounded-lg border border-border-default bg-paper-raised px-2 py-1 text-muted-foreground">
               未变化 {comparison.summary.unchanged}
             </span>
           </div>

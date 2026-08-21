@@ -129,7 +129,7 @@ function ControlledImagePreview({
     <div className="flex min-h-full items-center justify-center p-8 [background-image:linear-gradient(45deg,var(--paper-muted)_25%,transparent_25%),linear-gradient(-45deg,var(--paper-muted)_25%,transparent_25%),linear-gradient(45deg,transparent_75%,var(--paper-muted)_75%),linear-gradient(-45deg,transparent_75%,var(--paper-muted)_75%)] [background-position:0_0,0_8px,8px_-8px,-8px_0] [background-size:16px_16px]">
       <img
         alt={relativePath}
-        className="max-h-[65vh] max-w-full border border-foreground bg-white object-contain shadow-[6px_6px_0_var(--rule-soft)]"
+        className="max-h-[65vh] max-w-full rounded-2xl border border-border bg-white object-contain shadow-[var(--surface-shadow)]"
         onError={() => setFailed(true)}
         src={imagePreviewUrl}
       />
@@ -248,7 +248,7 @@ export function VersionFilePreview({
             {downloadUrl ? (
               <Button
                 asChild
-                className="h-8 rounded-none px-3 text-xs shadow-none"
+                className="h-8 rounded-xl px-3 text-xs shadow-none"
                 size="sm"
                 variant="outline"
               >
@@ -278,7 +278,7 @@ export function VersionFilePreview({
             action={
               isRetryablePreviewIssue(previewIssue) ? (
                 <Button
-                  className="rounded-none"
+                  className="rounded-xl"
                   onClick={onRetry}
                   size="sm"
                   type="button"

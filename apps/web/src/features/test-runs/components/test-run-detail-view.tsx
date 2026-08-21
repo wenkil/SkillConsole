@@ -86,7 +86,7 @@ function BenchmarkCard({
 }) {
   const coverage = side ? getCoverageRate(side) : null
   return (
-    <article className="border border-foreground bg-paper-raised p-4">
+    <article className="rounded-2xl border border-border bg-paper-raised p-4 shadow-[var(--surface-shadow)]">
       <span className="font-mono text-[9px] font-bold text-muted-foreground uppercase">
         {label}
       </span>
@@ -157,7 +157,7 @@ function SkillScoreReportPanel({
         <p className="mt-2 text-muted-foreground">
           {currentReport.error?.message ?? labels.failed}
         </p>
-        <Button className="mt-3 rounded-none" onClick={onView} size="sm" type="button" variant="outline">
+        <Button className="mt-3 rounded-xl" onClick={onView} size="sm" type="button" variant="outline">
           <FileChartColumn data-icon="inline-start" />
           {labels.view}
         </Button>
@@ -176,7 +176,7 @@ function SkillScoreReportPanel({
             ? labels.running
             : labels.pending}
         </p>
-        <Button className="mt-3 rounded-none" onClick={onView} size="sm" type="button" variant="outline">
+        <Button className="mt-3 rounded-xl" onClick={onView} size="sm" type="button" variant="outline">
           <FileChartColumn data-icon="inline-start" />
           {labels.view}
         </Button>
@@ -187,7 +187,7 @@ function SkillScoreReportPanel({
     <section className="border border-rule-soft bg-paper-muted p-4 text-sm">
       <strong className="font-mono text-[10px] uppercase">{labels.title}</strong>
       <p className="mt-2 text-muted-foreground">{labels.available}</p>
-      <Button className="mt-3 rounded-none" onClick={onView} size="sm" type="button" variant="outline">
+      <Button className="mt-3 rounded-xl" onClick={onView} size="sm" type="button" variant="outline">
         <FileChartColumn data-icon="inline-start" />
         {labels.view}
       </Button>
@@ -230,7 +230,7 @@ function CaseSidePanel({
     )
   }
   return (
-    <section className="min-w-0 border border-foreground bg-paper-raised">
+    <section className="min-w-0 overflow-hidden rounded-2xl border border-border bg-paper-raised shadow-[var(--surface-shadow)]">
       <header className="flex items-center justify-between gap-2 border-b border-rule-soft px-4 py-3">
         <strong className="font-mono text-[10px]">{title}</strong>
         <span className="font-mono text-[8px] text-muted-foreground">
@@ -239,7 +239,7 @@ function CaseSidePanel({
       </header>
       <div className="grid gap-4 p-4">
         {runCase.executionError || runCase.assessmentError ? (
-          <div className="border border-destructive/45 bg-destructive/5 p-3 text-[11px] leading-5">
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-[11px] leading-5">
             <span className="block font-mono text-[9px] font-bold text-destructive">
               {(runCase.executionError ?? runCase.assessmentError)?.code}
             </span>
@@ -410,13 +410,13 @@ export function TestRunDetailView({
   if (controller.error || !controller.run) {
     return (
       <main className="flex h-full items-center justify-center px-8">
-        <div className="max-w-md border border-destructive/50 bg-paper-raised p-7 text-center">
+        <div className="max-w-md rounded-2xl border border-destructive/30 bg-destructive/5 p-7 text-center shadow-[var(--surface-shadow)]">
           <AlertTriangle className="mx-auto size-8 text-destructive" />
           <h1 className="mt-3 text-lg font-[760]">
             {t("states.detailError")}
           </h1>
           <Button
-            className="mt-4 rounded-none"
+            className="mt-4 rounded-xl"
             onClick={controller.actions.retry}
             type="button"
             variant="outline"
@@ -540,7 +540,7 @@ export function TestRunDetailView({
           <div className="flex items-center gap-2">
           {isActiveTestRun(run.status) ? (
             <Button
-              className="rounded-none"
+              className="rounded-xl"
               disabled={controller.mutationPending}
               onClick={() => {
                 void controller.actions.cancel().catch(() => undefined)
@@ -580,7 +580,7 @@ export function TestRunDetailView({
 
       <div className="shrink-0 border-b border-border-strong bg-paper-muted/40 px-6 py-4">
         {run.benchmark && !benchmarkComparable ? (
-          <div className="mb-3 flex items-start gap-2 border border-status-blocked/50 bg-status-blocked/5 p-3 text-[13px] leading-5">
+          <div className="mb-3 flex items-start gap-2 rounded-xl border border-status-blocked/25 bg-status-blocked/5 p-3 text-[13px] leading-5">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-blocked" />
             <div>
               <strong className="block">
@@ -648,7 +648,7 @@ export function TestRunDetailView({
                   className={cn(
                     "mb-1.5 w-full border px-3 py-2.5 text-left",
                     selectedExternalId === externalId
-                      ? "border-primary bg-paper-raised shadow-[inset_3px_0_0_var(--primary)]"
+                      ? "border-primary bg-paper-raised shadow-none"
                       : "border-transparent hover:border-rule",
                   )}
                   key={externalId}
@@ -763,7 +763,7 @@ export function TestRunDetailView({
             <div className="flex flex-wrap items-center gap-2">
               <select
                 aria-label={t("detail.allSides")}
-                className="h-7 border border-white/25 bg-trace px-2 font-mono text-[9px] text-white outline-none"
+                className="h-7 rounded-lg border border-white/25 bg-trace px-2 font-mono text-[9px] text-white outline-none"
                 onChange={(event) =>
                   setLogSide(
                     event.target.value as "" | "TARGET" | "BASELINE",
@@ -777,7 +777,7 @@ export function TestRunDetailView({
               </select>
               <select
                 aria-label={t("detail.cases")}
-                className="h-7 border border-white/25 bg-trace px-2 font-mono text-[9px] text-white outline-none"
+                className="h-7 rounded-lg border border-white/25 bg-trace px-2 font-mono text-[9px] text-white outline-none"
                 onChange={(event) =>
                   setLogExternalId(event.target.value)
                 }
@@ -792,7 +792,7 @@ export function TestRunDetailView({
               </select>
               <select
                 aria-label={t("detail.allPhases")}
-                className="h-7 border border-white/25 bg-trace px-2 font-mono text-[9px] text-white outline-none"
+                className="h-7 rounded-lg border border-white/25 bg-trace px-2 font-mono text-[9px] text-white outline-none"
                 onChange={(event) =>
                   setLogPhase(
                     event.target.value as
@@ -824,7 +824,7 @@ export function TestRunDetailView({
             {controller.hasEarlierEvents ? (
               <div className="mb-3 text-center">
                 <Button
-                  className="rounded-none border-white/25 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                  className="rounded-xl border-white/25 bg-transparent text-white hover:bg-white/10 hover:text-white"
                   disabled={controller.loadingEarlierEvents}
                   onClick={() => {
                     void controller.actions.loadEarlierEvents()
@@ -840,7 +840,7 @@ export function TestRunDetailView({
               </div>
             ) : null}
             {controller.logsError ? (
-              <div className="flex items-center justify-between gap-3 border border-destructive/60 p-3 text-destructive">
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-destructive">
                 {t("detail.logsError")}
                 <button
                   className="underline"
@@ -899,7 +899,7 @@ export function TestRunDetailView({
         </section>
       )}
 
-      <footer className="grid shrink-0 grid-cols-2 gap-6 border-t border-foreground bg-paper-muted px-5 py-2">
+      <footer className="grid shrink-0 grid-cols-2 gap-6 border-t border-border bg-paper-muted px-5 py-2">
         <details>
           <summary className="flex cursor-pointer items-center gap-2 font-mono text-[9px] font-bold uppercase">
             <Cpu className="size-3.5" />

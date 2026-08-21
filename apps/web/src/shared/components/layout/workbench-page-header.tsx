@@ -25,19 +25,19 @@ export function WorkbenchPageHeader({
   return (
     <header
       className={cn(
-        "shrink-0 border-b border-border-strong bg-background px-6 py-5",
+        "shrink-0 border-b border-border bg-background px-6 py-5 lg:px-8 lg:py-6",
         className,
       )}
     >
       <div className="flex flex-wrap items-start justify-between gap-5">
         <div className="min-w-0">
           {eyebrow ? (
-            <div className="ui-label flex items-center gap-2 text-signal-dark">
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               {Icon ? <Icon aria-hidden="true" className="size-4" /> : null}
               <span>{eyebrow}</span>
             </div>
           ) : null}
-          <h1 className="mt-1.5 text-[clamp(1.75rem,2.5vw,2rem)] leading-tight font-[760] tracking-[-0.03em]">
+          <h1 className="mt-2 font-display text-[clamp(1.9rem,2.7vw,2.35rem)] leading-[1.18] font-bold tracking-[-0.025em]">
             {title}
           </h1>
           {description ? (
